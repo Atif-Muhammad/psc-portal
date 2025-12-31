@@ -18,7 +18,7 @@ export class CreateMemberDto {
     Contact_No: string;
 
     @IsNotEmpty({ message: "Status cannot be empty" })
-    Status: MemberStatus
+    Actual_Status: MemberStatus
 
     @IsOptional()
     Balance?: string;

@@ -189,7 +189,10 @@ function RuleForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
 
             <DialogFooter>
                 <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
-                <Button onClick={() => onSubmit({ content, isActive: true })} disabled={isSubmitting}>
+                <Button onClick={() => {
+                    if (isSubmitting) return;
+                    onSubmit({ content, isActive: true })
+                }} disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save"}
                 </Button>
             </DialogFooter>

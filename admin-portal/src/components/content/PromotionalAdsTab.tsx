@@ -55,6 +55,7 @@ export default function PromotionalAdsTab() {
     });
 
     const handleSubmit = (data: any, isEdit = false) => {
+        if (isSubmitting) return;
         const formData = new FormData();
         formData.append("title", data.title);
         formData.append("description", data.description);
@@ -136,8 +137,10 @@ export default function PromotionalAdsTab() {
                     <DialogHeader><DialogTitle>Delete Ad</DialogTitle></DialogHeader>
                     <p>Are you sure you want to delete <strong>{deleteData?.title}</strong>?</p>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteData(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={() => deleteMutation.mutate(deleteData.id)}>Delete</Button>
+                        <Button variant="outline" onClick={() => setDeleteData(null)} disabled={deleteMutation.isPending}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => deleteMutation.mutate(deleteData.id)} disabled={deleteMutation.isPending}>
+                            {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -223,7 +226,10 @@ function AdForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
 
             <DialogFooter>
                 <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
-                <Button onClick={() => onSubmit(form)} disabled={isSubmitting}>
+                <Button onClick={() => {
+                    if (isSubmitting) return;
+                    onSubmit(form)
+                }} disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save"}
                 </Button>
             </DialogFooter>

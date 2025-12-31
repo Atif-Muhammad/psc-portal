@@ -37,6 +37,7 @@ export default function AboutUsTab() {
     });
 
     const handleSaveInfo = () => {
+        if (upsertAboutUsMutation.isPending) return;
         upsertAboutUsMutation.mutate({ id: aboutUsId, clubInfo });
     }
 
@@ -74,6 +75,7 @@ export default function AboutUsTab() {
     });
 
     const handleHistorySubmit = (data: any, isEdit = false) => {
+        if (isHistorySubmitting) return;
         const formData = new FormData();
         formData.append("description", data.description);
 
@@ -198,8 +200,10 @@ export default function AboutUsTab() {
                     <DialogHeader><DialogTitle>Delete History Item</DialogTitle></DialogHeader>
                     <p>Are you sure?</p>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteHistoryData(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={() => deleteHistoryMutation.mutate(deleteHistoryData.id)}>Delete</Button>
+                        <Button variant="outline" onClick={() => setDeleteHistoryData(null)} disabled={deleteHistoryMutation.isPending}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => deleteHistoryMutation.mutate(deleteHistoryData.id)} disabled={deleteHistoryMutation.isPending}>
+                            {deleteHistoryMutation.isPending ? "Deleting..." : "Delete"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -276,7 +280,10 @@ function HistoryForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
 
             <DialogFooter>
                 <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
-                <Button onClick={() => onSubmit(form)} disabled={isSubmitting}>
+                <Button onClick={() => {
+                    if (isSubmitting) return;
+                    onSubmit(form)
+                }} disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save"}
                 </Button>
             </DialogFooter>

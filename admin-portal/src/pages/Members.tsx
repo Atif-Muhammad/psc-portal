@@ -183,26 +183,35 @@ export default function Members() {
 
   // ─── Helpers ─────────────────────────────────────────────────────
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status?.toUpperCase()) {
       case "CLEAR":
-      case "ACTIVE": // Backward compatibility if needed temporarily
-        return <Badge className="bg-green-500/80 text-white hover:bg-green-500"><UserCheck className="h-3 w-3 mr-1" /> Clear</Badge>;
-      case "ABSENT":
-        return <Badge className="bg-gray-500/80 text-white hover:bg-gray-500">Absent</Badge>;
-      case "CANCELLED":
-        return <Badge className="bg-orange-500/80 text-white hover:bg-orange-500">Cancelled</Badge>;
-      case "DEFAULTER":
-        return <Badge className="bg-red-600/80 text-white hover:bg-red-600"><Ban className="h-3 w-3 mr-1" /> Defaulter</Badge>;
-      case "DIED":
-        return <Badge className="bg-black/80 text-white hover:bg-black">Died</Badge>;
+      case "REGULAR":
       case "HONORARY":
-        return <Badge className="bg-purple-500/80 text-white hover:bg-purple-500">Honorary</Badge>;
+      case "ACTIVE":
+        return <Badge className="bg-green-500/80 text-white hover:bg-green-500"><UserCheck className="h-3 w-3 mr-1" /> {status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
+      case "ABSENT":
       case "SUSPENDED":
-      case "DEACTIVATED": // Backward compatibility
-        return <Badge className="bg-yellow-600/80 text-white hover:bg-yellow-600"><UserX className="h-3 w-3 mr-1" /> Suspended</Badge>;
+      case "DEFAULTER":
+      case "DEACTIVATED":
+        return <Badge className="bg-yellow-600/80 text-white hover:bg-yellow-600"><UserX className="h-3 w-3 mr-1" /> {status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
       case "TERMINATED":
-      case "BLOCKED": // Backward compatibility
-        return <Badge className="bg-red-800/80 text-white hover:bg-red-800"><Ban className="h-3 w-3 mr-1" /> Terminated</Badge>;
+      case "CANCELLED":
+      case "DIED":
+      case "BLOCKED":
+        return <Badge className="bg-red-800/80 text-white hover:bg-red-800"><Ban className="h-3 w-3 mr-1" /> {status.charAt(0) + status.slice(1).toLowerCase()}</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getDerivedStatusBadge = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "active":
+        return <Badge className="bg-green-500/80 text-white hover:bg-green-500">Active</Badge>;
+      case "deactivated":
+        return <Badge className="bg-yellow-600/80 text-white hover:bg-yellow-600">Deactivated</Badge>;
+      case "blocked":
+        return <Badge className="bg-red-800/80 text-white hover:bg-red-800">Blocked</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -325,12 +334,13 @@ export default function Members() {
                 </div>
 
                 <div className="col-span-2">
-                  <Label>Status</Label>
-                  <Select name="Status" defaultValue="ACTIVE">
+                  <Label>Actual Status</Label>
+                  <Select name="Actual_Status" defaultValue="CLEAR">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="REGULAR">Regular</SelectItem>
                       <SelectItem value="CLEAR">Clear</SelectItem>
                       <SelectItem value="ABSENT">Absent</SelectItem>
                       <SelectItem value="CANCELLED">Cancelled</SelectItem>
@@ -416,12 +426,13 @@ export default function Members() {
                   </div>
 
                   <div className="col-span-2">
-                    <Label>Status</Label>
-                    <Select name="Status" defaultValue={editMember.Status}>
+                    <Label>Actual Status</Label>
+                    <Select name="Actual_Status" defaultValue={editMember.Actual_Status || editMember.Status}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="REGULAR">Regular</SelectItem>
                         <SelectItem value="CLEAR">Clear</SelectItem>
                         <SelectItem value="ABSENT">Absent</SelectItem>
                         <SelectItem value="CANCELLED">Cancelled</SelectItem>
@@ -562,6 +573,7 @@ export default function Members() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="REGULAR">Regular</SelectItem>
                     <SelectItem value="CLEAR">Clear</SelectItem>
                     <SelectItem value="ABSENT">Absent</SelectItem>
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
@@ -570,6 +582,9 @@ export default function Members() {
                     <SelectItem value="HONORARY">Honorary</SelectItem>
                     <SelectItem value="SUSPENDED">Suspended</SelectItem>
                     <SelectItem value="TERMINATED">Terminated</SelectItem>
+                    <SelectItem value="ACTIVE">Active (Derived)</SelectItem>
+                    <SelectItem value="DEACTIVATED">Deactivated (Derived)</SelectItem>
+                    <SelectItem value="BLOCKED">Blocked (Derived)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -583,6 +598,7 @@ export default function Members() {
                     <TableHead>Membership No</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>Actual Status</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
                     <TableHead className="text-right">Bookings</TableHead>
@@ -615,7 +631,8 @@ export default function Members() {
                           </div>
                         </TableCell>
                         <TableCell>{member.Contact_No}</TableCell>
-                        <TableCell>{getStatusBadge(member.Status)}</TableCell>
+                        <TableCell>{getStatusBadge(member.Actual_Status || member.Status)}</TableCell>
+                        <TableCell>{getDerivedStatusBadge(member.Status)}</TableCell>
                         <TableCell className="text-right font-medium">
                           PKR {member.Balance?.toLocaleString() || 0}
                         </TableCell>

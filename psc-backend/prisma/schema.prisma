@@ -35,6 +35,7 @@ model Admin {
 }
 
 enum MemberStatus {
+  REGULAR
   ABSENT
   CANCELLED
   CLEAR
@@ -51,7 +52,8 @@ model Member {
   Name          String
   Email         String?      @unique
   Contact_No    String?      @unique
-  Status        MemberStatus @default(CLEAR)
+  Actual_Status MemberStatus @default(CLEAR)
+  Status        String       @default("active")
   Balance       Decimal?     @default(0.00) @db.Decimal(20, 2)
   Other_Details String?
 

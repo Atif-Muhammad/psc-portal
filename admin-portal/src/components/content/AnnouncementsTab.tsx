@@ -56,6 +56,7 @@ export default function AnnouncementsTab() {
     });
 
     const handleSubmit = (data: any, isEdit = false) => {
+        if (isSubmitting) return;
         if (isEdit) {
             updateMutation.mutate({ id: editItem.id, data });
         } else {
@@ -131,8 +132,10 @@ export default function AnnouncementsTab() {
                     <DialogHeader><DialogTitle>Delete Announcement</DialogTitle></DialogHeader>
                     <p>Are you sure?</p>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteData(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={() => deleteMutation.mutate(deleteData.id)}>Delete</Button>
+                        <Button variant="outline" onClick={() => setDeleteData(null)} disabled={deleteMutation.isPending}>Cancel</Button>
+                        <Button variant="destructive" onClick={() => deleteMutation.mutate(deleteData.id)} disabled={deleteMutation.isPending}>
+                            {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -199,7 +202,10 @@ function AnnouncementForm({ initialData, onSubmit, onCancel, isSubmitting }: any
 
             <DialogFooter>
                 <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
-                <Button onClick={() => onSubmit(form)} disabled={isSubmitting}>
+                <Button onClick={() => {
+                    if (isSubmitting) return;
+                    onSubmit(form)
+                }} disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Save"}
                 </Button>
             </DialogFooter>
