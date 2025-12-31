@@ -1,20 +1,27 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
+import { BookingType, PaidBy, PaymentMode, VoucherStatus, VoucherType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   formatPakistanDate,
   getPakistanDate,
   parsePakistanDate,
 } from 'src/utils/time';
+import { BookingService } from 'src/booking/booking.service';
 
 @Injectable()
 export class PaymentService {
-  constructor(private prismaService: PrismaService) { }
+  constructor(
+    private prismaService: PrismaService,
+    private bookingService: BookingService,
+  ) { }
 
   // kuick pay
   // Mock payment gateway call - replace with actual integration
@@ -102,9 +109,138 @@ export class PaymentService {
     };
   }
 
+
+  async confirmBooking(type: string, id: number) {
+    console.log(`Confirming ${type} booking with ID: ${id}`);
+    const bookingType = type.toUpperCase() as BookingType;
+
+    return await this.prismaService.$transaction(async (prisma) => {
+      let booking: any;
+      let membershipNo: string = '';
+      let totalAmount: number = 0;
+
+      // 1. Fetch booking and confirm it
+      if (bookingType === 'ROOM') {
+        booking = await prisma.roomBooking.update({
+          where: { id },
+          data: { isConfirmed: true, paymentStatus: 'PAID' },
+          include: { rooms: true }
+        });
+        membershipNo = booking.Membership_No;
+        totalAmount = Number(booking.totalPrice);
+      } else if (bookingType === 'HALL') {
+        booking = await prisma.hallBooking.update({
+          where: { id },
+          data: { isConfirmed: true, paymentStatus: 'PAID' },
+          include: { member: true }
+        });
+        membershipNo = booking.member.Membership_No;
+        totalAmount = Number(booking.totalPrice);
+      } else if (bookingType === 'LAWN') {
+        booking = await prisma.lawnBooking.update({
+          where: { id },
+          data: { isConfirmed: true, paymentStatus: 'PAID' },
+          include: { member: true }
+        });
+        membershipNo = booking.member.Membership_No;
+        totalAmount = Number(booking.totalPrice);
+      } else if (bookingType === 'PHOTOSHOOT') {
+        booking = await prisma.photoshootBooking.update({
+          where: { id },
+          data: { isConfirmed: true, paymentStatus: 'PAID' },
+          include: { member: true }
+        });
+        membershipNo = booking.member.Membership_No;
+        totalAmount = Number(booking.totalPrice);
+      }
+      // Add more types as needed...
+
+      // 2. Update Voucher
+      await prisma.paymentVoucher.updateMany({
+        where: { booking_id: id, booking_type: bookingType, status: VoucherStatus.PENDING },
+        data: { status: VoucherStatus.CONFIRMED }
+      });
+
+      // 3. Clear Holdings
+      if (bookingType === 'ROOM') {
+        const roomIds = booking.rooms.map(r => r.roomId);
+        await prisma.roomHoldings.deleteMany({
+          where: { roomId: { in: roomIds }, holdBy: membershipNo }
+        });
+      } else if (bookingType === 'HALL') {
+        await prisma.hallHoldings.deleteMany({
+          where: { hallId: booking.hallId, holdBy: membershipNo }
+        });
+      } else if (bookingType === 'LAWN') {
+        await prisma.lawnHoldings.deleteMany({
+          where: { lawnId: booking.lawnId, holdBy: membershipNo }
+        });
+      }
+
+      // 4. Update Member Ledger (Mimicking ledger updates in BookingService)
+      // Note: This logic should ideally be shared or called from BookingService
+      const member = await prisma.member.findUnique({
+        where: { Membership_No: membershipNo }
+      });
+
+      if (member) {
+        await prisma.member.update({
+          where: { Membership_No: membershipNo },
+          data: {
+            totalBookings: { increment: 1 },
+            lastBookingDate: getPakistanDate(),
+            bookingAmountPaid: { increment: Math.round(totalAmount) },
+            bookingBalance: { increment: Math.round(totalAmount) },
+            // Since it's PAID, we don't increment bookingAmountDue
+          },
+        });
+      }
+
+      if (!membershipNo || totalAmount === 0) {
+        throw new BadRequestException(`Unsupported or invalid booking type: ${type}`);
+      }
+
+      return { success: true, booking };
+    });
+  }
+
+  private async createVoucher(data: {
+    booking_type: BookingType;
+    booking_id: number;
+    membership_no: string;
+    amount: number;
+    payment_mode: PaymentMode;
+    voucher_type: VoucherType;
+    status?: VoucherStatus;
+    issued_by?: string;
+    remarks: string;
+    expiresAt?: Date;
+  }) {
+    return await this.prismaService.paymentVoucher.create({
+      data: {
+        booking_type: data.booking_type,
+        booking_id: data.booking_id,
+        membership_no: data.membership_no,
+        amount: data.amount,
+        payment_mode: data.payment_mode,
+        voucher_type: data.voucher_type,
+        status: data.status || VoucherStatus.PENDING,
+        issued_by: data.issued_by || 'system',
+        remarks: data.remarks,
+        expiresAt: data.expiresAt,
+      },
+    });
+  }
+
   ///////////////////////////////////////////////////////////////////////
 
   async genInvoiceRoom(roomType: number, bookingData: any) {
+
+    // check if member is active
+    const member = await this.prismaService.member.findFirst({
+      where: { Membership_No: bookingData.membership_no }
+    })
+    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
     // Validate room type exists
     const typeExists = await this.prismaService.roomType.findFirst({
       where: { id: roomType },
@@ -204,9 +340,9 @@ export class PaymentService {
     // Select specific rooms for booking
     const selectedRooms = availableRooms.slice(0, bookingData.numberOfRooms);
 
-    // Calculate expiry time (3 minutes from now)
-    const holdExpiry = new Date(Date.now() + 3 * 60 * 1000);
-    const invoiceDueDate = new Date(Date.now() + 3 * 60 * 1000);
+    // Calculate expiry time (1 hour from now for refined flow)
+    const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const invoiceDueDate = new Date(Date.now() + 60 * 60 * 1000);
 
     // Put rooms on hold
     try {
@@ -232,99 +368,77 @@ export class PaymentService {
     }
 
     // Prepare booking data
-    const bookingRecord = {
-      roomTypeId: roomType,
-      checkIn,
-      checkOut,
-      numberOfRooms: bookingData.numberOfRooms,
-      numberOfAdults: bookingData.numberOfAdults,
-      numberOfChildren: bookingData.numberOfChildren,
-      pricingType: bookingData.pricingType,
-      specialRequest: bookingData.specialRequest || '',
-      totalPrice,
-      selectedRoomIds: selectedRooms.map((room) => room.id),
-      selectedRoomNumbers: selectedRooms.map((room) => room.roomNumber),
-      guestName: bookingData.guestName,
-      guestContact: bookingData.guestContact,
-    };
-
-    // Call payment gateway
-    try {
-      const invoiceResponse = await this.callPaymentGateway({
-        type: 'room',
-        amount: totalPrice,
-        consumerInfo: {
-          membership_no: String(bookingData.membership_no),
-          roomType: typeExists.type,
-          nights: nights,
-          rooms: bookingData.numberOfRooms,
-          selectedRooms: selectedRooms.map((room) => room.roomNumber),
-          checkIn: formatPakistanDate(checkIn),
-          checkOut: formatPakistanDate(checkOut),
-        },
-        bookingData: bookingRecord,
-      });
-
-      return {
-        ResponseCode: '00',
-        ResponseMessage: 'Invoice Created Successfully',
-        Data: {
-          ConsumerNumber: '7701234567',
-          InvoiceNumber:
-            'INV-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-          DueDate: invoiceDueDate.toISOString(),
-          Amount: totalPrice.toString(),
-          Instructions:
-            'Complete payment within 3 minutes to confirm your booking',
-          PaymentChannels: [
-            'JazzCash',
-            'Easypaisa',
-            'HBL',
-            'Meezan',
-            'UBL',
-            'ATM',
-            'Internet Banking',
-          ],
-          BookingSummary: {
-            RoomType: typeExists.type,
-            CheckIn: formatPakistanDate(checkIn),
-            CheckOut: formatPakistanDate(checkOut),
-            Nights: nights,
-            Rooms: bookingData.numberOfRooms,
-            SelectedRooms: selectedRooms.map((room) => room.roomNumber),
-            Adults: bookingData.numberOfAdults,
-            Children: bookingData.numberOfChildren,
-            PricePerNight: pricePerNight.toString(),
-            TotalAmount: totalPrice.toString(),
-            HoldExpiresAt: holdExpiry.toISOString(),
-          },
-        },
-        TemporaryData: {
-          roomIds: selectedRooms.map((room) => room.id),
-          holdExpiry: holdExpiry,
-        },
-      };
-    } catch (paymentError) {
-      // Clean up room holds if payment gateway fails
-      try {
-        await this.prismaService.roomHoldings.deleteMany({
-          where: {
-            roomId: { in: selectedRooms.map((room) => room.id) },
-            holdExpiry: holdExpiry, // Match the exact hold we just created
-          },
-        });
-      } catch (cleanupError) {
-        console.error('Failed to clean up room holds:', cleanupError);
+    // create temporary(unconfirmed) booking
+    const booking = await this.prismaService.roomBooking.create({
+      data: {
+        Membership_No: String(bookingData.membership_no),
+        checkIn,
+        checkOut,
+        totalPrice,
+        pricingType: bookingData.pricingType,
+        paymentStatus: 'UNPAID',
+        paidAmount: 0,
+        pendingAmount: totalPrice,
+        numberOfAdults: bookingData.numberOfAdults,
+        numberOfChildren: bookingData.numberOfChildren,
+        specialRequests: bookingData.specialRequest || '',
+        paidBy: 'MEMBER',
+        guestName: bookingData.guestName,
+        guestContact: bookingData.guestContact?.toString(),
+        isConfirmed: false,
+        rooms: {
+          create: selectedRooms.map((r: any) => ({
+            roomId: r.id,
+            priceAtBooking: bookingData.pricingType === 'member' ? r.roomType.priceMember : r.roomType.priceGuest
+          }))
+        }
       }
+    });
 
-      throw new InternalServerErrorException(
-        'Failed to generate invoice with payment gateway',
-      );
+    // create voucher as unpaid/pending
+    const voucher = await this.createVoucher({
+      booking_type: 'ROOM',
+      booking_id: booking.id,
+      membership_no: String(bookingData.membership_no),
+      amount: totalPrice,
+      payment_mode: 'ONLINE',
+      voucher_type: "FULL_PAYMENT",
+      status: VoucherStatus.PENDING,
+      issued_by: 'system',
+      remarks: `Room booking voucher for ${selectedRooms.map((room) => room.roomNumber).join(', ')}`,
+      expiresAt: holdExpiry
+    });
+
+    // dummy api call to confirm (mimicking webhook/payment callback)
+    // we'll simulate this by calling a method in booking.service (to be implemented)
+    // For now, let's keep the return as voucher and the user can decide how they'll call confirmation.
+    // However, the user asked for the dummy call to be part of the flow.
+    if (voucher) {
+      // Mimicking dummy call to confirm internal logic
+      // In a real scenario, this would be triggered by a payment successful webhook
+      // async confirm call
+      setTimeout(async () => {
+        try {
+          await fetch(`http://localhost:3000/api/payment/confirm/ROOM/${booking.id}`, {
+            method: 'POST'
+          });
+        } catch (e) {
+          console.error("Dummy confirmation call failed", e);
+        }
+      }, 5000); // 5 seconds later
+
+      return voucher;
     }
+    throw new HttpException('Failed to create voucher', 500);
   }
 
   async genInvoiceHall(hallId: number, bookingData: any) {
     console.log('Hall booking data received:', bookingData);
+    // check if member is active
+    const member = await this.prismaService.member.findFirst({
+      where: { Membership_No: bookingData.membership_no }
+    })
+    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE HALL EXISTS ─────────────────────────────
     const hallExists = await this.prismaService.hall.findFirst({
@@ -476,8 +590,8 @@ export class PaymentService {
     const totalPrice = Number(basePrice);
 
     // ── 10. CALCULATE HOLD EXPIRY ───────────────────────────
-    const holdExpiry = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
-    const invoiceDueDate = new Date(Date.now() + 3 * 60 * 1000);
+    const holdExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour for refined flow
+    const invoiceDueDate = new Date(Date.now() + 60 * 60 * 1000);
 
     // ── 11. PUT HALL ON HOLD ────────────────────────────────
     try {
@@ -499,108 +613,69 @@ export class PaymentService {
     }
 
     // ── 12. PREPARE BOOKING DATA ────────────────────────────
-    const bookingRecord = {
-      hallId: hallExists.id,
-      bookingDate: bookingData.bookingDate,
-      eventTime: normalizedEventTime,
-      eventType: bookingData.eventType,
-      numberOfGuests: bookingData.numberOfGuests || 0,
-      pricingType: bookingData.pricingType,
-      specialRequest: bookingData.specialRequest || '',
-      guestName: bookingData.guestName,
-      guestContact: bookingData.guestContact,
-      totalPrice,
-    };
+    // (using holdExpiry from above)
 
-    console.log('Booking record prepared:', bookingRecord);
-
-    // ── 13. GENERATE INVOICE ────────────────────────────────
-    try {
-      const timeSlotMap = {
-        MORNING: 'Morning (8:00 AM - 2:00 PM)',
-        EVENING: 'Evening (2:00 PM - 8:00 PM)',
-        NIGHT: 'Night (8:00 PM - 12:00 AM)',
-      };
-
-      const invoiceResponse = await this.callPaymentGateway({
-        type: 'hall',
-        amount: totalPrice,
-        consumerInfo: {
-          membership_no: bookingData.membership_no,
-          hallName: hallExists.name,
-          eventType: bookingData.eventType,
-          bookingDate: bookingData.bookingDate,
-        },
-        bookingData: bookingRecord,
-      });
-
-      return {
-        ResponseCode: '00',
-        ResponseMessage: 'Invoice Created Successfully',
-        Data: {
-          ConsumerNumber: '7701234567',
-          InvoiceNumber:
-            'INV-HALL-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-          DueDate: invoiceDueDate.toISOString(),
-          Amount: totalPrice.toString(),
-          Instructions:
-            'Complete payment within 3 minutes to confirm your hall booking',
-          PaymentChannels: [
-            'JazzCash',
-            'Easypaisa',
-            'HBL',
-            'Meezan',
-            'UBL',
-            'ATM',
-            'Internet Banking',
-          ],
-          BookingSummary: {
-            HallName: hallExists.name,
-            Capacity: hallExists.capacity,
-            BookingDate: bookingData.bookingDate,
-            TimeSlot: timeSlotMap[normalizedEventTime],
-            EventType: bookingData.eventType,
-            NumberOfGuests: bookingData.numberOfGuests || 0,
-            PricingType:
-              bookingData.pricingType === 'member'
-                ? 'Member Rate'
-                : 'Guest Rate',
-            BasePrice: basePrice.toString(),
-            TotalAmount: totalPrice.toString(),
-            HoldExpiresAt: holdExpiry.toISOString(),
-          },
-        },
-        // Include temporary data for cleanup if payment fails
-        TemporaryData: {
-          hallId: hallExists.id,
-          holdExpiry: holdExpiry,
-        },
-      };
-    } catch (paymentError) {
-      // ── 14. CLEANUP ON FAILURE ──────────────────────────────
-      console.error('Payment gateway error:', paymentError);
-
-      try {
-        await this.prismaService.hallHoldings.deleteMany({
-          where: {
-            hallId: hallExists.id,
-            holdExpiry: holdExpiry,
-          },
-        });
-
-        console.log('Cleaned up hall hold after payment failure');
-      } catch (cleanupError) {
-        console.error('Failed to clean up hall hold:', cleanupError);
+    // create temporary(unconfirmed) booking
+    const booking = await this.prismaService.hallBooking.create({
+      data: {
+        memberId: member.Sno, // Use member.Sno from line 321
+        hallId: hallExists.id,
+        bookingDate: bookingDate,
+        bookingTime: normalizedEventTime,
+        eventType: bookingData.eventType,
+        numberOfGuests: bookingData.numberOfGuests || 0,
+        pricingType: bookingData.pricingType,
+        totalPrice: totalPrice,
+        paymentStatus: 'UNPAID',
+        paidAmount: 0,
+        pendingAmount: totalPrice,
+        guestName: bookingData.guestName,
+        guestContact: bookingData.guestContact?.toString(),
+        isConfirmed: false,
+        paidBy: 'MEMBER',
       }
+    });
 
-      throw new InternalServerErrorException(
-        'Failed to generate invoice with payment gateway',
-      );
+    // create voucher as unpaid/pending
+    const voucher = await this.createVoucher({
+      booking_type: 'HALL',
+      booking_id: booking.id,
+      membership_no: String(bookingData.membership_no),
+      amount: totalPrice,
+      payment_mode: 'ONLINE',
+      voucher_type: "FULL_PAYMENT",
+      status: VoucherStatus.PENDING,
+      issued_by: 'system',
+      remarks: `Hall booking voucher for ${hallExists.name}`,
+      expiresAt: holdExpiry
+    });
+
+    // dummy api call to confirm
+    if (voucher) {
+      setTimeout(async () => {
+        try {
+          await fetch(`http://localhost:3000/api/payment/confirm/HALL/${booking.id}`, {
+            method: 'POST'
+          });
+        } catch (e) {
+          console.error("Dummy confirmation call failed for HALL", e);
+        }
+      }, 5000);
+
+      return voucher;
     }
+    throw new HttpException('Failed to create voucher', 500);
+
   }
 
   async genInvoiceLawn(lawnId: number, bookingData: any) {
     console.log('Lawn booking data received:', bookingData);
+
+    // check if member is active
+    const member = await this.prismaService.member.findFirst({
+      where: { Membership_No: bookingData.membership_no }
+    })
+    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE LAWN EXISTS ─────────────────────────────
     const lawnExists = await this.prismaService.lawn.findFirst({
@@ -767,135 +842,59 @@ export class PaymentService {
         : lawnExists.guestCharges;
     const totalPrice = Number(basePrice);
 
-    // ── 12. CALCULATE HOLD EXPIRY ───────────────────────────
-    const holdExpiry = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
-    const invoiceDueDate = new Date(Date.now() + 3 * 60 * 1000);
+    // Calculate capacity and pricing
+    const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
 
-    // ── 13. PUT LAWN ON HOLD ────────────────────────────────
-    try {
-      await this.prismaService.lawnHoldings.create({
-        data: {
-          lawnId: lawnExists.id,
-          onHold: true,
-          holdExpiry: holdExpiry,
-          holdBy: String(bookingData.membership_no),
-        },
-      });
-
-      console.log(
-        `Put lawn '${lawnExists.description}' on hold until ${holdExpiry}`,
-      );
-    } catch (holdError) {
-      console.error('Failed to put lawn on hold:', holdError);
-      throw new InternalServerErrorException(
-        'Failed to reserve lawn temporarily',
-      );
-    }
-
-    // ── 14. PREPARE BOOKING DATA ────────────────────────────
-    const bookingRecord = {
-      lawnId: lawnExists.id,
-      bookingDate: bookingData.bookingDate,
-      eventTime: normalizedEventTime,
-      numberOfGuests: bookingData.numberOfGuests,
-      pricingType: bookingData.pricingType,
-      eventType: bookingData.eventType || '',
-      specialRequest: bookingData.specialRequest || '',
-      totalPrice,
-      guestName: bookingData.guestName,
-      guestContact: bookingData.guestContact,
-    };
-
-    // console.log('Lawn booking record prepared:', bookingRecord);
-
-    // ── 15. GENERATE INVOICE ────────────────────────────────
-    try {
-      const timeSlotMap = {
-        MORNING: 'Morning (8:00 AM - 2:00 PM)',
-        EVENING: 'Evening (2:00 PM - 8:00 PM)',
-        NIGHT: 'Night (8:00 PM - 12:00 AM)',
-      };
-      const invoiceResponse = await this.callPaymentGateway({
-        type: 'lawn',
-        amount: totalPrice,
-        consumerInfo: {
-          membership_no: bookingData.membership_no,
-          lawnName: lawnExists.description,
-          category: lawnExists.lawnCategory?.category || 'Standard',
-          bookingDate: bookingData.bookingDate,
-        },
-        bookingData: bookingRecord,
-      });
-
-      return {
-        ResponseCode: '00',
-        ResponseMessage: 'Lawn Booking Invoice Created Successfully',
-        Data: {
-          ConsumerNumber: '7701234567',
-          InvoiceNumber:
-            'INV-LAWN-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-          DueDate: invoiceDueDate.toISOString(),
-          Amount: totalPrice.toString(),
-          Instructions:
-            'Complete payment within 3 minutes to confirm your lawn booking',
-          PaymentChannels: [
-            'JazzCash',
-            'Easypaisa',
-            'HBL',
-            'Meezan',
-            'UBL',
-            'ATM',
-            'Internet Banking',
-          ],
-          BookingSummary: {
-            LawnName: lawnExists.description,
-            Category: lawnExists.lawnCategory?.category,
-            Capacity: `${lawnExists.minGuests || 0} - ${lawnExists.maxGuests} guests`,
-            BookingDate: bookingData.bookingDate,
-            TimeSlot: timeSlotMap[normalizedEventTime],
-            NumberOfGuests: bookingData.numberOfGuests,
-            PricingType:
-              bookingData.pricingType === 'member'
-                ? 'Member Rate'
-                : 'Guest Rate',
-            BasePrice: basePrice.toString(),
-            TotalAmount: totalPrice.toString(),
-            HoldExpiresAt: holdExpiry.toISOString(),
-            MaintenancePeriods:
-              lawnExists.outOfOrders.length > 0
-                ? lawnExists.outOfOrders.map((period) => ({
-                  dates: `${new Date(period.startDate).toLocaleDateString()} - ${new Date(period.endDate).toLocaleDateString()}`,
-                  reason: period.reason,
-                }))
-                : [],
-          },
-        },
-        // Include temporary data for cleanup if payment fails
-        TemporaryData: {
-          lawnId: lawnExists.id,
-          holdExpiry: holdExpiry,
-        },
-      };
-    } catch (paymentError) {
-      // ── 16. CLEANUP ON FAILURE ──────────────────────────────
-      console.error('Payment gateway error:', paymentError);
-
-      try {
-        await this.prismaService.lawnHoldings.deleteMany({
-          where: {
-            lawnId: lawnExists.id,
-            holdExpiry: holdExpiry,
-          },
-        });
-        console.log('Cleaned up lawn hold after payment failure');
-      } catch (cleanupError) {
-        console.error('Failed to clean up lawn hold:', cleanupError);
+    // create temporary(unconfirmed) booking
+    const booking = await this.prismaService.lawnBooking.create({
+      data: {
+        memberId: member.Sno, // Wait, I need to fetch 'member' in genInvoiceLawn too
+        lawnId: lawnExists.id,
+        bookingDate: bookingDate,
+        bookingTime: normalizedEventTime,
+        guestsCount: bookingData.numberOfGuests,
+        eventType: bookingData.eventType || '',
+        totalPrice: totalPrice,
+        pricingType: bookingData.pricingType,
+        paymentStatus: 'UNPAID',
+        paidAmount: 0,
+        pendingAmount: totalPrice,
+        guestName: bookingData.guestName,
+        guestContact: bookingData.guestContact?.toString(),
+        isConfirmed: false,
+        paidBy: 'MEMBER',
       }
+    });
 
-      throw new InternalServerErrorException(
-        'Failed to generate invoice with payment gateway',
-      );
+    // create voucher as unpaid/pending
+    const voucher = await this.createVoucher({
+      booking_type: 'LAWN',
+      booking_id: booking.id,
+      membership_no: String(bookingData.membership_no),
+      amount: totalPrice,
+      payment_mode: 'ONLINE',
+      voucher_type: "FULL_PAYMENT",
+      status: VoucherStatus.PENDING,
+      issued_by: 'system',
+      remarks: `Lawn booking voucher for ${lawnExists.description}`,
+      expiresAt: holdExpiry
+    });
+
+    // dummy api call to confirm
+    if (voucher) {
+      setTimeout(async () => {
+        try {
+          await fetch(`http://localhost:3000/api/payment/confirm/LAWN/${booking.id}`, {
+            method: 'POST'
+          });
+        } catch (e) {
+          console.error("Dummy confirmation call failed for LAWN", e);
+        }
+      }, 5000);
+
+      return voucher;
     }
+    throw new HttpException('Failed to create voucher', 500);
   }
 
   // Helper methods
@@ -991,83 +990,59 @@ export class PaymentService {
         : photoshootExists.guestCharges;
     const totalPrice = Number(basePrice);
 
-    // ── 7. PREPARE BOOKING DATA ─────────────────────────────
-    const bookingRecord = {
-      photoshootId: photoshootExists.id,
-      bookingDate: bookingDate,
-      startTime: startTime,
-      endTime: endTime,
-      pricingType: bookingData.pricingType,
-      specialRequest: bookingData.specialRequest || '',
-      totalPrice,
-      memberId: member.Sno,
-      membershipNo: bookingData.membership_no,
-      paidBy: bookingData.paidBy,
-      guestName: bookingData.guestName,
-      guestContact: bookingData.guestContact,
-    };
+    // ── 7. CREATE TEMPORARY BOOKING & VOUCHER ───────────
+    const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
 
-    // console.log('Photoshoot booking record prepared:', bookingRecord);
+    // create temporary(unconfirmed) booking
+    const booking = await this.prismaService.photoshootBooking.create({
+      data: {
+        memberId: member.Sno,
+        photoshootId: photoshootExists.id,
+        bookingDate: bookingDate,
+        startTime: startTime,
+        endTime: endTime,
+        totalPrice: totalPrice,
+        pricingType: bookingData.pricingType,
+        paymentStatus: 'UNPAID',
+        paidAmount: 0,
+        pendingAmount: totalPrice,
+        guestName: bookingData.guestName,
+        guestContact: bookingData.guestContact?.toString(),
+        isConfirmed: false,
+        paidBy: 'MEMBER',
+        bookingDetails: JSON.stringify([{ date: bookingData.bookingDate, timeSlot: bookingData.timeSlot }])
+      }
+    });
 
-    // ── 8. GENERATE INVOICE VIA PAYMENT GATEWAY ─────────────
-    try {
-      const invoiceDueDate = new Date(Date.now() + 3 * 60 * 1000);
+    // create voucher as unpaid/pending
+    const voucher = await this.createVoucher({
+      booking_type: 'PHOTOSHOOT',
+      booking_id: booking.id,
+      membership_no: String(bookingData.membership_no),
+      amount: totalPrice,
+      payment_mode: 'ONLINE',
+      voucher_type: "FULL_PAYMENT",
+      status: VoucherStatus.PENDING,
+      issued_by: 'system',
+      remarks: `Photoshoot booking voucher for ${photoshootExists.description}`,
+      expiresAt: holdExpiry
+    });
 
-      const invoiceResponse = await this.callPaymentGateway({
-        type: 'photoshoot',
-        amount: totalPrice,
-        consumerInfo: {
-          membership_no: bookingData.membership_no,
-          member_name: member.Name,
-          serviceName: photoshootExists.description,
-          serviceType: 'Photoshoot Session',
-          bookingDate: bookingDate.toISOString(),
-          bookingTime: startTime.toISOString(),
-        },
-        bookingData: bookingRecord,
-      });
+    // dummy api call to confirm
+    if (voucher) {
+      setTimeout(async () => {
+        try {
+          await fetch(`http://localhost:3000/api/payment/confirm/PHOTOSHOOT/${booking.id}`, {
+            method: 'POST'
+          });
+        } catch (e) {
+          console.error("Dummy confirmation call failed for PHOTOSHOOT", e);
+        }
+      }, 5000);
 
-      return {
-        ResponseCode: '00',
-        ResponseMessage: 'Photoshoot Booking Invoice Created Successfully',
-        Data: {
-          ConsumerNumber: '7701234567',
-          InvoiceNumber:
-            'INV-PHOTO-' +
-            Math.random().toString(36).substr(2, 9).toUpperCase(),
-          DueDate: invoiceDueDate.toISOString(),
-          Amount: totalPrice.toString(),
-          Instructions:
-            'Complete payment within 3 minutes to confirm your photoshoot booking',
-          PaymentChannels: [
-            'JazzCash',
-            'Easypaisa',
-            'HBL',
-            'Meezan',
-            'UBL',
-            'ATM',
-            'Internet Banking',
-          ],
-          BookingSummary: {
-            ServiceName: photoshootExists.description,
-            BookingDate: bookingDate.toLocaleDateString(),
-            Time: startTime.toLocaleTimeString(),
-            Duration: '2 hours',
-            PricingType:
-              bookingData.pricingType === 'member'
-                ? 'Member Rate'
-                : 'Guest Rate',
-            BasePrice: basePrice.toString(),
-            TotalAmount: totalPrice.toString(),
-          },
-        },
-      };
-    } catch (paymentError) {
-      console.error('Payment gateway error:', paymentError);
-      throw new InternalServerErrorException(
-        'Failed to generate invoice with payment gateway',
-      );
+      return voucher;
     }
+    throw new HttpException('Failed to create voucher', 500);
   }
 
   /////////////////////////////////////////////////////////////////////

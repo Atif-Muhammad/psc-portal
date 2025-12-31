@@ -152,8 +152,8 @@ export class BookingController {
   // member bookings
   @Post('member/booking/room')
   async memberBookingRoom(@Body() payload: any) {
-    const { membership_no } = payload.consumerInfo;
     const {
+      membership_no,
       checkIn,
       checkOut,
       numberOfRooms,
@@ -167,7 +167,7 @@ export class BookingController {
       paidBy = 'MEMBER',
       guestName,
       guestContact,
-    } = payload.bookingData;
+    } = payload;
     console.log(payload);
 
     if (!membership_no) {
@@ -208,8 +208,8 @@ export class BookingController {
 
   @Post('member/booking/hall')
   async memberBookingHall(@Body() payload: any) {
-    const { membership_no } = payload.consumerInfo;
     const {
+      membership_no,
       hallId,
       bookingDate,
       eventTime,
@@ -217,11 +217,10 @@ export class BookingController {
       pricingType,
       specialRequest,
       totalPrice,
-
       paidBy = 'MEMBER',
       guestName,
       guestContact,
-    } = payload.bookingData;
+    } = payload;
 
     if (!membership_no) {
       throw new NotFoundException('Membership number must be provided');

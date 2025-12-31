@@ -132,6 +132,7 @@ model RoomBooking {
 
   refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
   refundReturned Boolean @default(false)
+  isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
 
   member Member @relation(fields: [Membership_No], references: [Membership_No])
@@ -175,6 +176,7 @@ model HallBooking {
 
   refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
   refundReturned Boolean @default(false)
+  isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
 
   member Member @relation(fields: [memberId], references: [Sno])
@@ -212,6 +214,7 @@ model LawnBooking {
 
   refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
   refundReturned Boolean @default(false)
+  isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
 
   member Member @relation(fields: [memberId], references: [Sno])
@@ -246,6 +249,7 @@ model PhotoshootBooking {
   refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
   refundReturned Boolean @default(false)
   bookingDetails Json?   @default("[]") // Array of { date: string, timeSlot: string }
+  isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
 
 
@@ -302,6 +306,7 @@ model PaymentVoucher {
 
   voucher_type VoucherType
   status       VoucherStatus @default(PENDING)
+  expiresAt    DateTime?     // For temporary vouchers (e.g. 1 hour)
 
   issued_at DateTime @default(now())
   issued_by String? // admin name OR "system"

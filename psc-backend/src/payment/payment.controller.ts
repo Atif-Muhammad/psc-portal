@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -16,7 +17,7 @@ export class PaymentController {
   constructor(
     private payment: PaymentService,
     private bookingService: BookingService,
-  ) {}
+  ) { }
 
   // generate invoice:
 
@@ -96,5 +97,13 @@ export class PaymentController {
       bookingType,
       Number(bookingId),
     );
+  }
+
+  @Post('confirm/:type/:id')
+  async confirmBooking(
+    @Param('type') type: string,
+    @Param('id') id: string,
+  ) {
+    return await this.payment.confirmBooking(type, Number(id));
   }
 }
