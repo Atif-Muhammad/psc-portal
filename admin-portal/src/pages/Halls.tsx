@@ -1,0 +1,2544 @@
+import { useState, useEffect, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  FileDown,
+  Calendar,
+  Clock,
+  Info,
+  Filter,
+  AlertCircle,
+  Sun,
+  Moon,
+  Sunset,
+  Eye,
+  LayoutDashboard,
+  Users,
+  DollarSign,
+  Settings,
+  DoorOpen,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { DateRange } from "react-day-picker";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { getPakistanDate, getPakistanDateString, normalizeToPakistanDate } from "@/utils/pakDate";
+import { ImageUpload } from "@/components/ImageUpload";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { exportHallsReport } from "@/lib/pdfExport";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  getHalls,
+  createHall as createHallApi,
+  updateHall as updateHallApi,
+  deleteHall as deleteHallApi,
+  reserveHall,
+  getHallLogs,
+} from "../../config/apis";
+import { checkHallConflicts } from "@/utils/hallBookingUtils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { isSameDay } from "date-fns";
+
+interface HallReservation {
+  id: string;
+  hallId: string;
+  reservedFrom: string;
+  reservedTo: string;
+  timeSlot: string;
+  admin: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface HallBooking {
+  id: string;
+  hallId: string;
+  bookingDate: string;
+  eventDate: string;
+  memberName: string;
+  guestName?: string;
+  paymentStatus: string;
+  totalPrice: number;
+  numberOfGuests: number;
+  eventType: string;
+  specialRequests?: string;
+}
+
+interface OutOfOrderPeriod {
+  id?: string;
+  reason: string;
+  startDate: string;
+  endDate: string;
+  hallId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface Hall {
+  id: string;
+  name: string;
+  capacity: number;
+  chargesMembers: number;
+  chargesGuests: number;
+  description: string;
+  isActive: boolean;
+  outOfOrders?: OutOfOrderPeriod[];
+  isReserved: boolean;
+  isBooked: boolean;
+  reservations: HallReservation[];
+  bookings: HallBooking[];
+  images: any[];
+  holdings: any[];
+  // Legacy fields (kept for compatibility)
+  isOutOfService: boolean;
+  outOfServiceReason?: string;
+  outOfServiceFrom?: string;
+  outOfServiceTo?: string;
+}
+
+const MaintenanceIndicator = ({
+  outOfOrders,
+  isOutOfService,
+}: {
+  outOfOrders: OutOfOrderPeriod[];
+  isOutOfService: boolean;
+}) => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const today = now.getTime();
+
+  // All current or future periods
+  const activeAndFuture = outOfOrders
+    ?.filter((p) => new Date(p.endDate).getTime() >= today)
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) || [];
+
+  const displayCount = 2;
+  const sliced = activeAndFuture.slice(0, displayCount);
+  const remaining = activeAndFuture.length - displayCount;
+
+  if (activeAndFuture.length === 0 && !isOutOfService) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 mt-2">
+      {sliced.map((p, idx) => {
+        const isCurrent = new Date(p.startDate).getTime() <= today && new Date(p.endDate).getTime() >= today;
+        return (
+          <div key={idx} className="flex flex-col gap-0.5 bg-orange-50 p-1.5 rounded border border-orange-100">
+            <div className="flex items-center gap-1">
+              <Badge
+                variant={isCurrent ? "destructive" : "secondary"}
+                className={`text-[9px] py-0 px-1 h-3.5 ${!isCurrent ? "bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200" : ""}`}
+              >
+                {isCurrent ? "Maintenance" : "Scheduled"}
+              </Badge>
+            </div>
+            <span className={`text-[10px] font-medium leading-tight ${isCurrent ? "text-red-700" : "text-orange-700"}`}>
+              {p.reason}
+            </span>
+            <span className="text-[9px] text-muted-foreground italic">
+              ({new Date(p.startDate).toLocaleDateString()} - {new Date(p.endDate).toLocaleDateString()})
+            </span>
+          </div>
+        );
+      })}
+      {remaining > 0 && (
+        <span className="text-[9px] text-muted-foreground font-medium pl-1">
+          + {remaining} more periods
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Hall Detail Dialog Component
+function HallDetailDialog({
+  hall,
+  onClose,
+  logs,
+  loading,
+  dateRange,
+  onDateRangeChange,
+  activeTab,
+  onTabChange
+}: {
+  hall: Hall | null;
+  onClose: () => void;
+  logs: any;
+  loading: boolean;
+  dateRange: DateRange | undefined;
+  onDateRangeChange: (range: DateRange | undefined) => void;
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+}) {
+  if (!hall) return null;
+
+  return (
+    <Dialog open={!!hall} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center justify-between pr-8">
+            <div>
+              <DialogTitle className="text-2xl font-bold">
+                {hall.name}
+              </DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="outline" className="font-normal border-primary/20 bg-primary/5 text-primary">
+                  Hall
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  ID: {hall.id}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">{hall.description}</span>
+            </div>
+            <Badge
+              variant={hall.isActive ? "default" : "secondary"}
+              className={cn(
+                "px-3 py-1",
+                hall.isActive
+                  ? "bg-green-100 text-green-700 hover:bg-green-100"
+                  : "bg-red-100 text-red-700 hover:bg-red-100"
+              )}
+            >
+              {hall.isActive ? "Active" : "Inactive"}
+            </Badge>
+          </div>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 py-2">
+          <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-md">
+                <Users className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
+                  Member Price
+                </p>
+                <p className="text-sm font-bold text-slate-700">
+                  Rs. {Number(hall.chargesMembers || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-md">
+                <Users className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
+                  Guest Price
+                </p>
+                <p className="text-sm font-bold text-slate-700">
+                  Rs. {Number(hall.chargesGuests || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left overflow-hidden">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-md shrink-0">
+                <Info className="h-4 w-4 text-slate-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight whitespace-nowrap">
+                  Description
+                </p>
+                <p className="text-xs truncate text-slate-600">
+                  {hall.description || "No description provided."}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Small Overview Totals */}
+        <div className="flex items-center gap-4 py-2 border-y border-border/40">
+          <div className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+            <span className="text-[11px] font-medium text-slate-500">
+              Reservations: <span className="text-slate-900">{logs?.reservations?.length || 0}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 border-l pl-4 border-border/40">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+            <span className="text-[11px] font-medium text-slate-500">
+              Bookings: <span className="text-slate-900">{logs?.bookings?.length || 0}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 border-l pl-4 border-border/40">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+            <span className="text-[11px] font-medium text-slate-500">
+              Maintenance: <span className="text-slate-900">{logs?.outOfOrders?.length || 0}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-6 pt-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-700">
+              Activity Logs
+              {loading && <div className="h-3 w-3 animate-spin rounded-full border border-slate-400 border-t-transparent" />}
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Filter Logs:</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "justify-start text-left font-normal h-9",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={onDateRangeChange}
+                    numberOfMonths={2}
+                    classNames={{
+                      day_today: "border-2 border-primary text-primary bg-transparent font-bold",
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <Tabs
+            value={activeTab}
+            onValueChange={onTabChange}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-slate-100 rounded-md">
+              <TabsTrigger value="reservations" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
+                Reservations ({logs?.reservations?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="bookings" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
+                Bookings ({logs?.bookings?.length || 0})
+              </TabsTrigger>
+              <TabsTrigger value="maintenance" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
+                Maintenance ({logs?.outOfOrders?.length || 0})
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="mt-4 min-h-[300px]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-[300px] gap-2 text-slate-400">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-300"></div>
+                  <p className="text-[11px] font-medium">Loading history...</p>
+                </div>
+              ) : (
+                <>
+                  <TabsContent value="reservations" className="mt-0 outline-none">
+                    <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow className="hover:bg-transparent border-slate-100">
+                            <TableHead className="text-[11px] h-9 text-slate-500">Reserved From</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Reserved To</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Time Slot</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Remarks</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Reserved By</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {logs?.reservations?.length ? (
+                            logs.reservations.map((res: any) => (
+                              <TableRow key={res.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {format(new Date(res.reservedFrom), "LLL dd, y")}
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {format(new Date(res.reservedTo), "LLL dd, y")}
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {res.timeSlot}
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600 italic">
+                                  {res.remarks || "-"}
+                                </TableCell>
+                                <TableCell className="text-xs py-2">
+                                  <div className="flex items-center gap-2 text-slate-600">
+                                    <div className="h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                      {res.admin?.name?.substring(0, 1).toUpperCase()}
+                                    </div>
+                                    {res.admin?.name}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="text-center py-10 text-slate-400"
+                              >
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <Calendar className="h-6 w-6 opacity-10" />
+                                  <p className="text-[11px]">No reservations found.</p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="bookings" className="mt-0 outline-none">
+                    <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow className="hover:bg-transparent border-slate-100">
+                            <TableHead className="text-[11px] h-9 text-slate-500">Member</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Date</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Slot & Event</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {logs?.bookings?.length ? (
+                            logs.bookings.map((book: any) => (
+                              <TableRow key={book.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
+                                <TableCell className="py-2">
+                                  <div>
+                                    <p className="font-semibold text-xs text-slate-700">
+                                      {book.member?.Name || "Guest"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">
+                                      {book.member?.Membership_No || "-"}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {format(new Date(book.bookingDate), "LLL dd, y")}
+                                  {book.endDate && book.endDate !== book.bookingDate && ` - ${format(new Date(book.endDate), "LLL dd, y")}`}
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold">
+                                      {book.bookingDetails && Array.isArray(book.bookingDetails) && book.bookingDetails.length > 0
+                                        ? book.bookingDetails.map((slot: any) => `${slot.timeSlot}${slot.eventType ? ` - ${slot.eventType}` : ''}`).join(", ")
+                                        : `${book.bookingTime}${book.eventType ? ` - ${book.eventType}` : ''}`
+                                      }
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2">
+                                  <Badge
+                                    variant="secondary"
+                                    className={cn(
+                                      "capitalize text-[9px] font-semibold px-2 py-0 h-4 bg-slate-100 text-slate-600 border-none shadow-none"
+                                    )}
+                                  >
+                                    {book.paymentStatus?.toLowerCase()}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="text-center py-10 text-slate-400"
+                              >
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <DoorOpen className="h-6 w-6 opacity-10" />
+                                  <p className="text-[11px]">No bookings found.</p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="maintenance" className="mt-0 outline-none">
+                    <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50/50">
+                          <TableRow className="hover:bg-transparent border-slate-100">
+                            <TableHead className="text-[11px] h-9 text-slate-500">Date Range</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Reason</TableHead>
+                            <TableHead className="text-[11px] h-9 text-slate-500">Created By</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {logs?.outOfOrders?.length ? (
+                            logs.outOfOrders.map((oo: any) => (
+                              <TableRow key={oo.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {format(new Date(oo.startDate), "LLL dd, y")} -{" "}
+                                  {format(new Date(oo.endDate), "LLL dd, y")}
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  <div className="flex items-center gap-1.5">
+                                    <Settings className="h-3 w-3 text-slate-300" />
+                                    {oo.reason}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs py-2 text-slate-600">
+                                  {oo.createdBy || "System"}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={3}
+                                className="text-center py-10 text-slate-400"
+                              >
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <Settings className="h-6 w-6 opacity-10" />
+                                  <p className="text-[11px]">No maintenance records.</p>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+                </>
+              )}
+            </div>
+          </Tabs>
+        </div>
+        <DialogFooter className="border-t pt-4">
+          <Button variant="outline" onClick={onClose}>Close Details</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function Halls() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editHall, setEditHall] = useState<any>(null);
+  const [deleteHallData, setDeleteHallData] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [reserveDialog, setReserveDialog] = useState(false);
+  const [selectedHalls, setSelectedHalls] = useState<string[]>([]);
+  const [reserveDates, setReserveDates] = useState({
+    from: new Date().toISOString().split("T")[0],
+    to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+  });
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("MORNING");
+  const [reservationRemarks, setReservationRemarks] = useState("");
+  const [detailHall, setDetailHall] = useState<Hall | null>(null);
+  const [detailLogs, setDetailLogs] = useState<any>(null);
+  const [logLoading, setLogLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("reservations");
+  const [detailDateRange, setDetailDateRange] = useState<DateRange | undefined>({
+    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of month
+    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), // End of month
+  });
+
+  const [newOutOfOrder, setNewOutOfOrder] = useState({
+    reason: "",
+    startDate: "",
+    endDate: "",
+  });
+
+  const [editNewOutOfOrder, setEditNewOutOfOrder] = useState({
+    reason: "",
+    startDate: "",
+    endDate: "",
+  });
+
+  // Add Form State
+  const [form, setForm] = useState({
+    name: "",
+    capacity: "",
+    chargesMembers: "",
+    chargesGuests: "",
+    description: "",
+    isActive: true,
+    isExclusive: false,
+    outOfOrders: [] as OutOfOrderPeriod[],
+    images: [] as File[],
+  });
+
+  // Edit Form State
+  const [editForm, setEditForm] = useState({
+    name: "",
+    capacity: "",
+    chargesMembers: "",
+    chargesGuests: "",
+    description: "",
+    isActive: true,
+    isExclusive: false,
+    outOfOrders: [] as OutOfOrderPeriod[],
+    existingImages: [] as string[],
+    newImages: [] as File[],
+  });
+
+  const { data: halls = [], isLoading } = useQuery<any[]>({
+    queryKey: ["halls"],
+    queryFn: getHalls,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createHallApi,
+    onSuccess: () => {
+      toast({ title: "Hall created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["halls"] });
+      setIsAddOpen(false);
+      resetAddForm();
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.cause || error.message || "Failed to create hall";
+      toast({
+        title: "Failed to create hall",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: updateHallApi,
+    onSuccess: () => {
+      toast({ title: "Hall updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["halls"] });
+      setEditHall(null);
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.cause || error.message || "Failed to update hall";
+      toast({
+        title: "Failed to update hall",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteHallApi,
+    onSuccess: () => {
+      toast({ title: "Hall deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["halls"] });
+      setDeleteHallData(null);
+    },
+    onError: () =>
+      toast({ title: "Failed to delete hall", variant: "destructive" }),
+  });
+
+  // Calculate date statuses for highlighting
+  const dateStatuses = useMemo(() => {
+    if (selectedHalls.length !== 1) return [];
+
+    const hall = halls.find((h: any) => h.id === selectedHalls[0]);
+    if (!hall) return [];
+
+    const statuses: any[] = [];
+
+    // Bookings
+    hall.bookings?.forEach((b: any) => {
+      const date = new Date(b.bookingDate);
+      statuses.push({ date, status: "BOOKED" });
+    });
+
+    // Reservations
+    hall.reservations?.forEach((r: any) => {
+      const start = new Date(r.reservedFrom);
+      const end = new Date(r.reservedTo);
+      const current = new Date(start);
+      while (current <= end) {
+        statuses.push({ date: new Date(current), status: "RESERVED" });
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Out of Orders
+    hall.outOfOrders?.forEach((oo: any) => {
+      const start = new Date(oo.startDate);
+      const end = new Date(oo.endDate);
+      const current = new Date(start);
+      while (current <= end) {
+        statuses.push({ date: new Date(current), status: "OUT_OF_ORDER" });
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    return statuses;
+  }, [selectedHalls, halls]);
+
+  // Sync selectedHalls with currently reserved halls when dialog opens or dates/slot change
+  useEffect(() => {
+    if (reserveDialog && reserveDates.from && reserveDates.to && selectedTimeSlot) {
+      const reservedHallIds = halls
+        .filter((hall: Hall) => isHallReservedForDates(hall))
+        .map((hall) => hall.id);
+      setSelectedHalls(reservedHallIds);
+    }
+  }, [reserveDialog, reserveDates.from, reserveDates.to, selectedTimeSlot, halls]);
+
+  const reserveMutation = useMutation({
+    mutationFn: ({
+      hallIds,
+      reserve,
+      reserveFrom,
+      reserveTo,
+      timeSlot,
+      remarks,
+    }: {
+      hallIds: any[];
+      reserve: boolean;
+      reserveFrom?: string;
+      reserveTo?: string;
+      timeSlot?: string;
+      remarks?: string;
+    }) => reserveHall(hallIds, reserve, timeSlot, reserveFrom, reserveTo, remarks),
+    onSuccess: (data) => {
+      toast({
+        title: "Reservations updated successfully",
+        description: data.message,
+      });
+      setReservationRemarks(""); // Reset remarks after successful reservation
+      queryClient.invalidateQueries({ queryKey: ["halls"] });
+    },
+    onError: (err: any) => {
+      const errorMessage = err.response?.data?.message || err.message || "Failed to update reservations";
+      toast({
+        title: "Operation failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add out of order handlers
+  const handleAddOutOfOrder = () => {
+    if (!newOutOfOrder.reason || !newOutOfOrder.startDate || !newOutOfOrder.endDate) {
+      toast({
+        title: "Missing information",
+        description: "Please fill all fields for maintenance period",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (new Date(newOutOfOrder.startDate) > new Date(newOutOfOrder.endDate)) {
+      toast({
+        title: "Invalid date range",
+        description: "End date cannot be before start date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setForm(prev => ({
+      ...prev,
+      outOfOrders: [...prev.outOfOrders, { ...newOutOfOrder }]
+    }));
+
+    // Reset new form
+    setNewOutOfOrder({
+      reason: "",
+      startDate: "",
+      endDate: "",
+    });
+  };
+
+  const handleRemoveOutOfOrder = (index: number) => {
+    setForm(prev => ({
+      ...prev,
+      outOfOrders: prev.outOfOrders.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Edit out of order handlers
+  const handleAddEditOutOfOrder = () => {
+    if (!editNewOutOfOrder.reason || !editNewOutOfOrder.startDate || !editNewOutOfOrder.endDate) {
+      toast({
+        title: "Missing information",
+        description: "Please fill all fields for maintenance period",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (new Date(editNewOutOfOrder.startDate) > new Date(editNewOutOfOrder.endDate)) {
+      toast({
+        title: "Invalid date range",
+        description: "End date cannot be before start date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEditForm(prev => ({
+      ...prev,
+      outOfOrders: [...prev.outOfOrders, { ...editNewOutOfOrder }]
+    }));
+
+    // Reset new form
+    setEditNewOutOfOrder({
+      reason: "",
+      startDate: "",
+      endDate: "",
+    });
+  };
+
+  const handleRemoveEditOutOfOrder = (index: number) => {
+    setEditForm(prev => ({
+      ...prev,
+      outOfOrders: prev.outOfOrders.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Get time slot icon
+  const getTimeSlotIcon = (timeSlot: string) => {
+    switch (timeSlot) {
+      case "MORNING":
+        return <Sun className="h-4 w-4 text-yellow-500" />;
+      case "EVENING":
+        return <Sunset className="h-4 w-4 text-orange-500" />;
+      case "NIGHT":
+        return <Moon className="h-4 w-4 text-blue-500" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  // Get time slot display name
+  const getTimeSlotDisplay = (timeSlot: string) => {
+    switch (timeSlot) {
+      case "MORNING":
+        return "Morning (8:00 AM - 2:00 PM)";
+      case "EVENING":
+        return "Evening (2:00 PM - 8:00 PM)";
+      case "NIGHT":
+        return "Night (8:00 PM - 12:00 AM)";
+      default:
+        return timeSlot;
+    }
+  };
+
+  // Check if hall has current booking
+  const hasCurrentBooking = (hall: Hall) => {
+    const now = new Date();
+    return hall.bookings?.some(booking => {
+      const eventDate = new Date(booking.eventDate);
+      return isSameDay(eventDate, now);
+    });
+  };
+
+
+  const isHallReservedForDates = (hall: Hall) => {
+    if (!reserveDates.from || !reserveDates.to || !selectedTimeSlot) return false;
+
+    const selectedFrom = new Date(reserveDates.from);
+    const selectedTo = new Date(reserveDates.to);
+
+    // Normalize dates to compare only the date part (ignore time)
+    selectedFrom.setHours(0, 0, 0, 0);
+    selectedTo.setHours(0, 0, 0, 0);
+
+    return hall.reservations?.some((reservation) => {
+      const reservationFrom = new Date(reservation.reservedFrom);
+      const reservationTo = new Date(reservation.reservedTo);
+
+      // Normalize reservation dates to compare only the date part
+      reservationFrom.setHours(0, 0, 0, 0);
+      reservationTo.setHours(0, 0, 0, 0);
+
+      // Check for exact match: same dates AND same time slot
+      const isExactMatch =
+        reservationFrom.getTime() === selectedFrom.getTime() &&
+        reservationTo.getTime() === selectedTo.getTime() &&
+        reservation.timeSlot === selectedTimeSlot;
+
+      return isExactMatch;
+    });
+  };
+
+  // Handle hall selection in reservation dialog
+  const handleHallSelection = (hallId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedHalls((prev) => [...prev, hallId]);
+    } else {
+      setSelectedHalls((prev) => prev.filter((id) => id !== hallId));
+    }
+  };
+
+  // Bulk reserve function
+  const handleBulkReserve = () => {
+    if (!reserveDates.from || !reserveDates.to || !selectedTimeSlot) {
+      toast({
+        title: "Missing information",
+        description: "Please select both start/end dates and a time slot",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const fromDate = new Date(reserveDates.from);
+    const toDate = new Date(reserveDates.to);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (fromDate > toDate) {
+      toast({
+        title: "Invalid date range",
+        description: "End date cannot be before start date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (fromDate < today) {
+      toast({
+        title: "Invalid start date",
+        description: "Start date cannot be in the past",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get halls that are currently reserved for the exact dates and time slot
+    const currentlyReservedHallIds = halls
+      .filter((hall: Hall) => isHallReservedForDates(hall))
+      .map((hall) => hall.id);
+
+    // Halls to reserve: selected but not currently reserved
+    const hallsToReserve = selectedHalls.filter(
+      (hallId) => !currentlyReservedHallIds.includes(hallId)
+    );
+
+    // Halls to unreserve: currently reserved but not selected
+    const hallsToUnreserve = currentlyReservedHallIds.filter(
+      (hallId) => !selectedHalls.includes(hallId)
+    );
+
+    // Check for overlapping reservations only for NEW reservations
+    const allBookings = halls.flatMap(h => h.bookings || []);
+    const allReservations = halls.flatMap(h => h.reservations || []);
+
+    const hallsWithConflicts = hallsToReserve.filter((hallId) => {
+      const conflict = checkHallConflicts(
+        hallId.toString(),
+        reserveDates.from,
+        reserveDates.to,
+        selectedTimeSlot,
+        allBookings,
+        halls,
+        allReservations
+      );
+      return conflict.hasConflict;
+    });
+
+    if (hallsWithConflicts.length > 0) {
+      toast({
+        title: "Conflicts detected",
+        description: `${hallsWithConflicts.length} hall(s) have conflicts (Bookings, Maintenance, or other Reservations) that prevent reservation`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (hallsToReserve.length === 0 && hallsToUnreserve.length === 0) {
+      toast({
+        title: "No changes to make",
+        description: "The selected halls already match the current reservation status",
+        variant: "default",
+      });
+      return;
+    }
+
+    // Process reservations and unreservations
+    if (hallsToReserve.length > 0) {
+      reserveMutation.mutate({
+        hallIds: hallsToReserve,
+        reserve: true,
+        reserveFrom: reserveDates.from,
+        reserveTo: reserveDates.to,
+        timeSlot: selectedTimeSlot,
+        remarks: reservationRemarks,
+      });
+    }
+
+    if (hallsToUnreserve.length > 0) {
+      reserveMutation.mutate({
+        hallIds: hallsToUnreserve,
+        reserve: false,
+        reserveFrom: reserveDates.from,
+        reserveTo: reserveDates.to,
+        timeSlot: selectedTimeSlot,
+        remarks: reservationRemarks,
+      });
+    }
+  };
+
+  // Validate form before submission
+  const validateForm = (formData: any, isEdit: boolean = false) => {
+    if (!formData.name || !formData.capacity) {
+      toast({ title: "Please fill required fields", variant: "destructive" });
+      return false;
+    }
+
+    console.log(formData)
+
+    // Validate out of order periods
+    for (const period of formData.outOfOrders) {
+      if (!period.reason.trim()) {
+        toast({
+          title: "Reason required",
+          description: "Please provide a reason for each maintenance period",
+          variant: "destructive"
+        });
+        return false;
+      }
+      console.log(period)
+      const alreadyExists = period.startDate === newOutOfOrder.startDate && period.endDate === newOutOfOrder.endDate
+
+      if (alreadyExists) {
+        toast({
+          title: "Date Error",
+          description: "Cannot Selecting existing dates",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(period.startDate) > new Date(period.endDate)) {
+        toast({
+          title: "Invalid date range",
+          description: "End date cannot be before start date for all maintenance periods",
+          variant: "destructive"
+        });
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Handle create hall function
+  const handleCreateHall = () => {
+    if (!validateForm(form)) return;
+
+    const fd = new FormData();
+    fd.append("name", form.name);
+    fd.append("capacity", form.capacity);
+    fd.append("chargesMembers", form.chargesMembers || "0");
+    fd.append("chargesGuests", form.chargesGuests || "0");
+    fd.append("description", form.description);
+    fd.append("isActive", String(form.isActive));
+    fd.append("isExclusive", String(form.isExclusive));
+
+    // Add out of order periods if any
+    if (form.outOfOrders.length > 0) {
+      fd.append("outOfOrders", JSON.stringify(form.outOfOrders));
+    }
+
+    form.images.forEach((file) => fd.append("files", file));
+    createMutation.mutate(fd);
+  };
+
+  const filteredHalls = halls?.filter((hall: Hall) => {
+    if (statusFilter === "ALL") return true;
+    if (statusFilter === "ACTIVE") return hall.isActive && !isCurrentlyOutOfOrder(hall) && !hall.isReserved;
+    if (statusFilter === "INACTIVE")
+      return !hall.isActive || isCurrentlyOutOfOrder(hall) || hall.isReserved;
+    return true;
+  });
+
+  const resetAddForm = () => {
+    setForm({
+      name: "",
+      capacity: "",
+      chargesMembers: "",
+      chargesGuests: "",
+      description: "",
+      isActive: true,
+      isExclusive: false,
+      outOfOrders: [],
+      images: [],
+    });
+    setNewOutOfOrder({
+      reason: "",
+      startDate: "",
+      endDate: "",
+    });
+  };
+
+  useEffect(() => {
+    if (editHall) {
+      const outOfOrders = editHall.outOfOrders?.map((period: any) => ({
+        id: period.id,
+        reason: period.reason,
+        startDate: period.startDate?.split("T")[0] || "",
+        endDate: period.endDate?.split("T")[0] || "",
+      })) || [];
+
+      setEditForm({
+        name: editHall.name || "",
+        capacity: editHall.capacity || "",
+        chargesMembers: editHall.chargesMembers || "",
+        chargesGuests: editHall.chargesGuests || "",
+        description: editHall.description || "",
+        isActive: editHall.isActive || false,
+        isExclusive: editHall.isExclusive || false,
+        outOfOrders: outOfOrders,
+        existingImages:
+          editHall.images?.map((img: any) => img.publicId || img.url || img) ||
+          [],
+        newImages: [],
+      });
+    }
+  }, [editHall]);
+
+  // Auto-select halls that are already reserved for the selected dates and time slot
+  useEffect(() => {
+    if (reserveDates.from && reserveDates.to && selectedTimeSlot) {
+      const hallsReservedForDates = halls.filter((hall: Hall) =>
+        isHallReservedForDates(hall)
+      );
+      const reservedHallIds = hallsReservedForDates.map((hall) => hall.id);
+      setSelectedHalls(reservedHallIds);
+    } else {
+      setSelectedHalls([]);
+    }
+  }, [reserveDates.from, reserveDates.to, selectedTimeSlot, halls]);
+
+  // Fetch hall logs
+  useEffect(() => {
+    const fetchLogs = async () => {
+      if (!detailHall || !detailDateRange?.from || !detailDateRange?.to) return;
+
+      setLogLoading(true);
+      try {
+        const fromStr = format(detailDateRange.from, "yyyy-MM-dd");
+        const toStr = format(detailDateRange.to, "yyyy-MM-dd");
+        const logs = await getHallLogs(detailHall.id, fromStr, toStr);
+        setDetailLogs(logs);
+      } catch (error) {
+        console.error("Failed to fetch logs:", error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch hall logs",
+          variant: "destructive",
+        });
+      } finally {
+        setLogLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, [detailHall, detailDateRange, toast]);
+
+  // Get payment status badge
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case "PAID":
+        return <Badge variant="default" className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Paid</Badge>;
+      case "UNPAID":
+        return <Badge variant="secondary" className="bg-red-100 text-red-800 hover:bg-red-100 text-xs">Unpaid</Badge>;
+      case "HALF_PAID":
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">Half Paid</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs">{status}</Badge>;
+    }
+  };
+
+  // Get upcoming bookings for a hall
+  const getUpcomingBookings = (hall: Hall) => {
+    const now = new Date();
+    return hall.bookings
+      ?.filter((booking) => new Date(booking.bookingDate) >= now)
+      .sort(
+        (a, b) =>
+          new Date(a.bookingDate).getTime() - new Date(b.bookingDate).getTime()
+      ) || [];
+  };
+
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const handleUpdateHall = () => {
+    if (!editHall) return;
+    if (!validateForm(editForm, true)) return;
+
+    const fd = new FormData();
+    fd.append("id", String(editHall.id));
+    fd.append("name", editForm.name);
+    fd.append("capacity", editForm.capacity);
+    fd.append("chargesMembers", editForm.chargesMembers);
+    fd.append("chargesGuests", editForm.chargesGuests);
+    fd.append("description", editForm.description);
+    fd.append("isActive", String(editForm.isActive));
+    fd.append("isExclusive", String(editForm.isExclusive));
+
+    // Add out of order periods if any
+    if (editForm.outOfOrders.length > 0) {
+      fd.append("outOfOrders", JSON.stringify(editForm.outOfOrders));
+    }
+
+    editForm.existingImages.forEach((pid) => fd.append("existingimgs", pid));
+    editForm.newImages.forEach((file) => fd.append("files", file));
+    updateMutation.mutate(fd);
+  };
+
+  const handleDeleteHall = () => {
+    if (deleteHallData) deleteMutation.mutate(deleteHallData.id);
+  };
+
+  const isCurrentlyOutOfOrder = (hall: Hall) => {
+    if (hall.isOutOfService) return true;
+    const now = new Date();
+    return hall.outOfOrders?.some(period => {
+      const startDate = new Date(period.startDate);
+      const endDate = new Date(period.endDate);
+      return startDate <= now && endDate >= now;
+    });
+  };
+
+  const isCurrentlyHeld = (hall: Hall) => {
+    const now = new Date();
+    const dateString = format(now, "yyyy-MM-dd");
+    // Determine current slot based on time
+    const hours = now.getHours();
+    let currentSlot = "";
+    if (hours >= 8 && hours < 14) currentSlot = "MORNING";
+    else if (hours >= 14 && hours < 20) currentSlot = "EVENING";
+    else if (hours >= 20 || hours < 8) currentSlot = "NIGHT";
+
+    return hall.holdings?.some(hold => {
+      if (!hold.onHold) return false;
+      const holdExpiry = new Date(hold.holdExpiry);
+      if (holdExpiry < now) return false;
+
+      if (hold.fromDate && hold.toDate) {
+        const hStart = format(new Date(hold.fromDate), "yyyy-MM-dd");
+        const hEnd = format(new Date(hold.toDate), "yyyy-MM-dd");
+        if (dateString >= hStart && dateString <= hEnd) {
+          return !hold.timeSlot || hold.timeSlot === currentSlot;
+        }
+        return false;
+      }
+      return true; // Legacy hold
+    });
+  };
+
+  const hasScheduledMaintenance = (hall: Hall) => {
+    const now = new Date();
+    return hall.outOfOrders?.some(period => {
+      const startDate = new Date(period.startDate);
+      return startDate > now;
+    });
+  };
+
+  // Get hall status for display
+  const getHallStatus = (hall: Hall) => {
+    const now = new Date();
+
+    if (isCurrentlyOutOfOrder(hall)) {
+      return "Out of Order";
+    }
+
+    if (isCurrentlyHeld(hall)) {
+      return "On Hold";
+    }
+
+    if (hasScheduledMaintenance(hall)) {
+      return "Scheduled Maintenance";
+    }
+
+    if (hasCurrentBooking(hall)) {
+      return "Currently Booked";
+    }
+
+    if (hall.isReserved) return "Currently Reserved";
+    if (!hall.isActive) return "Inactive";
+
+    const hasFutureReservations = hall.reservations?.some(
+      (reservation) => new Date(reservation.reservedFrom) > now
+    );
+
+    if (hasFutureReservations) return "Scheduled";
+
+    return "Available";
+  };
+
+  // Get hall status badge variant
+  const getHallStatusVariant = (hall: Hall) => {
+    const now = new Date();
+
+    if (isCurrentlyOutOfOrder(hall)) {
+      return "destructive";
+    }
+
+    if (isCurrentlyHeld(hall)) {
+      return "secondary";
+    }
+
+    if (hasScheduledMaintenance(hall)) {
+      return "outline";
+    }
+
+    if (hasCurrentBooking(hall)) return "secondary";
+
+    if (hall.isReserved) return "secondary";
+    if (!hall.isActive) return "secondary";
+
+    const hasFutureReservations = hall.reservations?.some(
+      (reservation) => new Date(reservation.reservedFrom) > now
+    );
+
+    if (hasFutureReservations) return "outline";
+
+    return "default";
+  };
+
+  // Get upcoming reservations for a hall
+  const getUpcomingReservations = (hall: Hall) => {
+    const now = new Date();
+    return hall.reservations?.filter((reservation) => new Date(reservation.reservedTo) >= now)
+      .sort(
+        (a, b) =>
+          new Date(a.reservedFrom).getTime() -
+          new Date(b.reservedFrom).getTime()
+      );
+  };
+
+
+  const hasActiveFilters = statusFilter !== "ALL";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Manage Halls</h2>
+          <p className="text-muted-foreground">
+            Manage event halls and their availability
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {/* <Button
+            variant="outline"
+            onClick={() => exportHallsReport(halls)}
+            className="gap-2"
+          >
+            <FileDown className="h-4 w-4" />
+            Export PDF
+          </Button> */}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                Filters
+                {hasActiveFilters && (
+                  <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                    !
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              <DropdownMenuLabel>Filter Halls</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <div className="p-2 space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All Status</SelectItem>
+                        <SelectItem value="ACTIVE">Active & Available</SelectItem>
+                        <SelectItem value="INACTIVE">Inactive / Reserved</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStatusFilter("ALL")}
+                      className="w-full text-xs"
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="outline"
+            onClick={() => setReserveDialog(true)}
+            className="gap-2"
+            disabled={isLoading}
+          >
+            <Calendar className="h-4 w-4" />
+            Manage Reservations
+          </Button>
+
+          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Hall
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Hall</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Hall Name *</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm({ ...form, name: e.target.value })
+                      }
+                      placeholder="Main Auditorium"
+                    />
+                  </div>
+                  <div>
+                    <Label>Capacity *</Label>
+                    <Input
+                      type="number"
+                      value={form.capacity}
+                      onChange={(e) =>
+                        setForm({ ...form, capacity: e.target.value })
+                      }
+                      placeholder="300"
+                    />
+                  </div>
+                  <div>
+                    <Label>Member Charges (PKR)</Label>
+                    <Input
+                      type="number"
+                      value={form.chargesMembers}
+                      onChange={(e) =>
+                        setForm({ ...form, chargesMembers: e.target.value })
+                      }
+                      placeholder="25000"
+                    />
+                  </div>
+                  <div>
+                    <Label>Guest Charges (PKR)</Label>
+                    <Input
+                      type="number"
+                      value={form.chargesGuests}
+                      onChange={(e) =>
+                        setForm({ ...form, chargesGuests: e.target.value })
+                      }
+                      placeholder="35000"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 py-2 px-1">
+                  <Checkbox
+                    id="isExclusive"
+                    checked={form.isExclusive}
+                    onCheckedChange={(checked) =>
+                      setForm({ ...form, isExclusive: checked as boolean })
+                    }
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <Label
+                      htmlFor="isExclusive"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Exclusive Hall
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Mark this hall as exclusive (e.g., for only members)
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                    rows={3}
+                    placeholder="Luxurious hall with AC, sound system..."
+                  />
+                </div>
+                <div>
+                  <Label>Hall Images (Max 5)</Label>
+                  <ImageUpload
+                    images={form.images.map((f) => URL.createObjectURL(f))}
+                    onChange={(files) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        images: [...prev.images, ...files].slice(0, 5),
+                      }))
+                    }
+                    onRemove={(i) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        images: prev.images.filter((_, idx) => idx !== i),
+                      }))
+                    }
+                    maxImages={5}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base">Out of Order Periods</Label>
+                    <span className="text-sm text-muted-foreground">
+                      Add multiple maintenance periods (e.g., Nov 9-10, Dec 9-10)
+                    </span>
+                  </div>
+
+                  {/* Current out-of-order periods */}
+                  {form.outOfOrders.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Added Maintenance Periods ({form.outOfOrders.length})</Label>
+                      {form.outOfOrders.map((oo, index) => (
+                        <div key={index} className="p-3 border rounded-lg flex justify-between items-center">
+                          <div>
+                            <div className="font-medium">
+                              {new Date(oo.startDate).toLocaleDateString()} - {new Date(oo.endDate).toLocaleDateString()}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {oo.reason}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveOutOfOrder(index)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add new out-of-order period form */}
+                  <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                    <h4 className="font-medium">Add New Maintenance Period</h4>
+                    <div>
+                      <Label>Reason *</Label>
+                      <Textarea
+                        value={newOutOfOrder.reason}
+                        onChange={(e) =>
+                          setNewOutOfOrder({ ...newOutOfOrder, reason: e.target.value })
+                        }
+                        placeholder="Describe the issue (maintenance, renovation, repair, etc.)"
+                        className="mt-2"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Maintenance Period *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-12 bg-white",
+                              !newOutOfOrder.startDate && "text-muted-foreground"
+                            )}
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            {newOutOfOrder.startDate ? (
+                              newOutOfOrder.endDate && newOutOfOrder.endDate !== newOutOfOrder.startDate ? (
+                                <>
+                                  {format(new Date(newOutOfOrder.startDate), "LLL dd, y")} -{" "}
+                                  {format(new Date(newOutOfOrder.endDate), "LLL dd, y")}
+                                </>
+                              ) : (
+                                format(new Date(newOutOfOrder.startDate), "LLL dd, y")
+                              )
+                            ) : (
+                              <span>Pick a date range</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            initialFocus
+                            mode="range"
+                            defaultMonth={newOutOfOrder.startDate ? new Date(newOutOfOrder.startDate) : new Date()}
+                            selected={{
+                              from: newOutOfOrder.startDate ? new Date(newOutOfOrder.startDate) : undefined,
+                              to: newOutOfOrder.endDate ? new Date(newOutOfOrder.endDate) : undefined,
+                            }}
+                            onSelect={(range: DateRange | undefined) => {
+                              if (range?.from) {
+                                setNewOutOfOrder({
+                                  ...newOutOfOrder,
+                                  startDate: format(range.from, "yyyy-MM-dd"),
+                                  endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                                });
+                              } else {
+                                setNewOutOfOrder({ ...newOutOfOrder, startDate: "", endDate: "" });
+                              }
+                            }}
+                            numberOfMonths={1}
+                            disabled={(date) => {
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              return date < today;
+                            }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleAddOutOfOrder}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Maintenance Period
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                  <div>
+                    <Label className="text-base font-medium">Hall Availability</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {form.outOfOrders.length > 0
+                        ? "Hall has maintenance periods scheduled"
+                        : form.isActive
+                          ? "Active & Available for Booking"
+                          : "Inactive (Hidden from users)"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Label>Active</Label>
+                    <Switch
+                      checked={form.isActive}
+                      onCheckedChange={(checked) => {
+                        setForm({
+                          ...form,
+                          isActive: checked,
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    resetAddForm();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateHall}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? "Creating..." : "Create Hall"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Active Filters Display */}
+      {
+        hasActiveFilters && (
+          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+            <span className="text-sm font-medium">Active Filters:</span>
+            {statusFilter !== "ALL" && (
+              <Badge variant="secondary" className="gap-1">
+                Status: {statusFilter === "ACTIVE" ? "Active & Available" : "Inactive / Reserved"}
+                <button
+                  onClick={() => setStatusFilter("ALL")}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStatusFilter("ALL")}
+              className="ml-auto text-xs h-7"
+            >
+              Clear All
+            </Button>
+          </div>
+        )
+      }
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-12 text-center text-muted-foreground">
+              Loading halls...
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Member Rate</TableHead>
+                  <TableHead>Guest Rate</TableHead>
+                  <TableHead>Images</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Maintenance</TableHead>
+                  <TableHead>Reservations</TableHead>
+                  <TableHead>Bookings</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredHalls.map((hall: Hall) => {
+                  const upcomingReservations = getUpcomingReservations(hall);
+                  const upcomingBookings = getUpcomingBookings(hall);
+                  const hasCurrent = hasCurrentBooking(hall);
+                  const currentlyOutOfOrder = isCurrentlyOutOfOrder(hall);
+                  const scheduledMaintenance = hasScheduledMaintenance(hall);
+
+                  return (
+                    <TableRow key={hall.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {hall.name}
+                          {hasCurrent && (
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
+                              Booked Today
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{hall.capacity} guests</TableCell>
+                      <TableCell>
+                        PKR {Number(hall.chargesMembers).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        PKR {Number(hall.chargesGuests).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="grid grid-cols-2">
+                        {hall.images ? hall.images?.slice(0, 5).map((img: any, idx: number) => (
+                          <img
+                            key={idx}
+                            src={img.url}
+                            alt="hall"
+                            className="w-12 h-12 rounded object-cover border"
+                          />
+                        )) : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getHallStatusVariant(hall)}>
+                          {getHallStatus(hall)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <MaintenanceIndicator
+                          outOfOrders={hall.outOfOrders || []}
+                          isOutOfService={!!hall.isOutOfService}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {upcomingReservations?.length > 0 ? (
+                          <div className="space-y-2">
+                            {upcomingReservations
+                              .slice(0, 2)
+                              .map((reservation) => (
+                                <div key={reservation.id} className="text-xs border-l-2 border-orange-400 pl-2">
+                                  <div className="font-medium text-orange-700 flex items-center gap-1">
+                                    {getTimeSlotIcon(reservation.timeSlot)}
+                                    {reservation.admin?.name || 'Unknown Admin'}
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    {formatDate(reservation.reservedFrom)} - {formatDate(reservation.reservedTo)}
+                                  </div>
+                                  <div className="text-xs text-blue-600 flex items-center gap-1">
+                                    {getTimeSlotIcon(reservation.timeSlot)}
+                                    {getTimeSlotDisplay(reservation.timeSlot)}
+                                  </div>
+                                </div>
+                              ))}
+                            {upcomingReservations.length > 2 && (
+                              <div className="text-xs text-muted-foreground">
+                                +{upcomingReservations.length - 2} more
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No upcoming
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {upcomingBookings.length > 0 ? (
+                          <div className="space-y-2">
+                            {upcomingBookings
+                              .slice(0, 2)
+                              .map((booking: any) => (
+                                <div key={booking.id} className="text-xs border-l-2 border-blue-400 pl-2">
+                                  <div className="font-medium">
+                                    Booking #{booking.id}
+                                  </div>
+                                  <div className="text-muted-foreground">
+                                    {formatDate(booking.bookingDate)}
+                                  </div>
+                                  <div className="mt-1">
+                                    {getPaymentStatusBadge(booking.paymentStatus)}
+                                  </div>
+                                  {booking.totalPrice && (
+                                    <div className="text-xs text-muted-foreground">
+                                      PKR {Number(booking.totalPrice).toLocaleString()}
+                                    </div>
+                                  )}
+                                  {booking.eventType && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {booking.eventType}
+                                    </div>
+                                  )}
+                                  {booking.bookingTime && (
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                      {getTimeSlotIcon(booking.bookingTime)}
+                                      {getTimeSlotDisplay(booking.bookingTime)}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            {upcomingBookings.length > 2 && (
+                              <div className="text-xs text-muted-foreground">
+                                +{upcomingBookings.length - 2} more
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No upcoming
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDetailHall(hall)}
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setEditHall(hall)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteHallData(hall)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <HallDetailDialog
+        hall={detailHall}
+        onClose={() => setDetailHall(null)}
+        logs={detailLogs}
+        loading={logLoading}
+        dateRange={detailDateRange}
+        onDateRangeChange={setDetailDateRange}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+
+      {/* Reserve Halls Dialog */}
+      <Dialog open={reserveDialog} onOpenChange={setReserveDialog}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manage Hall Reservations</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Select dates, time slot, and halls to manage reservations. Halls already
+              reserved for the selected dates and time slot will be automatically checked.
+            </p>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {/* Date and Time Selection */}
+            <div className="grid grid-cols-3 gap-6 p-4 bg-muted rounded-lg items-end">
+              <div className="col-span-2 space-y-2">
+                <Label className="text-sm font-medium">Reservation Period *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-12 bg-white",
+                        !reserveDates.from && "text-muted-foreground"
+                      )}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {reserveDates.from ? (
+                        reserveDates.to && reserveDates.to !== reserveDates.from ? (
+                          <>
+                            {format(new Date(reserveDates.from), "LLL dd, y")} -{" "}
+                            {format(new Date(reserveDates.to), "LLL dd, y")}
+                          </>
+                        ) : (
+                          format(new Date(reserveDates.from), "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={reserveDates.from ? new Date(reserveDates.from) : new Date()}
+                      selected={{
+                        from: reserveDates.from ? new Date(reserveDates.from) : undefined,
+                        to: reserveDates.to ? new Date(reserveDates.to) : undefined,
+                      }}
+                      onSelect={(range: DateRange | undefined) => {
+                        if (range?.from) {
+                          setReserveDates({
+                            from: format(range.from, "yyyy-MM-dd"),
+                            to: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                          });
+                        } else {
+                          setReserveDates({ from: "", to: "" });
+                        }
+                      }}
+                      numberOfMonths={2}
+                      modifiers={{
+                        today: new Date(),
+                        booked: dateStatuses?.filter((ds: any) => ds.status === "BOOKED").map((ds: any) => ds.date) || [],
+                        reserved: dateStatuses?.filter((ds: any) => ds.status === "RESERVED").map((ds: any) => ds.date) || [],
+                        outOfOrder: dateStatuses?.filter((ds: any) => ds.status === "OUT_OF_ORDER").map((ds: any) => ds.date) || [],
+                      }}
+                      modifiersClassNames={{
+                        today: "border-2 border-primary bg-transparent text-primary hover:bg-transparent hover:text-primary",
+                        booked: "bg-blue-100 border-blue-200 text-blue-900 font-semibold rounded-none",
+                        reserved: "bg-amber-100 border-amber-200 text-amber-900 font-semibold rounded-none",
+                        outOfOrder: "bg-red-100 border-red-200 text-red-900 font-semibold rounded-none",
+                      }}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today;
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label>Time Slot *</Label>
+                <Select value={selectedTimeSlot} onValueChange={setSelectedTimeSlot}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MORNING">
+                      <div className="flex items-center gap-2">
+                        <Sun className="h-4 w-4 text-yellow-500" />
+                        Morning (8:00 AM - 2:00 PM)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="EVENING">
+                      <div className="flex items-center gap-2">
+                        <Sunset className="h-4 w-4 text-orange-500" />
+                        Evening (2:00 PM - 8:00 PM)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="NIGHT">
+                      <div className="flex items-center gap-2">
+                        <Moon className="h-4 w-4 text-blue-500" />
+                        Night (8:00 PM - 12:00 AM)
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-4">
+              <Label>Remarks</Label>
+              <Textarea
+                value={reservationRemarks}
+                onChange={(e) => setReservationRemarks(e.target.value)}
+                placeholder="Enter any additional details or remarks for this reservation..."
+                className="mt-2"
+                rows={3}
+              />
+            </div>
+
+            {/* Summary */}
+            {reserveDates.from && reserveDates.to && selectedTimeSlot && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+                <div className="flex items-center gap-2 text-sm text-blue-800">
+                  <Info className="h-4 w-4" />
+                  <span>
+                    Managing reservations for{" "}
+                    <strong>
+                      {new Date(reserveDates.from).toLocaleDateString()} to{" "}
+                      {new Date(reserveDates.to).toLocaleDateString()}
+                    </strong>
+                    {" "}during{" "}
+                    <strong className="flex items-center gap-1">
+                      {getTimeSlotIcon(selectedTimeSlot)}
+                      {getTimeSlotDisplay(selectedTimeSlot)}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Halls List */}
+            <div className="flex-1 overflow-y-auto mt-4 space-y-4">
+              <div className="border rounded-lg">
+                <div className="p-3 bg-muted font-medium flex items-center justify-between">
+                  <span>All Halls</span>
+                  <Badge variant="outline">{halls?.length} halls</Badge>
+                </div>
+                <div className="p-4 grid grid-cols-1 gap-3">
+                  {halls?.map((hall: Hall) => {
+                    const isReservedForDates = isHallReservedForDates(hall);
+
+                    // Collect all bookings and reservations for the conflict check
+                    const allBookings = halls.flatMap(h => h.bookings || []);
+                    const allReservations = halls.flatMap(h => h.reservations || []);
+
+                    const conflict = checkHallConflicts(
+                      hall.id.toString(),
+                      reserveDates.from,
+                      reserveDates.to,
+                      selectedTimeSlot,
+                      allBookings,
+                      halls,
+                      allReservations
+                    );
+
+                    const isCheckboxDisabled = conflict.hasConflict && !isReservedForDates;
+
+                    return (
+                      <div
+                        key={hall.id}
+                        className={`flex items-center space-x-3 p-3 border rounded-lg ${conflict.hasConflict && !isReservedForDates
+                          ? conflict.type === 'BOOKED' ? "bg-red-50 border-red-200" : "bg-orange-50 border-orange-200"
+                          : isReservedForDates
+                            ? "bg-blue-50 border-blue-200"
+                            : "bg-white border-gray-200"
+                          }`}
+                      >
+                        <Checkbox
+                          checked={selectedHalls.includes(hall.id)}
+                          onCheckedChange={(checked) =>
+                            handleHallSelection(hall.id, checked as boolean)
+                          }
+                          disabled={isCheckboxDisabled}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium flex items-center gap-2">
+                            {hall.name}
+                            {conflict.hasConflict && !isReservedForDates && (
+                              <AlertCircle className={`h-4 w-4 ${conflict.type === 'BOOKED' ? 'text-red-500' : 'text-orange-500'}`} />
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Capacity: {hall.capacity} guests
+                          </div>
+
+                          {conflict.hasConflict && !isReservedForDates && (
+                            <div className={`text-xs mt-1 flex items-center gap-1 font-medium ${conflict.type === 'BOOKED' ? 'text-red-600' : 'text-orange-600'}`}>
+                              <AlertCircle className="h-3 w-3" />
+                              {conflict.message}
+                            </div>
+                          )}
+
+                          {isReservedForDates && (
+                            <div className="text-xs text-blue-600 mt-1 flex items-center gap-1 font-medium">
+                              <CheckCircle className="h-3 w-3" />
+                              Currently Reserved by you (uncheck to remove)
+                            </div>
+                          )}
+                        </div>
+                        <Badge
+                          variant={
+                            conflict.hasConflict && !isReservedForDates
+                              ? conflict.type === 'BOOKED' ? "destructive" : "outline"
+                              : isReservedForDates
+                                ? "secondary"
+                                : "default"
+                          }
+                        >
+                          {conflict.hasConflict && !isReservedForDates
+                            ? conflict.type === 'BOOKED' ? "Booked" : "Unavailable"
+                            : isReservedForDates
+                              ? "Reserved"
+                              : "Available"}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="shrink-0 pt-4 border-t">
+            <div className="flex justify-between items-center w-full">
+              <div className="text-sm text-muted-foreground">
+                <div>{selectedHalls.length} hall(s) selected</div>
+                <div>
+                  {
+                    selectedHalls.filter((hallId) => {
+                      const hall = halls.find((h: Hall) => h.id === hallId);
+                      return hall && isHallReservedForDates(hall);
+                    }).length
+                  }{" "}
+                  already reserved for these dates and time slot
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setReserveDialog(false);
+                    setSelectedHalls([]);
+                    setReservationRemarks("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleBulkReserve}
+                  disabled={
+                    reserveMutation.isPending ||
+                    !reserveDates.from ||
+                    !reserveDates.to ||
+                    !selectedTimeSlot
+                  }
+                >
+                  {reserveMutation.isPending ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Updating...
+                    </div>
+                  ) : (
+                    `Save Changes (${selectedHalls.length})`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editHall} onOpenChange={() => setEditHall(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Hall: {editHall?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Name</Label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Capacity</Label>
+                <Input
+                  type="number"
+                  value={editForm.capacity}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, capacity: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Member Charges</Label>
+                <Input
+                  type="number"
+                  value={editForm.chargesMembers}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, chargesMembers: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Guest Charges</Label>
+                <Input
+                  type="number"
+                  value={editForm.chargesGuests}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, chargesGuests: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={editForm.description}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Current Images</Label>
+              <div className="flex flex-wrap gap-3 mt-2">
+                {editHall?.images?.map((img: any, i: number) => (
+                  <img
+                    key={i}
+                    src={img.url || img}
+                    alt="hall"
+                    className="h-24 w-24 object-cover rounded border"
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Add New Images</Label>
+              <ImageUpload
+                images={editForm.newImages.map((f) => URL.createObjectURL(f))}
+                onChange={(files) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    newImages: [...prev.newImages, ...files].slice(0, 5),
+                  }))
+                }
+                onRemove={(i) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    newImages: prev.newImages.filter((_, idx) => idx !== i),
+                  }))
+                }
+                maxImages={5}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+              <div>
+                <Label className="text-base font-medium">Hall Status</Label>
+                <p className="text-sm text-muted-foreground">
+                  {editForm.outOfOrders.length > 0
+                    ? "Hall has maintenance periods scheduled"
+                    : editForm.isActive
+                      ? "Active & Available"
+                      : "Inactive"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label>Active</Label>
+                <Switch
+                  checked={editForm.isActive}
+                  onCheckedChange={(checked) => {
+                    setEditForm({ ...editForm, isActive: checked });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
+              <div>
+                <Label className="text-base font-medium">Exclusive Status</Label>
+                <p className="text-sm text-muted-foreground">
+                  {editForm.isExclusive
+                    ? "Hall is marked as Exclusive"
+                    : "Not an exclusive hall"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label>Exclusive</Label>
+                <Switch
+                  checked={editForm.isExclusive}
+                  onCheckedChange={(checked) => {
+                    setEditForm({ ...editForm, isExclusive: checked });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Out of Order Periods</Label>
+                <span className="text-sm text-muted-foreground">
+                  Add multiple maintenance periods (e.g., Nov 9-10, Dec 9-10)
+                </span>
+              </div>
+              {/* Current out-of-order periods */}
+              {editForm.outOfOrders.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Added Maintenance Periods ({editForm.outOfOrders.length})</Label>
+                  {editForm.outOfOrders.map((oo, index) => (
+                    <div key={index} className="p-3 border rounded-lg flex justify-between items-center">
+                      <div>
+
+                        <div className="font-medium">
+                          {new Date(oo.startDate).toLocaleDateString()} - {new Date(oo.endDate).toLocaleDateString()}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {oo.reason}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveEditOutOfOrder(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Add new out-of-order period form */}
+              <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                <h4 className="font-medium">Add New Maintenance Period</h4>
+                <div>
+                  <Label>Reason *</Label>
+                  <Textarea
+                    value={editNewOutOfOrder.reason}
+                    onChange={(e) =>
+                      setEditNewOutOfOrder({ ...editNewOutOfOrder, reason: e.target.value })
+                    }
+                    placeholder="Describe the issue (maintenance, renovation, repair, etc.)"
+                    className="mt-2"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Maintenance Period *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-12 bg-white",
+                          !editNewOutOfOrder.startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {editNewOutOfOrder.startDate ? (
+                          editNewOutOfOrder.endDate && editNewOutOfOrder.endDate !== editNewOutOfOrder.startDate ? (
+                            <>
+                              {format(new Date(editNewOutOfOrder.startDate), "LLL dd, y")} -{" "}
+                              {format(new Date(editNewOutOfOrder.endDate), "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(new Date(editNewOutOfOrder.startDate), "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        initialFocus
+                        mode="range"
+                        defaultMonth={editNewOutOfOrder.startDate ? new Date(editNewOutOfOrder.startDate) : new Date()}
+                        selected={{
+                          from: editNewOutOfOrder.startDate ? new Date(editNewOutOfOrder.startDate) : undefined,
+                          to: editNewOutOfOrder.endDate ? new Date(editNewOutOfOrder.endDate) : undefined,
+                        }}
+                        onSelect={(range: DateRange | undefined) => {
+                          if (range?.from) {
+                            setEditNewOutOfOrder({
+                              ...editNewOutOfOrder,
+                              startDate: format(range.from, "yyyy-MM-dd"),
+                              endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                            });
+                          } else {
+                            setEditNewOutOfOrder({ ...editNewOutOfOrder, startDate: "", endDate: "" });
+                          }
+                        }}
+                        numberOfMonths={1}
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          return date < today;
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleAddEditOutOfOrder}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Maintenance Period
+                </Button>
+              </div>
+            </div>
+
+
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditHall(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateHall}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? "Updating..." : "Update Hall"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog
+        open={!!deleteHallData}
+        onOpenChange={() => setDeleteHallData(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Hall</DialogTitle>
+          </DialogHeader>
+          <p className="py-4">
+            Are you sure you want to delete{" "}
+            <strong>{deleteHallData?.name}</strong>? This action cannot be
+            undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteHallData(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteHall}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div >
+  );
+}
