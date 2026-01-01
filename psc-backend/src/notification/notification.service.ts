@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+// import * as admin from 'firebase-admin';
 import * as fs from 'fs';
 import * as path from 'path';
 import { QueueMessage, QueueMeta, QueueStatus } from './types';
@@ -11,7 +11,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 export class NotificationService {
     constructor(
         private readonly prisma: PrismaService,
-        @Inject('FIREBASE_ADMIN') private readonly firebase: admin.app.App,
+        // @Inject('FIREBASE_ADMIN') private readonly firebase: admin.app.App,
     ) { }
 
     private readonly META_FILE = path.join(process.cwd(), 'src/notification', 'queue.meta.json');
@@ -291,17 +291,17 @@ export class NotificationService {
         // Send FCM if token exists
         if (member.FCMToken && notificationRecord) {
             try {
-                await this.firebase.messaging().send({
-                    token: member.FCMToken,
-                    notification: {
-                        title: notificationRecord.title,
-                        body: notificationRecord.description || "",
-                    },
-                    data: {
-                        notificationId: String(notificationRecord.id),
-                        type: "general"
-                    }
-                });
+                // await this.firebase.messaging().send({
+                //     token: member.FCMToken,
+                //     notification: {
+                //         title: notificationRecord.title,
+                //         body: notificationRecord.description || "",
+                //     },
+                //     data: {
+                //         notificationId: String(notificationRecord.id),
+                //         type: "general"
+                //     }
+                // });
             } catch (error) {
                 console.error(`Failed to send FCM to ${noti.recipient}:`, error);
             }
