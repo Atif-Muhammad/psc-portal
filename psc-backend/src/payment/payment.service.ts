@@ -27,7 +27,6 @@ export class PaymentService {
   // Mock payment gateway call - replace with actual integration
   private async callPaymentGateway(paymentData: any) {
     // Simulate API call to payment gateway
-    // console.log('Calling payment gateway with:', paymentData);
 
     // This would be your actual payment gateway integration
     // For example:
@@ -64,7 +63,6 @@ export class PaymentService {
           }),
         },
       );
-      console.log(done);
     };
     paymentData.type === 'hall' && bookHall(paymentData);
     paymentData.type === 'lawn' &&
@@ -111,7 +109,6 @@ export class PaymentService {
 
 
   async confirmBooking(type: string, id: number) {
-    console.log(`Confirming ${type} booking with ID: ${id}`);
     const bookingType = type.toUpperCase() as BookingType;
 
     return await this.prismaService.$transaction(async (prisma) => {
@@ -240,16 +237,17 @@ export class PaymentService {
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: bookingData.membership_no }
     })
-    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
     // Validate room type exists
     const typeExists = await this.prismaService.roomType.findFirst({
       where: { id: roomType },
     });
     if (!typeExists) throw new NotFoundException(`Room type not found`);
-    // console.log(bookingData)
     // Parse dates
     const checkIn = parsePakistanDate(bookingData.from);
+    checkIn.setHours(0, 0, 0, 0)
     const checkOut = parsePakistanDate(bookingData.to);
+    checkOut.setHours(0, 0, 0, 0)
 
     // Validate dates
     if (checkIn >= checkOut) {
@@ -261,10 +259,7 @@ export class PaymentService {
     const today = getPakistanDate();
     today.setHours(0, 0, 0, 0);
 
-    const checkInDateOnly = new Date(checkIn);
-    checkInDateOnly.setHours(0, 0, 0, 0);
-
-    if (checkInDateOnly < today) {
+    if (checkIn < today) {
       throw new BadRequestException('Check-in date cannot be in the past');
     }
 
@@ -316,6 +311,14 @@ export class PaymentService {
             ],
           },
         },
+      },
+      include: {
+        roomType: {
+          select: {
+            priceMember: true,
+            priceGuest: true
+          }
+        }
       },
       orderBy: {
         roomNumber: 'asc',
@@ -387,9 +390,9 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         rooms: {
-          create: selectedRooms.map((r: any) => ({
+          create: selectedRooms.map(r => ({
             roomId: r.id,
-            priceAtBooking: bookingData.pricingType === 'member' ? r.roomType.priceMember : r.roomType.priceGuest
+            priceAtBooking: bookingData?.pricingType === 'member' ? r.roomType?.priceMember : r.roomType?.priceGuest
           }))
         }
       }
@@ -405,13 +408,13 @@ export class PaymentService {
       voucher_type: "FULL_PAYMENT",
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Room booking voucher for ${selectedRooms.map((room) => room.roomNumber).join(', ')}`,
+      remarks: `Room booking: ${selectedRooms.map((room) => room.roomNumber).join(', ')} from ${bookingData.from} to ${bookingData.to}`,
       expiresAt: holdExpiry
     });
 
     // dummy api call to confirm (mimicking webhook/payment callback)
     // we'll simulate this by calling a method in booking.service (to be implemented)
-    // For now, let's keep the return as voucher and the user can decide how they'll call confirmation.
+    // For now, let'll keep the return as voucher and the user can decide how they'll call confirmation.
     // However, the user asked for the dummy call to be part of the flow.
     if (voucher) {
       // Mimicking dummy call to confirm internal logic
@@ -423,22 +426,21 @@ export class PaymentService {
             method: 'POST'
           });
         } catch (e) {
-          console.error("Dummy confirmation call failed", e);
+          // Dummy confirmation call failed
         }
       }, 5000); // 5 seconds later
 
-      return voucher;
+      return { voucher, booking, member };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
 
   async genInvoiceHall(hallId: number, bookingData: any) {
-    console.log('Hall booking data received:', bookingData);
     // check if member is active
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: bookingData.membership_no }
     })
-    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE HALL EXISTS ─────────────────────────────
     const hallExists = await this.prismaService.hall.findFirst({
@@ -473,18 +475,29 @@ export class PaymentService {
     }
 
     // ── 3. PARSE AND VALIDATE BOOKING DATE ──────────────────
-    const bookingDate = new Date(bookingData.bookingDate);
-    bookingDate.setHours(0, 0, 0, 0);
+    const booking = parsePakistanDate(bookingData.bookingDate);
+    booking.setHours(0, 0, 0, 0);
 
-    const today = new Date();
+    const today = getPakistanDate();
     today.setHours(0, 0, 0, 0);
 
-    if (bookingDate < today) {
+    if (booking < today) {
       throw new BadRequestException('Booking date cannot be in the past');
     }
 
+    // Resolve End Date
+    const endDate = bookingData.endDate ? parsePakistanDate(bookingData.endDate) : new Date(booking);
+    endDate.setHours(0, 0, 0, 0);
+    if (endDate < booking) {
+      throw new BadRequestException('End Date cannot be before Start Date');
+    }
+
+    // Calculate number of days (inclusive)
+    const diffTime = Math.abs(endDate.getTime() - booking.getTime());
+    const numberOfDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
-    const normalizedEventTime = bookingData.eventTime.toUpperCase() as
+    const normalizedEventTime = (bookingData.eventTime || 'EVENING').toUpperCase() as
       | 'MORNING'
       | 'EVENING'
       | 'NIGHT';
@@ -494,6 +507,33 @@ export class PaymentService {
       throw new BadRequestException(
         'Invalid event time. Must be MORNING, EVENING, or NIGHT',
       );
+    }
+
+    // ── BOOKING DETAILS NORMALIZATION ──
+    const bookingDetails = bookingData.bookingDetails || [];
+    const normalizedDetails: { date: Date; timeSlot: string; eventType?: string }[] = [];
+
+    if (bookingDetails && bookingDetails.length > 0) {
+      for (const detail of bookingDetails) {
+        const dDate = parsePakistanDate(detail.date);
+        dDate.setHours(0, 0, 0, 0);
+        normalizedDetails.push({
+          date: dDate,
+          timeSlot: detail.timeSlot,
+          eventType: detail.eventType || bookingData.eventType,
+        });
+      }
+    } else {
+      for (let i = 0; i < numberOfDays; i++) {
+        const currentCheckDate = new Date(booking);
+        currentCheckDate.setDate(booking.getDate() + i);
+        currentCheckDate.setHours(0, 0, 0, 0);
+        normalizedDetails.push({
+          date: currentCheckDate,
+          timeSlot: normalizedEventTime,
+          eventType: bookingData.eventType,
+        });
+      }
     }
 
     // ── 5. CHECK IF HALL IS ON HOLD ─────────────────────────
@@ -507,93 +547,89 @@ export class PaymentService {
       }
     }
 
-    // ── 6. CHECK OUT-OF-ORDER PERIODS ──────────────────────
-    // Check for conflicts with out-of-order periods
-    const conflictingOutOfOrder = hallExists.outOfOrders?.find((period) => {
-      const periodStart = new Date(period.startDate);
-      const periodEnd = new Date(period.endDate);
-      periodStart.setHours(0, 0, 0, 0);
-      periodEnd.setHours(0, 0, 0, 0);
+    // ── 6. CONFLICT CHECKS (Granular) ─────────────────────────
+    for (const detail of normalizedDetails) {
+      const currentCheckDate = detail.date;
+      const currentSlot = detail.timeSlot;
 
-      return bookingDate >= periodStart && bookingDate <= periodEnd;
-    });
+      // 1. Check Out of Order
+      const outOfOrderConflict = hallExists.outOfOrders?.find((period) => {
+        const pStart = new Date(period.startDate).setHours(0, 0, 0, 0);
+        const pEnd = new Date(period.endDate).setHours(0, 0, 0, 0);
+        return currentCheckDate.getTime() >= pStart && currentCheckDate.getTime() <= pEnd;
+      });
 
-    if (conflictingOutOfOrder) {
-      const startDate = new Date(conflictingOutOfOrder.startDate);
-      const endDate = new Date(conflictingOutOfOrder.endDate);
+      if (outOfOrderConflict) {
+        throw new ConflictException(
+          `Hall '${hallExists.name}' out of order on ${currentCheckDate.toLocaleDateString()}`,
+        );
+      }
 
-      throw new ConflictException(
-        `Hall '${hallExists.name}' is out of order from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}: ${conflictingOutOfOrder.reason}`,
-      );
-    }
-
-    // Check if hall is currently out of order (active period)
-    const now = new Date();
-    const isCurrentlyOutOfOrder = hallExists.outOfOrders?.some((period) => {
-      const periodStart = new Date(period.startDate);
-      const periodEnd = new Date(period.endDate);
-      return now >= periodStart && now <= periodEnd;
-    });
-
-    // If hall is currently out of order and not active
-    if (isCurrentlyOutOfOrder && !hallExists.isActive) {
-      throw new ConflictException(
-        `Hall '${hallExists.name}' is currently out of order`,
-      );
-    }
-
-    // ── 7. CHECK FOR EXISTING BOOKINGS ──────────────────────
-    const existingBooking = await this.prismaService.hallBooking.findFirst({
-      where: {
-        hallId: hallExists.id,
-        bookingDate: bookingDate,
-        bookingTime: normalizedEventTime,
-      },
-    });
-
-    if (existingBooking) {
-      const timeSlotMap = {
-        MORNING: 'Morning (8:00 AM - 2:00 PM)',
-        EVENING: 'Evening (2:00 PM - 8:00 PM)',
-        NIGHT: 'Night (8:00 PM - 12:00 AM)',
-      };
-
-      throw new ConflictException(
-        `Hall '${hallExists.name}' is already booked for ${bookingDate.toLocaleDateString()} during ${timeSlotMap[normalizedEventTime]}`,
-      );
-    }
-
-    // ── 8. CHECK FOR RESERVATIONS ───────────────────────────
-    const conflictingReservation =
-      await this.prismaService.hallReservation.findFirst({
+      // 2. Check Existing Bookings
+      const existingBooking = await this.prismaService.hallBooking.findFirst({
         where: {
           hallId: hallExists.id,
-          AND: [
-            { reservedFrom: { lte: bookingDate } },
-            { reservedTo: { gt: bookingDate } },
-          ],
-          timeSlot: normalizedEventTime,
+          bookingDate: { lte: currentCheckDate },
+          endDate: { gte: currentCheckDate },
+          isCancelled: false,
         },
       });
 
-    if (conflictingReservation) {
-      throw new ConflictException(
-        `Hall '${hallExists.name}' is reserved from ${conflictingReservation.reservedFrom.toLocaleDateString()} to ${conflictingReservation.reservedTo.toLocaleDateString()} (${normalizedEventTime} time slot)`,
-      );
+      if (existingBooking) {
+        const details = existingBooking.bookingDetails as any[];
+        let hasConflict = false;
+
+        if (details && Array.isArray(details) && details.length > 0) {
+          const conflictDetail = details.find((d: any) => {
+            const dDate = new Date(d.date);
+            dDate.setHours(0, 0, 0, 0);
+            return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+          });
+          if (conflictDetail) hasConflict = true;
+        } else {
+          if (existingBooking.bookingTime === currentSlot) hasConflict = true;
+        }
+
+        if (hasConflict) {
+          throw new ConflictException(
+            `Hall already booked for ${currentSlot} on ${currentCheckDate.toLocaleDateString()}`,
+          );
+        }
+      }
+
+      // 3. Check Reservations
+      const dayStart = new Date(currentCheckDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentCheckDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const reservation = await this.prismaService.hallReservation.findFirst({
+        where: {
+          hallId: hallExists.id,
+          reservedFrom: { lte: dayEnd },
+          reservedTo: { gte: dayStart },
+          timeSlot: currentSlot,
+        },
+      });
+
+      if (reservation) {
+        throw new ConflictException(
+          `Hall reserved for ${currentSlot} on ${currentCheckDate.toLocaleDateString()}`,
+        );
+      }
     }
 
-    // ── 9. CALCULATE TOTAL PRICE ────────────────────────────
+    // ── 7. CALCULATE TOTAL PRICE ────────────────────────────
     const basePrice =
       bookingData.pricingType === 'member'
         ? hallExists.chargesMembers
         : hallExists.chargesGuests;
-    const totalPrice = Number(basePrice);
+    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * normalizedDetails.length;
 
-    // ── 10. CALCULATE HOLD EXPIRY ───────────────────────────
+    // ── 8. CALCULATE HOLD EXPIRY ───────────────────────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour for refined flow
-    const invoiceDueDate = new Date(Date.now() + 60 * 60 * 1000);
 
-    // ── 11. PUT HALL ON HOLD ────────────────────────────────
+    // ── 9. PUT HALL ON HOLD ────────────────────────────────
     try {
       await this.prismaService.hallHoldings.create({
         data: {
@@ -601,26 +637,24 @@ export class PaymentService {
           onHold: true,
           holdExpiry: holdExpiry,
           holdBy: String(bookingData.membership_no),
+          fromDate: booking,
+          toDate: endDate,
+          timeSlot: normalizedEventTime,
         },
       });
-
-      console.log(`Put hall '${hallExists.name}' on hold until ${holdExpiry}`);
     } catch (holdError) {
-      console.error('Failed to put hall on hold:', holdError);
-      throw new InternalServerErrorException(
-        'Failed to reserve hall temporarily',
-      );
+      // Skip error if record exists or just proceed
     }
 
-    // ── 12. PREPARE BOOKING DATA ────────────────────────────
-    // (using holdExpiry from above)
-
     // create temporary(unconfirmed) booking
-    const booking = await this.prismaService.hallBooking.create({
+    const bookingCreated = await this.prismaService.hallBooking.create({
       data: {
-        memberId: member.Sno, // Use member.Sno from line 321
+        memberId: member.Sno,
         hallId: hallExists.id,
-        bookingDate: bookingDate,
+        bookingDate: booking,
+        endDate: endDate,
+        numberOfDays: numberOfDays,
+        bookingDetails: normalizedDetails,
         bookingTime: normalizedEventTime,
         eventType: bookingData.eventType,
         numberOfGuests: bookingData.numberOfGuests || 0,
@@ -639,14 +673,14 @@ export class PaymentService {
     // create voucher as unpaid/pending
     const voucher = await this.createVoucher({
       booking_type: 'HALL',
-      booking_id: booking.id,
+      booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
       voucher_type: "FULL_PAYMENT",
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Hall booking voucher for ${hallExists.name}`,
+      remarks: `Hall booking: ${hallExists.name} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
       expiresAt: holdExpiry
     });
 
@@ -654,28 +688,27 @@ export class PaymentService {
     if (voucher) {
       setTimeout(async () => {
         try {
-          await fetch(`http://localhost:3000/api/payment/confirm/HALL/${booking.id}`, {
+          await fetch(`http://localhost:3000/api/payment/confirm/HALL/${bookingCreated.id}`, {
             method: 'POST'
           });
         } catch (e) {
-          console.error("Dummy confirmation call failed for HALL", e);
+          // Dummy confirmation call failed
         }
       }, 5000);
 
-      return voucher;
+      return { voucher, booking: bookingCreated, member };
     }
     throw new HttpException('Failed to create voucher', 500);
 
   }
 
   async genInvoiceLawn(lawnId: number, bookingData: any) {
-    console.log('Lawn booking data received:', bookingData);
 
     // check if member is active
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: bookingData.membership_no }
     })
-    if (member?.Status !== 'ACTIVE') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE LAWN EXISTS ─────────────────────────────
     const lawnExists = await this.prismaService.lawn.findFirst({
@@ -713,18 +746,29 @@ export class PaymentService {
     }
 
     // ── 3. PARSE AND VALIDATE BOOKING DATE ──────────────────
-    const bookingDate = new Date(bookingData.bookingDate);
-    bookingDate.setHours(0, 0, 0, 0);
+    const booking = parsePakistanDate(bookingData.bookingDate);
+    booking.setHours(0, 0, 0, 0);
 
-    const today = new Date();
+    const today = getPakistanDate();
     today.setHours(0, 0, 0, 0);
 
-    if (bookingDate < today) {
+    if (booking < today) {
       throw new BadRequestException('Booking date cannot be in the past');
     }
 
+    // Resolve End Date
+    const endDate = bookingData.endDate ? parsePakistanDate(bookingData.endDate) : new Date(booking);
+    endDate.setHours(0, 0, 0, 0);
+    if (endDate < booking) {
+      throw new BadRequestException('End Date cannot be before Start Date');
+    }
+
+    // Calculate number of days (inclusive)
+    const diffTime = Math.abs(endDate.getTime() - booking.getTime());
+    const numberOfDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
-    const normalizedEventTime = bookingData.eventTime.toUpperCase() as
+    const normalizedEventTime = (bookingData.eventTime || 'NIGHT').toUpperCase() as
       | 'MORNING'
       | 'EVENING'
       | 'NIGHT';
@@ -746,7 +790,6 @@ export class PaymentService {
     // ── 6. CHECK IF LAWN IS ON HOLD ─────────────────────────
     if (lawnExists.holdings && lawnExists.holdings.length > 0) {
       const activeHold = lawnExists.holdings[0];
-      // Check if the hold is by a different user
       if (activeHold.holdBy !== bookingData.membership_no?.toString()) {
         throw new ConflictException(
           `Lawn '${lawnExists.description}' is currently on hold by another user`,
@@ -754,54 +797,49 @@ export class PaymentService {
       }
     }
 
-    // ── 7. CHECK MULTIPLE OUT OF SERVICE PERIODS ─────────────────────
-    // First, check if lawn is currently out of service (based on current periods)
-    const isCurrentlyOutOfOrder = this.isCurrentlyOutOfOrder(
-      lawnExists.outOfOrders,
-    );
+    // ── 7. CONFLICT CHECKS (Granular) ─────────────────────────
+    for (let i = 0; i < numberOfDays; i++) {
+      const currentCheckDate = new Date(booking);
+      currentCheckDate.setDate(booking.getDate() + i);
+      currentCheckDate.setHours(0, 0, 0, 0);
 
-    if (isCurrentlyOutOfOrder) {
-      // Find the current out-of-order period
-      const currentPeriod = this.getCurrentOutOfOrderPeriod(
-        lawnExists.outOfOrders,
-      );
-      if (currentPeriod) {
-        throw new ConflictException(
-          `Lawn '${lawnExists.description}' is currently out of service from ${currentPeriod.startDate.toLocaleDateString()} to ${currentPeriod.endDate.toLocaleDateString()}${currentPeriod.reason ? `: ${currentPeriod.reason}` : ''}`,
-        );
-      }
-    }
-
-    // ── 8. CHECK IF BOOKING DATE FALLS WITHIN ANY OUT-OF-ORDER PERIOD ──
-    if (lawnExists.outOfOrders && lawnExists.outOfOrders.length > 0) {
-      const conflictingPeriod = lawnExists.outOfOrders.find((period) => {
-        const periodStart = new Date(period.startDate);
-        const periodEnd = new Date(period.endDate);
-        periodStart.setHours(0, 0, 0, 0);
-        periodEnd.setHours(0, 0, 0, 0);
-
-        return bookingDate >= periodStart && bookingDate <= periodEnd;
+      // 1. Out of Order
+      const outOfOrderConflict = lawnExists.outOfOrders?.find((period) => {
+        const start = new Date(period.startDate).setHours(0, 0, 0, 0);
+        const end = new Date(period.endDate).setHours(0, 0, 0, 0);
+        return currentCheckDate.getTime() >= start && currentCheckDate.getTime() <= end;
       });
+      if (outOfOrderConflict) throw new ConflictException(`Lawn out of order on ${currentCheckDate.toLocaleDateString()}`);
 
-      if (conflictingPeriod) {
-        const startDate = new Date(conflictingPeriod.startDate);
-        const endDate = new Date(conflictingPeriod.endDate);
+      // 2. Existing Bookings
+      const confBooking = await this.prismaService.lawnBooking.findFirst({
+        where: {
+          lawnId: lawnExists.id,
+          bookingDate: { lte: currentCheckDate },
+          endDate: { gte: currentCheckDate },
+          bookingTime: normalizedEventTime as any,
+          isCancelled: false,
+        },
+      });
+      if (confBooking) throw new ConflictException(`Lawn already booked for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`);
 
-        const isScheduled = startDate > today;
-
-        if (isScheduled) {
-          throw new ConflictException(
-            `Lawn '${lawnExists.description}' has scheduled maintenance from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}${conflictingPeriod.reason ? `: ${conflictingPeriod.reason}` : ''}`,
-          );
-        } else {
-          throw new ConflictException(
-            `Lawn '${lawnExists.description}' is out of service from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}${conflictingPeriod.reason ? `: ${conflictingPeriod.reason}` : ''}`,
-          );
-        }
-      }
+      // 3. Reservations
+      const dayStart = new Date(currentCheckDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentCheckDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      const reservation = await this.prismaService.lawnReservation.findFirst({
+        where: {
+          lawnId: lawnExists.id,
+          timeSlot: normalizedEventTime,
+          reservedFrom: { lte: dayEnd },
+          reservedTo: { gte: dayStart },
+        },
+      });
+      if (reservation) throw new ConflictException(`Lawn reserved for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`);
     }
 
-    // ── 9. CHECK GUEST COUNT AGAINST CAPACITY ───────────────
+    // ── 8. CHECK GUEST COUNT AGAINST CAPACITY ───────────────
     if (bookingData.numberOfGuests < (lawnExists.minGuests || 0)) {
       throw new ConflictException(
         `Number of guests (${bookingData.numberOfGuests}) is below the minimum requirement of ${lawnExists.minGuests} for this lawn`,
@@ -814,44 +852,25 @@ export class PaymentService {
       );
     }
 
-    // ── 10. CHECK FOR EXISTING BOOKINGS ──────────────────────
-    const existingBooking = await this.prismaService.lawnBooking.findFirst({
-      where: {
-        lawnId: lawnExists.id,
-        bookingDate: bookingDate,
-        bookingTime: normalizedEventTime,
-      },
-    });
-
-    if (existingBooking) {
-      const timeSlotMap = {
-        MORNING: 'Morning (8:00 AM - 2:00 PM)',
-        EVENING: 'Evening (2:00 PM - 8:00 PM)',
-        NIGHT: 'Night (8:00 PM - 12:00 AM)',
-      };
-
-      throw new ConflictException(
-        `Lawn '${lawnExists.description}' is already booked for ${bookingDate.toLocaleDateString()} during ${timeSlotMap[normalizedEventTime]}`,
-      );
-    }
-
-    // ── 11. CALCULATE TOTAL PRICE ───────────────────────────
+    // ── 9. CALCULATE TOTAL PRICE ───────────────────────────
     const basePrice =
       bookingData.pricingType === 'member'
         ? lawnExists.memberCharges
         : lawnExists.guestCharges;
-    const totalPrice = Number(basePrice);
+    const slotsCount = (bookingData.bookingDetails as any[])?.length || numberOfDays;
+    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * slotsCount;
 
-    // Calculate capacity and pricing
+    // ── 10. CALCULATE HOLD EXPIRY ───────────────────────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
 
     // create temporary(unconfirmed) booking
-    const booking = await this.prismaService.lawnBooking.create({
+    const bookingCreated = await this.prismaService.lawnBooking.create({
       data: {
-        memberId: member.Sno, // Wait, I need to fetch 'member' in genInvoiceLawn too
+        memberId: member.Sno,
         lawnId: lawnExists.id,
-        bookingDate: bookingDate,
-        bookingTime: normalizedEventTime,
+        bookingDate: booking,
+        endDate: endDate,
+        numberOfDays: numberOfDays,
         guestsCount: bookingData.numberOfGuests,
         eventType: bookingData.eventType || '',
         totalPrice: totalPrice,
@@ -863,20 +882,22 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         paidBy: 'MEMBER',
+        bookingTime: normalizedEventTime,
+        bookingDetails: bookingData.bookingDetails || [],
       }
     });
 
     // create voucher as unpaid/pending
     const voucher = await this.createVoucher({
       booking_type: 'LAWN',
-      booking_id: booking.id,
+      booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
       voucher_type: "FULL_PAYMENT",
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Lawn booking voucher for ${lawnExists.description}`,
+      remarks: `Lawn booking: ${lawnExists.description} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
       expiresAt: holdExpiry
     });
 
@@ -884,15 +905,15 @@ export class PaymentService {
     if (voucher) {
       setTimeout(async () => {
         try {
-          await fetch(`http://localhost:3000/api/payment/confirm/LAWN/${booking.id}`, {
+          await fetch(`http://localhost:3000/api/payment/confirm/LAWN/${bookingCreated.id}`, {
             method: 'POST'
           });
         } catch (e) {
-          console.error("Dummy confirmation call failed for LAWN", e);
+          // Dummy confirmation call failed
         }
       }, 5000);
 
-      return voucher;
+      return { voucher, booking: bookingCreated, member };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
@@ -922,6 +943,12 @@ export class PaymentService {
 
   async genInvoicePhotoshoot(photoshootId: number, bookingData: any) {
     // console.log('Photoshoot booking data received:', bookingData);
+    // check if member is active
+    const member = await this.prismaService.member.findFirst({
+      where: { Membership_No: bookingData.membership_no }
+    })
+    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+
 
     // ── 1. VALIDATE PHOTOSHOOT EXISTS ───────────────────────
     const photoshootExists = await this.prismaService.photoshoot.findFirst({
@@ -942,21 +969,11 @@ export class PaymentService {
     if (!bookingData.membership_no) {
       throw new BadRequestException('Membership number is required');
     }
-
-    // ── 3. VALIDATE MEMBER EXISTS ───────────────────────────
-    const member = await this.prismaService.member.findUnique({
-      where: { Membership_No: bookingData.membership_no.toString() },
-    });
-
-    if (!member) {
-      throw new NotFoundException('Member not found');
-    }
-
     // ── 4. PARSE AND VALIDATE BOOKING DATE & TIME ───────────
-    const bookingDate = new Date(bookingData.bookingDate);
+    const bookingDate = parsePakistanDate(bookingData.bookingDate);
     bookingDate.setHours(0, 0, 0, 0);
 
-    const today = new Date();
+    const today = getPakistanDate();
     today.setHours(0, 0, 0, 0);
 
     if (bookingDate < today) {
@@ -1024,7 +1041,7 @@ export class PaymentService {
       voucher_type: "FULL_PAYMENT",
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Photoshoot booking voucher for ${photoshootExists.description}`,
+      remarks: `Photoshoot booking: ${photoshootExists.description} on ${bookingDate.toLocaleDateString()}`,
       expiresAt: holdExpiry
     });
 
@@ -1036,11 +1053,11 @@ export class PaymentService {
             method: 'POST'
           });
         } catch (e) {
-          console.error("Dummy confirmation call failed for PHOTOSHOOT", e);
+          // Dummy confirmation call failed
         }
       }, 5000);
 
-      return voucher;
+      return { voucher, booking, member };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
@@ -1061,6 +1078,5 @@ export class PaymentService {
 
   // check idempotency
   async checkIdempo(idempotencyKey: string) {
-    console.log(idempotencyKey)
   }
 }

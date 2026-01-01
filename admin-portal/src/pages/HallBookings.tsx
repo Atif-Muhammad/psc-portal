@@ -60,6 +60,7 @@ import {
   calculateHallPrice,
   parseLocalDate,
 } from "@/utils/hallBookingUtils";
+import { formatDateForDisplay, parsePakistanDate } from "@/utils/pakDate";
 import { MemberSearchComponent } from "@/components/MemberSearch";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
@@ -294,7 +295,7 @@ const IndividualTimeSlotSelector = ({
             <div key={dateStr} className="p-3 bg-background rounded-lg border shadow-sm space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold text-foreground">
-                  {format(date, "EEEE, MMMM do")}
+                  {formatDateForDisplay(dateStr)}
                 </span>
                 <div className="flex gap-1">
                   {["MORNING", "EVENING", "NIGHT"].map(slot => {
@@ -1356,10 +1357,10 @@ export default function HallBookings() {
                         {booking.hall?.name || booking.hallName}
                       </TableCell>
                       <TableCell>
-                        {format(parseLocalDate(booking.bookingDate), "PP")}
+                        {formatDateForDisplay(booking.bookingDate)}
                         {booking.endDate &&
                           booking.endDate !== booking.bookingDate && (
-                            <> - {format(parseLocalDate(booking.endDate), "PP")}</>
+                            <> - {formatDateForDisplay(booking.endDate)}</>
                           )}
                       </TableCell>
                       <TableCell>{booking.eventType}</TableCell>

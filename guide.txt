@@ -142,3 +142,19 @@ gen invoice response
         ]
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+suggestions -- app
+1. welcome note fix
+2. dont show pricing for member and guest seperate -- use 'starting from' or show only guest price
+3. better if open the form directly if type have rooms available -- have rooms for the type 

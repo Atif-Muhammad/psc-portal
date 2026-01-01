@@ -11,6 +11,7 @@ import {
     Delete,
     HttpException,
     HttpStatus,
+    UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CreateAdminDto } from './dtos/create-admin.dto';
@@ -157,7 +158,6 @@ export class AuthController {
     ) {
         if (req?.user?.role != RolesEnum.ADMIN) {
             if (req?.user?.role != RolesEnum.SUPER_ADMIN) {
-
                 const activeUser = await this.authService.checkActive(req.user?.id!);
                 if (!activeUser) {
                     throw new HttpException(
@@ -193,12 +193,14 @@ export class AuthController {
 
     @Post('sendOTP/member')
     async sendOTP(@Body() payload: { memberID: string }) {
+        
         const member = await this.authService.getMember(payload?.memberID);
+        if(member.Status !== "active") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
         // generate an OTP and combine with OTP_MSG
         const otp = generateRandomNumber(4) || 1234;
         // store in member table
         await this.authService.storeOTP(member?.Membership_No, otp);
-        return this.authService.sendOTP(
+        return await this.authService.sendOTP(
             member?.Email!,
             'Login Request',
             `${OTP_MSG} <br/>
@@ -239,13 +241,11 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: true,
-                maxAge: 24 * 60 * 60 * 1000, // 1 day
             });
             res.cookie('refresh_token', refresh_token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: true,
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
             return res.status(200).json({ message: 'Login successful' });
         }

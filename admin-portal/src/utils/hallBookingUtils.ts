@@ -204,7 +204,10 @@ export const getUnavailableTimeSlotsForDate = (
     // 1. Check granular bookingDetails if available
     if (booking.bookingDetails && Array.isArray(booking.bookingDetails)) {
       booking.bookingDetails.forEach((detail: any) => {
-        const detailDateStr = format(new Date(detail.date), "yyyy-MM-dd");
+        // detail.date is a string like "2025-12-27". 
+        // parseLocalDate(detail.date) gives a local Date object.
+        const dDate = parseLocalDate(detail.date);
+        const detailDateStr = format(dDate, "yyyy-MM-dd");
         if (detailDateStr === dateString && detail.timeSlot) {
           if (!unavailableSlots.includes(detail.timeSlot)) {
             unavailableSlots.push(detail.timeSlot);
@@ -214,8 +217,8 @@ export const getUnavailableTimeSlotsForDate = (
     }
     // 2. Fallback to legacy bookingTime for backward compatibility
     else if (booking.bookingTime) {
-      const bookingDate = new Date(booking.bookingDate);
-      const bDateString = bookingDate.toISOString().split('T')[0];
+      const bDate = parseLocalDate(booking.bookingDate as string);
+      const bDateString = format(bDate, "yyyy-MM-dd");
       if (bDateString === dateString && !unavailableSlots.includes(booking.bookingTime)) {
         unavailableSlots.push(booking.bookingTime);
       }
@@ -251,8 +254,8 @@ export const getUnavailableTimeSlotsForDate = (
       if (holdExpiry < new Date()) return;
 
       if (hold.fromDate && hold.toDate) {
-        const hStart = format(new Date(hold.fromDate), "yyyy-MM-dd");
-        const hEnd = format(new Date(hold.toDate), "yyyy-MM-dd");
+        const hStart = format(parseLocalDate(hold.fromDate), "yyyy-MM-dd");
+        const hEnd = format(parseLocalDate(hold.toDate), "yyyy-MM-dd");
         if (dateString >= hStart && dateString <= hEnd) {
           if (hold.timeSlot && !unavailableSlots.includes(hold.timeSlot)) {
             unavailableSlots.push(hold.timeSlot);
@@ -363,14 +366,16 @@ export const checkHallConflicts = (
       // Check granular details first
       if (b.bookingDetails && Array.isArray(b.bookingDetails)) {
         return b.hallId?.toString() === hallId && b.bookingDetails.some((d: any) => {
-          const detailDateStr = format(new Date(d.date), "yyyy-MM-dd");
+          const dDate = parseLocalDate(d.date);
+          const detailDateStr = format(dDate, "yyyy-MM-dd");
           return detailDateStr === dateString && d.timeSlot === currentSlot;
         });
       }
 
       // Fallback to legacy
-      const bDate = format(new Date(b.bookingDate), "yyyy-MM-dd");
-      return b.hallId?.toString() === hallId && bDate === dateString && b.bookingTime === currentSlot;
+      const bDate = parseLocalDate(b.bookingDate as string);
+      const bDateStr = format(bDate, "yyyy-MM-dd");
+      return b.hallId?.toString() === hallId && bDateStr === dateString && b.bookingTime === currentSlot;
     });
 
     if (isBooked) {

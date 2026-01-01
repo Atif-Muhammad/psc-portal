@@ -180,16 +180,19 @@ export class AuthService {
         return member;
     }
     async checkActive(Membership_No: string) {
-        return await this.prisma.member.findFirst({ where: { Membership_No, Status: "CLEAR" } })
+        return await this.prisma.member.findFirst({ where: { Membership_No, Status: "active" } })
     }
 
     async sendOTP(to: string, subject: string, body: string) {
         return await this.mailer.sendMail(to, [], subject, body);
     }
     async storeOTP(memberID: string, otp: number) {
+        const otpExpiry = new Date();
+        otpExpiry.setHours(otpExpiry.getHours() + 1); // 1 hour expiry
+
         const otpSaved = await this.prisma.member.update({
             where: { Membership_No: String(memberID) },
-            data: { otp },
+            data: { otp, otpExpiry },
         });
         if (!otpSaved) {
             throw new HttpException(
@@ -202,17 +205,23 @@ export class AuthService {
 
     async loginMember(memberID: string, otp: number) {
         // check otp against the memberID
-        const matched = await this.prisma.member.findFirst({
+        const member = await this.prisma.member.findFirst({
             where: { Membership_No: String(memberID), otp },
         });
-        if (!matched) {
+        if (!member) {
             throw new HttpException("OTP Didn't match", HttpStatus.NOT_ACCEPTABLE);
         }
+
+        // check expiry
+        if (member.otpExpiry && new Date() > member.otpExpiry) {
+            throw new HttpException("OTP Expired", HttpStatus.NOT_ACCEPTABLE);
+        }
+
         await this.prisma.member.update({
             where: { Membership_No: String(memberID) },
-            data: { otp: null },
+            data: { otp: null, otpExpiry: null },
         });
-        return matched;
+        return member;
     }
 
     async getAdmins() {
