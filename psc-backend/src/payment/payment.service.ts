@@ -942,7 +942,7 @@ export class PaymentService {
   }
 
   async genInvoicePhotoshoot(photoshootId: number, bookingData: any) {
-    // console.log('Photoshoot booking data received:', bookingData);
+    console.log('Photoshoot booking data received:', bookingData);
     // check if member is active
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: bookingData.membership_no }
@@ -970,26 +970,48 @@ export class PaymentService {
       throw new BadRequestException('Membership number is required');
     }
     // ── 4. PARSE AND VALIDATE BOOKING DATE & TIME ───────────
-    const bookingDate = parsePakistanDate(bookingData.bookingDate);
+    let timeSlotStr = bookingData.timeSlot;
+    // Sanitize timeSlot if it has non-standard trailing colons (e.g., :00:00)
+    const timeParts = timeSlotStr.split('T');
+    if (timeParts.length === 2) {
+      const hms = timeParts[1].split(':');
+      if (hms.length > 3) {
+        timeSlotStr = `${timeParts[0]}T${hms.slice(0, 3).join(':')}`;
+      }
+    }
+
+    const startTime = new Date(timeSlotStr);
+    if (isNaN(startTime.getTime())) {
+      throw new BadRequestException('Invalid time slot format');
+    }
+
+    const bookingDate = new Date(startTime);
     bookingDate.setHours(0, 0, 0, 0);
 
-    const today = getPakistanDate();
+    const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     if (bookingDate < today) {
       throw new BadRequestException('Booking date cannot be in the past');
     }
 
-    const startTime = parsePakistanDate(bookingData.timeSlot);
-    const now = getPakistanDate();
+    const now = new Date();
+    // Allow 1 min grace for "now" bookings as per cBookingPhotoshoot
+    if (startTime.getTime() < now.getTime() - 60000) {
+      const bookingDateOnly = new Date(startTime);
+      bookingDateOnly.setHours(0, 0, 0, 0);
+      const todayDateOnly = new Date(now);
+      todayDateOnly.setHours(0, 0, 0, 0);
 
-    if (startTime < now) {
-      throw new BadRequestException('Booking time cannot be in the past');
+      if (bookingDateOnly < todayDateOnly) {
+        throw new BadRequestException('Booking date cannot be in the past');
+      }
+      // If same day, allow minor past time (admin-like behavior)
     }
 
-    // Validate time slot is between 9am and 6pm (since booking is 2 hours, last slot ends at 8pm)
+    // Validate time slot is between 9am and 6pm
     const bookingHour = startTime.getHours();
-    if (bookingHour < 9 || bookingHour >= 18) {
+    if (bookingHour < 9 || bookingHour > 18) {
       throw new BadRequestException(
         'Photoshoot bookings are only available between 9:00 AM and 6:00 PM',
       );
@@ -1001,11 +1023,21 @@ export class PaymentService {
     // REMOVED: Existing booking check to allow same date/time
 
     // ── 6. CALCULATE TOTAL PRICE ────────────────────────────
+    let parsedDetails = bookingData.bookingDetails;
+    if (typeof parsedDetails === 'string') {
+      try {
+        parsedDetails = JSON.parse(parsedDetails);
+      } catch (e) {
+        parsedDetails = [];
+      }
+    }
+    const slotsCount = Array.isArray(parsedDetails) ? parsedDetails.length : 1;
+
     const basePrice =
       bookingData.pricingType === 'member'
         ? photoshootExists.memberCharges
         : photoshootExists.guestCharges;
-    const totalPrice = Number(basePrice);
+    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * slotsCount;
 
     // ── 7. CREATE TEMPORARY BOOKING & VOUCHER ───────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
@@ -1027,7 +1059,7 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         paidBy: 'MEMBER',
-        bookingDetails: JSON.stringify([{ date: bookingData.bookingDate, timeSlot: bookingData.timeSlot }])
+        bookingDetails: parsedDetails || []
       }
     });
 
