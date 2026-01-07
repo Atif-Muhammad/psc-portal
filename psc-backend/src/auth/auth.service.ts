@@ -21,6 +21,7 @@ export class AuthService {
         role?: string;
         status?: string;
         permissions?: any[];
+        FCMToken?: string;
     }) {
         const accessToken = await this.jwtService.signAsync(payload, {
             secret: process.env.JWT_ACCESS_SECRET!,
@@ -40,6 +41,7 @@ export class AuthService {
         role?: string;
         status?: string;
         permissions?: any[];
+        FCMToken?: string;
     }) {
         return this.generateTokens(payload);
     }
@@ -183,7 +185,7 @@ export class AuthService {
         return member;
     }
     async checkActive(Membership_No: string) {
-        return await this.prisma.member.findFirst({ where: { Membership_No, Status: "active" } })
+        return await this.prisma.member.findFirst({ where: { Membership_No, OR: [{Status: "active"}, {Status: "deactivated"}] } })
     }
 
     async sendOTP(to: string, subject: string, body: string) {

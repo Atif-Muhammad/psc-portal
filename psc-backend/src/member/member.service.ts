@@ -231,4 +231,11 @@ export class MemberService {
       take: 15,
     });
   }
+
+  async checkMemberStatus(memberID: string){
+    return await this.prismaService.member.findFirst({
+      where: { Membership_No: memberID },
+      select:{Status: true, Actual_Status: true}
+    });
+  }
 }

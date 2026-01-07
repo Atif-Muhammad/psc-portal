@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -11,17 +13,18 @@ import {
 import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { PaymentService } from './payment.service';
 import { BookingService } from 'src/booking/booking.service';
+import { StatusGuard } from 'src/common/guards/StatusGuard';
 
 @Controller('payment')
 export class PaymentController {
   constructor(
     private payment: PaymentService,
-    private bookingService: BookingService,
+    private bookingService: BookingService
   ) { }
 
   // generate invoice:
 
-  @UseGuards(JwtAccGuard)
+  @UseGuards(JwtAccGuard, StatusGuard)
   @Post('generate/invoice/room')
   async generateInvoiceRoom(
     @Query('roomType') roomType: string,
@@ -36,7 +39,7 @@ export class PaymentController {
     });
   }
 
-  @UseGuards(JwtAccGuard)
+  @UseGuards(JwtAccGuard, StatusGuard)
   @Post('generate/invoice/hall')
   async generateInvoiceHall(
     @Query('hallId') hallId: string,
@@ -51,7 +54,7 @@ export class PaymentController {
     });
   }
 
-  @UseGuards(JwtAccGuard)
+  @UseGuards(JwtAccGuard, StatusGuard)
   @Post('generate/invoice/lawn')
   async generateInvoiceLawn(
     @Query('lawnId') lawnId: string,
@@ -65,7 +68,7 @@ export class PaymentController {
       membership_no,
     });
   }
-  @UseGuards(JwtAccGuard)
+  @UseGuards(JwtAccGuard, StatusGuard)
   @Post('generate/invoice/photoshoot')
   async generateInvoicePhotoshoot(
     @Query('photoshootId') photoshootId: string,

@@ -154,7 +154,7 @@ export class AuthController {
     @UseGuards(JwtAccGuard)
     @Get('user-who')
     async userWho(
-        @Req() req: { user: { id: string | undefined; name: string | undefined; role: string | undefined, permissions: any[] } },
+        @Req() req: { user: { id: string | undefined; name: string | undefined; FCMToken: string | null; role: string | undefined, permissions: any[] } },
     ) {
         const admin = await this.authService.checkAdmin(Number(req.user?.id!));
         if (!admin) {
@@ -174,7 +174,7 @@ export class AuthController {
                 }
             }
         }
-        return { id: req.user?.id, name: req.user?.name, role: req.user?.role, permissions: req.user?.permissions };
+        return { id: req.user?.id, name: req.user?.name, FCMToken: req.user.FCMToken, role: req.user?.role, permissions: req.user?.permissions };
     }
 
 
@@ -238,11 +238,11 @@ export class AuthController {
             return res.status(500).json({ message: 'Login un-successful' });
         }
 
-        const { Name, Email, Status, Membership_No } = authenticated;
+        const { Name, Email, Status, Membership_No, FCMToken } = authenticated;
 
         // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
         const { access_token, refresh_token } =
-            await this.authService.generateTokens({ name: Name, email: Email!, status: Status, id: Membership_No });
+            await this.authService.generateTokens({ name: Name, email: Email!, status: Status, id: Membership_No, FCMToken: FCMToken ?? undefined });
         if (clientType === 'web') {
             res.cookie('access_token', access_token, {
                 httpOnly: true,
