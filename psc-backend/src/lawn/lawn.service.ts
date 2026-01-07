@@ -292,6 +292,65 @@ export class LawnService {
     });
   }
 
+  // ─────────────────────────── LAWN DATE STATUSES ───────────────────────────
+
+  // Get date statuses for calendar
+  async getDateStatuses(from: string, to: string, lawnIds?: string[]) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    const lawnIdsNum = lawnIds?.map(id => Number(id)) || [];
+    const lawnFilter = lawnIdsNum.length > 0 ? { lawnId: { in: lawnIdsNum } } : {};
+
+    const [bookings, reservations, outOfOrders] = await Promise.all([
+      this.prismaService.lawnBooking.findMany({
+        where: {
+          bookingDate: { lt: toDate },
+          isCancelled: false,
+          ...lawnFilter,
+        },
+        select: {
+          id: true,
+          bookingDate: true,
+          endDate: true,
+          bookingTime: true, // Legacy
+          bookingDetails: true, // JSON
+          lawnId: true,
+          paymentStatus: true,
+        },
+      }),
+      this.prismaService.lawnReservation.findMany({
+        where: {
+          reservedFrom: { lt: toDate },
+          reservedTo: { gt: fromDate },
+          ...lawnFilter,
+        },
+        select: {
+          id: true,
+          reservedFrom: true,
+          reservedTo: true,
+          timeSlot: true,
+          lawnId: true,
+        },
+      }),
+      this.prismaService.lawnOutOfOrder.findMany({
+        where: {
+          startDate: { lt: toDate },
+          endDate: { gt: fromDate },
+          ...lawnFilter,
+        },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          lawnId: true,
+        },
+      }),
+    ]);
+
+    return { bookings, reservations, outOfOrders };
+  }
+
   // ─────────────────────────── LAWNS ───────────────────────────
 
   private isCurrentlyOutOfOrder(outOfOrders: any[]): boolean {

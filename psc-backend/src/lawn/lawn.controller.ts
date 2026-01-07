@@ -160,6 +160,18 @@ export class LawnController {
     return this.lawn.deleteLawn(Number(id));
   }
 
+  // ─────────────────────────── LAWN DATE STATUSES ───────────────────────────
+  @UseGuards(JwtAccGuard)
+  @Get('date-statuses')
+  async getDateStatuses(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('lawnIds') lawnIds?: string, // Comma separated IDs
+  ) {
+    const lawnIdsArray = lawnIds ? lawnIds.split(',') : undefined;
+    return await this.lawn.getDateStatuses(from, to, lawnIdsArray);
+  }
+
   // ─────────────────────────── LAWN RESERVATIONS ───────────────────────────
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)

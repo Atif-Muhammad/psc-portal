@@ -104,6 +104,17 @@ export class HallController {
   }
 
   @UseGuards(JwtAccGuard)
+  @Get('date-statuses')
+  async getDateStatuses(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('hallIds') hallIds?: string, // Comma separated IDs
+  ) {
+    const hallIdsArray = hallIds ? hallIds.split(',') : undefined;
+    return await this.hall.getDateStatuses(from, to, hallIdsArray);
+  }
+
+  @UseGuards(JwtAccGuard)
   @Get('logs')
   async getHallLogs(
     @Query('hallId') hallId: string,

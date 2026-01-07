@@ -62,6 +62,7 @@ export const BookingFormComponent = React.memo(({
   // Multi-room support
   selectedRoomIds,
   onRoomSelection,
+  // Month change
 }: BookingFormProps) => {
   return (
     <div className="space-y-8">
@@ -407,30 +408,9 @@ export const BookingFormComponent = React.memo(({
                 disabled={(date) => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
-                  if (date < today) return true;
-
-                  // Find status for this date
-                  const status = dateStatuses?.find(ds => {
-                    const d = new Date(ds.date);
-                    return d.getFullYear() === date.getFullYear() &&
-                      d.getMonth() === date.getMonth() &&
-                      d.getDate() === date.getDate();
-                  });
-
-                  if (!status) return false;
-
-                  // Allow OOS start date as checkout if it's the start date
-                  // This is tricky without knowing if it's the first or second click.
-                  // For now, let's NOT disable OOS dates completely if they can be checkouts.
-                  // But usually OOS means totally unavailable.
-                  // Let's just block them and see if the user complains.
-                  // Actually, if I block them, they can't select them as checkout.
-                  // So let's NOT block them in the 'disabled' function, just highlight them.
-                  // This way they can select them, and my checkConflicts will catch it if they try to book an interval that contains them.
-
-                  // RETURN false to NOT disable them so they can be selected as checkout.
-                  // (The conflict check on Save will handle the logic)
-                  return false;
+                  // Only disable past dates, allow selecting booked/reserved/oos dates
+                  // The conflict check on 'Save' will handle the validation
+                  return date < today;
                 }}
               />
             </PopoverContent>

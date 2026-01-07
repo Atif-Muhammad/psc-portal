@@ -13,10 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getLawnCategories, getBookings, createBooking, updateBooking, deleteBooking, searchMembers, getVouchers } from "../../config/apis";
+import { getLawnCategories, getBookings, createBooking, updateBooking, deleteBooking, searchMembers, getVouchers, getLawnDateStatuses } from "../../config/apis";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
-import { format } from "date-fns";
+import { format, addYears, startOfDay } from "date-fns";
 import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
 
 interface Member {
@@ -608,6 +608,69 @@ export default function LawnBookings() {
     enabled: !!viewVouchers,
   });
 
+  // Fetch date statuses for selected lawn - fetch 1 year from today
+  const { data: fetchedStatuses } = useQuery({
+    queryKey: ["lawnDateStatuses", "upcoming", selectedLawn],
+    queryFn: async () => {
+      if (!selectedLawn) return null;
+      const from = format(new Date(), "yyyy-MM-dd");
+      const to = format(addYears(new Date(), 1), "yyyy-MM-dd");
+      return await getLawnDateStatuses(from, to, [selectedLawn]);
+    },
+    enabled: !!selectedLawn,
+  });
+
+  const calendarModifiers = useMemo(() => {
+    if (!fetchedStatuses) return { booked: [], reserved: [], outOfOrder: [] };
+
+    const booked: Date[] = [];
+    const reserved: Date[] = [];
+    const outOfOrder: Date[] = [];
+
+    // Process Bookings
+    fetchedStatuses.bookings?.forEach((b: any) => {
+      if (b.bookingDetails && Array.isArray(b.bookingDetails)) {
+        b.bookingDetails.forEach((d: any) => {
+          const date = startOfDay(new Date(d.date));
+          if (!booked.some(bd => bd.getTime() === date.getTime())) {
+            booked.push(date);
+          }
+        });
+      } else {
+        const date = startOfDay(new Date(b.bookingDate));
+        if (!booked.some(bd => bd.getTime() === date.getTime())) {
+          booked.push(date);
+        }
+      }
+    });
+
+    // Process Reservations
+    fetchedStatuses.reservations?.forEach((r: any) => {
+      let current = startOfDay(new Date(r.reservedFrom));
+      const end = startOfDay(new Date(r.reservedTo));
+      while (current <= end) {
+        if (!reserved.some(rd => rd.getTime() === current.getTime())) {
+          reserved.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Process Out Of Orders
+    fetchedStatuses.outOfOrders?.forEach((ooo: any) => {
+      let current = startOfDay(new Date(ooo.startDate));
+      const end = startOfDay(new Date(ooo.endDate));
+      while (current <= end) {
+        if (!outOfOrder.some(od => od.getTime() === current.getTime())) {
+          outOfOrder.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    return { booked, reserved, outOfOrder };
+  }, [fetchedStatuses]);
+
   // Mutations
   const createMutation = useMutation({
     mutationFn: (data: any) => createBooking(data),
@@ -1136,6 +1199,13 @@ export default function LawnBookings() {
                         disabled={(date) =>
                           date < new Date(new Date().setHours(0, 0, 0, 0))
                         }
+                        modifiers={calendarModifiers}
+                        modifiersClassNames={{
+                          today: "border-2 border-primary bg-transparent text-primary hover:bg-transparent hover:text-primary",
+                          booked: "bg-blue-100 border-blue-200 text-blue-900 font-semibold rounded-none",
+                          reserved: "bg-amber-100 border-amber-200 text-amber-900 font-semibold rounded-none",
+                          outOfOrder: "bg-red-100 border-red-200 text-red-900 font-semibold rounded-none",
+                        }}
                         initialFocus
                       />
                     </PopoverContent>

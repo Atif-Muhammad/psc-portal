@@ -279,6 +279,63 @@ export class HallService {
     await this.prismaService.hall.delete({ where: { id } });
   }
 
+  // Get date statuses for calendar
+  async getDateStatuses(from: string, to: string, hallIds?: string[]) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    const hallIdsNum = hallIds?.map(id => Number(id)) || [];
+    const hallFilter = hallIdsNum.length > 0 ? { hallId: { in: hallIdsNum } } : {};
+
+    const [bookings, reservations, outOfOrders] = await Promise.all([
+      this.prismaService.hallBooking.findMany({
+        where: {
+          bookingDate: { lt: toDate }, // Loose check, refined by details/endDate
+          isCancelled: false,
+          ...hallFilter,
+        },
+        select: {
+          id: true,
+          bookingDate: true,
+          endDate: true,
+          bookingTime: true, // Legacy
+          bookingDetails: true, // JSON
+          hallId: true,
+          paymentStatus: true,
+        },
+      }),
+      this.prismaService.hallReservation.findMany({
+        where: {
+          reservedFrom: { lt: toDate },
+          reservedTo: { gt: fromDate },
+          ...hallFilter,
+        },
+        select: {
+          id: true,
+          reservedFrom: true,
+          reservedTo: true,
+          timeSlot: true,
+          hallId: true,
+        },
+      }),
+      this.prismaService.hallOutOfOrder.findMany({
+        where: {
+          startDate: { lt: toDate },
+          endDate: { gt: fromDate },
+          ...hallFilter,
+        },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          hallId: true,
+        },
+      }),
+    ]);
+
+    return { bookings, reservations, outOfOrders };
+  }
+
   // reserve hall(s)
   async reserveHalls(
     hallIds: number[],

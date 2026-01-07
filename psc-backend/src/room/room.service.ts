@@ -288,13 +288,14 @@ export class RoomService {
           },
         },
         bookings: {
+          where: {
+            booking: {
+              checkOut: { gte: new Date() },
+              isCancelled: false,
+            }
+          },
           include: {
             booking: true,
-          },
-          orderBy: {
-            booking: {
-              checkIn: 'asc',
-            }
           },
         },
       },
@@ -1012,6 +1013,77 @@ export class RoomService {
         outOfOrders: true,
       },
     });
+  }
+
+  async getDateStatuses(from: string, to: string, roomIds?: string[]) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+
+    const roomIdsNum = roomIds?.map(id => Number(id)) || [];
+    const roomFilter = roomIdsNum.length > 0 ? { roomId: { in: roomIdsNum } } : {};
+
+    const [roomOnBookings, reservations, outOfOrders] = await Promise.all([
+      this.prismaService.roomOnBooking.findMany({
+        where: {
+          booking: {
+            checkIn: { lt: toDate },
+            checkOut: { gt: fromDate },
+            isCancelled: false,
+          },
+          ...roomFilter,
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              checkIn: true,
+              checkOut: true,
+              paymentStatus: true,
+            },
+          },
+        },
+      }),
+      this.prismaService.roomReservation.findMany({
+        where: {
+          reservedFrom: { lt: toDate },
+          reservedTo: { gt: fromDate },
+          ...roomFilter,
+        },
+        select: {
+          id: true,
+          reservedFrom: true,
+          reservedTo: true,
+          roomId: true,
+        },
+      }),
+      this.prismaService.roomOutOfOrder.findMany({
+        where: {
+          startDate: { lt: toDate },
+          endDate: { gt: fromDate },
+          ...roomFilter,
+        },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          roomId: true,
+        },
+      }),
+    ]);
+
+    const bookings = roomOnBookings.map((rob) => ({
+      id: rob.booking.id,
+      checkIn: rob.booking.checkIn,
+      checkOut: rob.booking.checkOut,
+      roomId: rob.roomId,
+      paymentStatus: rob.booking.paymentStatus,
+    }));
+
+    return {
+      bookings,
+      reservations,
+      outOfOrders,
+    };
   }
 
   async getRoomLogs(roomId: number, from: string, to: string) {

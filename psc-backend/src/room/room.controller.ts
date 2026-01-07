@@ -213,6 +213,20 @@ export class RoomController {
 
   // calendar
   @UseGuards(JwtAccGuard)
+  // date statuses for calendar
+  @UseGuards(JwtAccGuard)
+  @Get('date-statuses')
+  async getDateStatuses(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('roomIds') roomIds?: string, // Comma separated IDs
+  ) {
+    const roomIdsArray = roomIds ? roomIds.split(',') : undefined;
+    return await this.room.getDateStatuses(from, to, roomIdsArray);
+  }
+
+  // calendar
+  @UseGuards(JwtAccGuard)
   @Get('calendar')
   async roomCalendar() {
     return await this.room.roomCalendar();

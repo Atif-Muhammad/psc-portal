@@ -1,6 +1,6 @@
 import axios from "axios";
-// const base_url = "http://localhost:3000/api";
-const base_url = "http://193.203.169.122:8080/api";
+const base_url = "http://localhost:3000/api";
+// const base_url = "http://193.203.169.122:8080/api";
 
 export const authAdmin = async (data: any): Promise<any> => {
   try {
@@ -646,6 +646,63 @@ export const getRoomLogs = async (
       "Something went wrong";
 
     throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomDateStatuses = async (
+  from: string,
+  to: string,
+  roomIds?: string[]
+): Promise<any> => {
+  try {
+    let url = `${base_url}/room/date-statuses?from=${from}&to=${to}`;
+    if (roomIds && roomIds.length > 0) {
+      url += `&roomIds=${roomIds.join(',')}`;
+    }
+    const response = await axios.get(url, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message || "Failed to fetch room date statuses";
+    throw new Error(message);
+  }
+};
+
+export const getHallDateStatuses = async (
+  from: string,
+  to: string,
+  hallIds?: string[]
+): Promise<any> => {
+  try {
+    let url = `${base_url}/hall/date-statuses?from=${from}&to=${to}`;
+    if (hallIds && hallIds.length > 0) {
+      url += `&hallIds=${hallIds.join(',')}`;
+    }
+    const response = await axios.get(url, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message || "Failed to fetch hall date statuses";
+    throw new Error(message);
+  }
+};
+
+export const getLawnDateStatuses = async (
+  from: string,
+  to: string,
+  lawnIds?: string[]
+): Promise<any> => {
+  try {
+    let url = `${base_url}/lawn/date-statuses?from=${from}&to=${to}`;
+    if (lawnIds && lawnIds.length > 0) {
+      url += `&lawnIds=${lawnIds.join(',')}`;
+    }
+    const response = await axios.get(url, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message || "Failed to fetch lawn date statuses";
+    throw new Error(message);
   }
 };
 

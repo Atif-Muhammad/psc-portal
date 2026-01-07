@@ -427,36 +427,37 @@ export default function Rooms() {
     const selectedFrom = new Date(reserveDates.from);
     const selectedTo = new Date(reserveDates.to);
 
-    return room.outOfOrders.some((oo) => {
+    return room.outOfOrders?.some((oo) => {
       const ooStart = new Date(oo.startDate);
       const ooEnd = new Date(oo.endDate);
       // console.log(oo)
       // Check for overlap
       return selectedFrom <= ooEnd && selectedTo > ooStart;
-    });
+    }) || false;
   };
 
   // Check if room is currently out of order (any ongoing period)
   const isRoomCurrentlyOutOfOrder = (room: Room) => {
     const now = new Date();
-    return room.outOfOrders.some((oo) => {
+    return room.outOfOrders?.some((oo) => {
       const ooStart = new Date(oo.startDate);
       const ooEnd = new Date(oo.endDate);
       return ooStart <= now && ooEnd >= now;
-    });
+    }) || false;
   };
 
   // Check if room has reservation for the exact selected dates
   const isRoomReservedForDates = (room: Room) => {
     if (!reserveDates.from || !reserveDates.to) return false;
 
-    const selectedFromUTC = new Date(reserveDates.from + 'T00:00:00Z').toISOString();
-    const selectedToUTC = new Date(reserveDates.to + 'T00:00:00Z').toISOString();
+    const selectedFrom = reserveDates.from;
+    const selectedTo = reserveDates.to;
 
-    return room.reservations.some((reservation) => {
-      return reservation.reservedFrom === selectedFromUTC &&
-        reservation.reservedTo === selectedToUTC;
-    });
+    return room.reservations?.some((reservation) => {
+      const resFrom = getPakistanDateString(new Date(reservation.reservedFrom));
+      const resTo = getPakistanDateString(new Date(reservation.reservedTo));
+      return resFrom === selectedFrom && resTo === selectedTo;
+    }) || false;
   };
 
   // Check if room has overlapping reservations with selected dates
@@ -466,20 +467,21 @@ export default function Rooms() {
     const selectedFrom = new Date(reserveDates.from + 'T00:00:00Z');
     const selectedTo = new Date(reserveDates.to + 'T00:00:00Z');
 
-    return room.reservations.some((reservation) => {
+    return room.reservations?.some((reservation) => {
       const reservationFrom = new Date(reservation.reservedFrom);
       const reservationTo = new Date(reservation.reservedTo);
 
+      const resFromStr = getPakistanDateString(new Date(reservation.reservedFrom));
+      const resToStr = getPakistanDateString(new Date(reservation.reservedTo));
+
       // Check for exact match first
-      const isExactMatch =
-        reservation.reservedFrom === new Date(reserveDates.from + 'T00:00:00Z').toISOString() &&
-        reservation.reservedTo === new Date(reserveDates.to + 'T00:00:00Z').toISOString();
+      const isExactMatch = resFromStr === reserveDates.from && resToStr === reserveDates.to;
 
       // Check for overlap (excluding exact matches)
       const hasOverlap = selectedFrom < reservationTo && selectedTo > reservationFrom;
 
       return hasOverlap && !isExactMatch;
-    });
+    }) || false;
   };
 
   // Handle room selection with reservation cancellation
@@ -1708,8 +1710,7 @@ export default function Rooms() {
                         // 1. It has overlapping reservations (and not already reserved for these exact dates), OR
                         // 2. Selected dates conflict with any out-of-order period
                         const isCheckboxDisabled =
-                          (hasOverlap && !isReservedForDates) ||
-                          isOutOfOrderForSelectedDates;
+                          !isReservedForDates && (hasOverlap || isOutOfOrderForSelectedDates);
 
                         return (
                           <div
@@ -1767,15 +1768,17 @@ export default function Rooms() {
                                     <CheckCircle className="h-3 w-3" />
                                     Reserved for these dates (uncheck to remove)
                                   </div>
-                                  {room.reservations?.find((r: any) =>
-                                    r.reservedFrom === reserveDates.from &&
-                                    r.reservedTo === reserveDates.to
-                                  )?.admin?.name && (
+                                  {room.reservations?.find((r: any) => {
+                                    const resFrom = getPakistanDateString(new Date(r.reservedFrom));
+                                    const resTo = getPakistanDateString(new Date(r.reservedTo));
+                                    return resFrom === reserveDates.from && resTo === reserveDates.to;
+                                  })?.admin?.name && (
                                       <div className="text-[10px] text-gray-500 ml-4 mt-0.5">
-                                        Reserved by: {room.reservations.find((r: any) =>
-                                          r.reservedFrom === reserveDates.from &&
-                                          r.reservedTo === reserveDates.to
-                                        )?.admin?.name}
+                                        Reserved by: {room.reservations.find((r: any) => {
+                                          const resFrom = getPakistanDateString(new Date(r.reservedFrom));
+                                          const resTo = getPakistanDateString(new Date(r.reservedTo));
+                                          return resFrom === reserveDates.from && resTo === reserveDates.to;
+                                        })?.admin?.name}
                                       </div>
                                     )}
                                 </div>

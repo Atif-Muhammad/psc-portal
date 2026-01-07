@@ -42,8 +42,10 @@ import {
   getHalls,
   searchMembers,
   getVouchers,
+  getRoomDateStatuses, // Just in case, but we need getHallDateStatuses
+  getHallDateStatuses,
 } from "../../config/apis";
-import { Member, Voucher } from "@/types/room-booking.type";
+import { Member, Voucher, DateStatus } from "@/types/room-booking.type";
 import {
   Hall,
   HallBooking,
@@ -64,7 +66,7 @@ import { formatDateForDisplay, parsePakistanDate } from "@/utils/pakDate";
 import { MemberSearchComponent } from "@/components/MemberSearch";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
-import { format, differenceInCalendarDays, addDays } from "date-fns";
+import { format, differenceInCalendarDays, addDays, addYears, startOfDay } from "date-fns";
 import { HallBookingDetailsCard } from "@/components/details/HallBookingDets";
 
 
@@ -455,6 +457,78 @@ export default function HallBookings() {
   const reservations = useMemo(() => {
     return halls.flatMap((hall: any) => hall.reservations || []);
   }, [halls]);
+
+  // Fetch date statuses for selected hall(s) - fetch 1 year from today
+  // Optimized approach similar to RoomBookings
+  const { data: fetchedStatuses } = useQuery({
+    queryKey: ["hallDateStatuses", "upcoming", form.hallId],
+    queryFn: async () => {
+      if (!form.hallId) return null;
+      const from = format(new Date(), "yyyy-MM-dd");
+      const to = format(addYears(new Date(), 1), "yyyy-MM-dd");
+      return await getHallDateStatuses(from, to, [form.hallId]);
+    },
+    enabled: !!form.hallId,
+  });
+
+  const calendarModifiers = useMemo(() => {
+    if (!fetchedStatuses) return { booked: [], reserved: [], outOfOrder: [] };
+
+    const booked: Date[] = [];
+    const reserved: Date[] = [];
+    const outOfOrder: Date[] = [];
+
+    // Process Bookings
+    fetchedStatuses.bookings?.forEach((b: any) => {
+      // If we have granular details, check dates
+      if (b.bookingDetails && Array.isArray(b.bookingDetails)) {
+        b.bookingDetails.forEach((d: any) => {
+          // If date has ANY slot booked, we marks it blue? 
+          // Or should we only mark if ALL slots? 
+          // User asked to "color the dates accordingly". 
+          // Usually single dot means "something is there".
+          // Let's just mark it.
+          const date = startOfDay(new Date(d.date));
+          if (!booked.some(bd => bd.getTime() === date.getTime())) {
+            booked.push(date);
+          }
+        });
+      } else {
+        // Legacy
+        const date = startOfDay(new Date(b.bookingDate));
+        if (!booked.some(bd => bd.getTime() === date.getTime())) {
+          booked.push(date);
+        }
+      }
+    });
+
+    // Process Reservations
+    fetchedStatuses.reservations?.forEach((r: any) => {
+      let current = startOfDay(new Date(r.reservedFrom));
+      const end = startOfDay(new Date(r.reservedTo));
+      // Use <= to include the end date (halls typically reserve full days)
+      while (current <= end) {
+        if (!reserved.some(rd => rd.getTime() === current.getTime())) {
+          reserved.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Process Out Of Orders
+    fetchedStatuses.outOfOrders?.forEach((ooo: any) => {
+      let current = startOfDay(new Date(ooo.startDate));
+      const end = startOfDay(new Date(ooo.endDate));
+      while (current <= end) {
+        if (!outOfOrder.some(od => od.getTime() === current.getTime())) {
+          outOfOrder.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    return { booked, reserved, outOfOrder };
+  }, [fetchedStatuses]);
 
   // Stable search handler with proper cleanup
   const handleMemberSearch = useCallback(
@@ -1182,6 +1256,13 @@ export default function HallBookings() {
                           today.setHours(0, 0, 0, 0);
                           return date < today;
                         }}
+                        modifiers={calendarModifiers}
+                        modifiersClassNames={{
+                          today: "border-2 border-primary bg-transparent text-primary hover:bg-transparent hover:text-primary",
+                          booked: "bg-blue-100 border-blue-200 text-blue-900 font-semibold rounded-none",
+                          reserved: "bg-amber-100 border-amber-200 text-amber-900 font-semibold rounded-none",
+                          outOfOrder: "bg-red-100 border-red-200 text-red-900 font-semibold rounded-none",
+                        }}
                       />
                     </PopoverContent>
                   </Popover>
@@ -1230,9 +1311,9 @@ export default function HallBookings() {
                   <IndividualTimeSlotSelector
                     bookingDetails={form.bookingDetails}
                     hallId={form.hallId}
-                    bookings={bookings}
+                    bookings={(fetchedStatuses?.bookings as HallBooking[]) || bookings}
                     halls={halls}
-                    reservations={reservations}
+                    reservations={fetchedStatuses?.reservations || reservations}
                     onChange={(newDetails) => {
                       setForm(prev => {
                         const newPrice = calculateHallPrice(halls, prev.hallId, prev.pricingType as PricingType, newDetails);

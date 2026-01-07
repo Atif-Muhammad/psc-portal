@@ -19,6 +19,7 @@ import {
   getRooms,
   searchMembers,
   getVouchers,
+  getRoomDateStatuses,
 } from "../../config/apis";
 import { Plus, Loader2, X } from "lucide-react";
 import {
@@ -51,14 +52,17 @@ import {
   Room,
   Member,
   RoomType,
+  DateStatus,
 } from "@/types/room-booking.type";
+
 import {
   initialFormState,
-  calculatePrice,
   calculateAccountingValues,
   getDateStatuses,
+  calculatePrice,
 } from "@/utils/bookingUtils";
-import { format } from "date-fns";
+import { parseLocalDate } from "@/utils/hallBookingUtils";
+import { format, startOfDay, addYears } from "date-fns";
 import { BookingDetailsCard } from "@/components/details/RoomBookingDets";
 
 // ShadCN components for inlined form
@@ -163,17 +167,99 @@ export default function RoomBookings() {
     enabled: false,
   });
 
-  // Date statuses for the create/edit dialogs
-  const createDateStatuses = useMemo(
-    () => getDateStatuses(form.roomId, bookings, allRooms),
-    [form.roomId, bookings, allRooms]
-  );
+  // Fetch date statuses for selected room(s) - fetch 1 year from today
+  const targetRoomIds = useMemo(() => {
+    const ids: string[] = [];
+    if (form.roomId) ids.push(form.roomId);
+    if (selectedRoomIds.length > 0) ids.push(...selectedRoomIds);
+    if (editForm.roomId) ids.push(editForm.roomId);
+    // Unique
+    return [...new Set(ids)];
+  }, [form.roomId, selectedRoomIds, editForm.roomId]);
 
-  const editDateStatuses = useMemo(
-    () =>
-      editBooking ? getDateStatuses(editForm.roomId, bookings, allRooms) : [],
-    [editBooking, editForm.roomId, bookings, allRooms]
-  );
+  const { data: fetchedStatuses } = useQuery({
+    queryKey: ["roomDateStatuses", "upcoming", targetRoomIds.join(",")],
+    queryFn: async () => {
+      const from = format(new Date(), "yyyy-MM-dd");
+      const to = format(addYears(new Date(), 1), "yyyy-MM-dd"); // Fetch 1 year
+      return await getRoomDateStatuses(from, to, targetRoomIds);
+    },
+    enabled: targetRoomIds.length > 0,
+  });
+
+  // Helper to process fetched statuses deeply
+  const processFetchedStatuses = useCallback((rawData: any, roomIds: string[]) => {
+    if (!rawData) return [];
+    const apiStatuses: DateStatus[] = [];
+    const roomIdsNum = roomIds.map(Number);
+
+    // Process Bookings
+    rawData.bookings?.filter((b: any) => roomIdsNum.includes(b.roomId)).forEach((b: any) => {
+      let current = startOfDay(new Date(b.checkIn));
+      const end = startOfDay(new Date(b.checkOut));
+      while (current < end) {
+        apiStatuses.push({
+          date: new Date(current),
+          status: "BOOKED",
+          bookingId: b.id.toString(),
+          // You might want to include roomId here if needed for differentiating
+        });
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Process Reservations
+    rawData.reservations?.filter((r: any) => roomIdsNum.includes(r.roomId)).forEach((r: any) => {
+      let current = startOfDay(new Date(r.reservedFrom));
+      const end = startOfDay(new Date(r.reservedTo));
+      while (current < end) {
+        apiStatuses.push({ date: new Date(current), status: "RESERVED", reservationId: r.id.toString() });
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    // Process Out Of Orders
+    rawData.outOfOrders?.filter((ooo: any) => roomIdsNum.includes(ooo.roomId)).forEach((ooo: any) => {
+      let current = startOfDay(new Date(ooo.startDate));
+      const end = startOfDay(new Date(ooo.endDate));
+      while (current <= end) {
+        apiStatuses.push({ date: new Date(current), status: "OUT_OF_ORDER" });
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    return apiStatuses;
+  }, []);
+
+  // Date statuses for the create/edit dialogs
+  const createDateStatuses = useMemo(() => {
+    // Combine statuses from nested room data (fallback/immediate) with fetched upcoming data
+    const internalStatuses = getDateStatuses(form.roomId, bookings, allRooms);
+
+    // Only use fetched data if we have it and it matches the selected room
+    const relevantRoomIds = [form.roomId, ...selectedRoomIds].filter(Boolean);
+    if (!fetchedStatuses || relevantRoomIds.length === 0) return internalStatuses;
+
+    const apiStatuses = processFetchedStatuses(fetchedStatuses, relevantRoomIds) as DateStatus[];
+
+    // Merge: favor API statuses (they are simpler flat list) 
+    // Just blindly concat and let the UI handler find "some" blocking status
+    return [...internalStatuses, ...apiStatuses];
+  }, [form.roomId, selectedRoomIds, bookings, allRooms, fetchedStatuses, processFetchedStatuses]);
+
+  const editDateStatuses = useMemo(() => {
+    // Similar logic for edit
+    if (!editBooking) return [];
+
+    // We don't have multi-room support for EDIT yet usually, just editForm.roomId
+    const internalStatuses = getDateStatuses(editForm.roomId, bookings, allRooms);
+
+    if (!fetchedStatuses || !editForm.roomId) return internalStatuses;
+
+    const apiStatuses = processFetchedStatuses(fetchedStatuses, [editForm.roomId]) as DateStatus[];
+
+    return [...internalStatuses, ...apiStatuses];
+  }, [editBooking, editForm.roomId, bookings, allRooms, fetchedStatuses, processFetchedStatuses]);
 
   // Stable search handler with proper cleanup
   const handleMemberSearch = useCallback(

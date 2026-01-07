@@ -168,6 +168,9 @@ export class AuthService {
 
         return admin;
     }
+    async checkAdmin(id: number){
+        return await this.prisma.admin.findUnique({where:{id}})
+    }
 
     // members
     async getMember(memberID: string) {

@@ -156,6 +156,13 @@ export class AuthController {
     async userWho(
         @Req() req: { user: { id: string | undefined; name: string | undefined; role: string | undefined, permissions: any[] } },
     ) {
+        const admin = await this.authService.checkAdmin(Number(req.user?.id!));
+        if (!admin) {
+            throw new HttpException(
+                'no admin found.',
+                HttpStatus.FORBIDDEN,
+            );
+        }
         if (req?.user?.role != RolesEnum.ADMIN) {
             if (req?.user?.role != RolesEnum.SUPER_ADMIN) {
                 const activeUser = await this.authService.checkActive(req.user?.id!);
