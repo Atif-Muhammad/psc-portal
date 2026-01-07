@@ -18,6 +18,28 @@ import { useToast } from "@/hooks/use-toast";
 import { Edit, Trash2, Plus, Calendar as CalendarIcon, MapPin, Clock, X } from "lucide-react";
 import { format } from "date-fns";
 import { getEvents, createEvent, updateEvent, deleteEvent } from "../../../config/apis";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Quill editor configuration
+const quillModules = {
+    toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+        [{ 'align': [] }],
+        ['link', 'image'],
+        [{ 'color': [] }, { 'background': [] }],
+        ['clean']
+    ],
+};
+
+const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent', 'align',
+    'link', 'image', 'color', 'background'
+];
 
 export default function EventsTab() {
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -126,14 +148,14 @@ export default function EventsTab() {
                                 <div className="flex items-center gap-2"><Clock className="h-3 w-3" /> {event.time || "N/A"}</div>
                                 <div className="flex items-center gap-2"><MapPin className="h-3 w-3" /> {event.venue || "N/A"}</div>
                             </div>
-                            <p className="mt-3 text-sm line-clamp-3">{event.description}</p>
+                            <div className="mt-3 text-sm prose max-w-none line-clamp-3" dangerouslySetInnerHTML={{ __html: event.description }} />
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Add Event</DialogTitle></DialogHeader>
                     <EventForm
                         onSubmit={(data: any) => handleSubmit(data)}
@@ -144,7 +166,7 @@ export default function EventsTab() {
             </Dialog>
 
             <Dialog open={!!editEvent} onOpenChange={() => setEditEvent(null)}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Edit Event</DialogTitle></DialogHeader>
                     {editEvent && (
                         <EventForm
@@ -218,8 +240,15 @@ function EventForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" />
             </div>
             <div>
-                <Label>Description</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" />
+                <Label className="mb-2 block">Description</Label>
+                <ReactQuill
+                    theme="snow"
+                    value={form.description}
+                    onChange={(value) => setForm({ ...form, description: value })}
+                    className="mt-1 h-48 mb-12"
+                    modules={quillModules}
+                    formats={quillFormats}
+                />
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div><Label>Venue</Label><Input value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })} className="mt-1" /></div>

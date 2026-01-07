@@ -15,11 +15,12 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { getBookings, createBooking, updateBooking, deleteBooking as delBooking, getPhotoshoots, searchMembers, getVouchers } from "../../config/apis";
 import { MemberSearchComponent } from "@/components/MemberSearch";
-import { Member } from "@/types/room-booking.type";
+import { Member, Voucher } from "@/types/room-booking.type";
 import { cn } from "@/lib/utils";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { PhotoshootBookingDetailsCard } from "@/components/details/PhotoshootBookingDets";
+import { VouchersDialog } from "@/components/VouchersDialog";
 
 export interface PhotoshootBooking {
   id: number;
@@ -60,21 +61,7 @@ interface PhotoshootService {
   guestCharges: string;
 }
 
-interface Voucher {
-  id: number;
-  voucher_no: string;
-  booking_type: string;
-  booking_id: number;
-  membership_no: string;
-  amount: string;
-  payment_mode: string;
-  voucher_type: string;
-  status: string;
-  issued_by: string;
-  issued_at: string;
-  remarks?: string;
-  transaction_id?: string;
-}
+
 
 const PhotoshootPaymentSection = React.memo(
   ({
@@ -529,29 +516,7 @@ export default function PhotoshootBookings() {
     }
   };
 
-  const getVoucherBadge = (type: string) => {
-    switch (type) {
-      case "FULL_PAYMENT":
-        return <Badge className="bg-green-100 text-green-800">Full Payment</Badge>;
-      case "HALF_PAYMENT":
-        return <Badge className="bg-blue-100 text-blue-800">Half Payment</Badge>;
-      default:
-        return <Badge>{type}</Badge>;
-    }
-  };
 
-  const getVoucherStatusBadge = (status: string) => {
-    switch (status) {
-      case "CONFIRMED":
-        return <Badge className="bg-green-100 text-green-800">Confirmed</Badge>;
-      case "PENDING":
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-      case "CANCELLED":
-        return <Badge variant="destructive">Cancelled</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
-  };
 
   // Format time display
   const formatTimeDisplay = (timeString: string) => {
@@ -1276,101 +1241,12 @@ export default function PhotoshootBookings() {
         </DialogContent>
       </Dialog>
 
-      {/* Vouchers Dialog */}
-      <Dialog open={!!viewVouchers} onOpenChange={(open) => {
-        if (!open) setViewVouchers(null);
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Payment Vouchers</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {isLoadingVouchers ? (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : vouchers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No vouchers generated yet.</p>
-                <p className="text-sm">
-                  Vouchers will be created when payments are made.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {vouchers.map((voucher) => (
-                  <div key={voucher.id} className="p-4 border rounded-lg bg-muted/50">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {getVoucherBadge(voucher.voucher_type)}
-                          {getVoucherStatusBadge(voucher.status)}
-                        </div>
-                        <div className="text-sm font-mono text-muted-foreground">
-                          Voucher #: {voucher.voucher_no}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-green-600">
-                          PKR {parseFloat(voucher.amount).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-muted-foreground capitalize">
-                          {voucher.payment_mode?.toLowerCase() || "cash"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                      <div>
-                        <div className="font-medium">Booking Type</div>
-                        <div>{voucher.booking_type}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium">Membership No</div>
-                        <div>{voucher.membership_no}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium">Issued By</div>
-                        <div>{voucher.issued_by || "—"}</div>
-                      </div>
-                      <div>
-                        <div className="font-medium">Issued At</div>
-                        <div>
-                          {voucher.issued_at
-                            ? new Date(voucher.issued_at).toLocaleDateString()
-                            : "—"}
-                        </div>
-                      </div>
-                    </div>
-
-                    {voucher.transaction_id && (
-                      <div className="mt-2 text-sm">
-                        <div className="font-medium">Transaction ID</div>
-                        <div className="font-mono text-muted-foreground">
-                          {voucher.transaction_id}
-                        </div>
-                      </div>
-                    )}
-
-                    {voucher.remarks && (
-                      <div className="mt-3 p-2 bg-white border rounded text-sm">
-                        <div className="font-medium">Remarks</div>
-                        <div className="text-muted-foreground">
-                          {voucher.remarks}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setViewVouchers(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <VouchersDialog
+        viewVouchers={viewVouchers}
+        onClose={() => setViewVouchers(null)}
+        vouchers={vouchers as any}
+        isLoadingVouchers={isLoadingVouchers}
+      />
 
       {/* Delete Dialog */}
       <Dialog open={!!deleteBooking} onOpenChange={() => setDeleteBooking(null)}>

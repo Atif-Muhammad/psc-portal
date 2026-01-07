@@ -268,6 +268,7 @@ export class BookingService {
         guestName,
         guestContact: guestContact?.toString(),
         createdBy,
+        updatedBy: '-',
       },
     });
 
@@ -579,6 +580,7 @@ export class BookingService {
         guestContact: guestContact?.toString(),
         refundAmount,
         refundReturned: false,
+        updatedBy,
       },
     });
 
@@ -1089,6 +1091,7 @@ export class BookingService {
             }))
           },
           createdBy,
+          updatedBy: '-',
         },
       });
 
@@ -1393,6 +1396,7 @@ export class BookingService {
         guestContact: guestContact?.toString(),
         refundAmount,
         refundReturned: false,
+        updatedBy,
       },
     });
 
@@ -1748,6 +1752,7 @@ export class BookingService {
           guestContact: guestContact?.toString(),
           remarks: remarks!,
           createdBy,
+          updatedBy: '-',
         },
       });
 
@@ -2389,6 +2394,7 @@ export class BookingService {
           guestName,
           guestContact: guestContact?.toString(),
           createdBy,
+          updatedBy: '-',
         },
         include: { hall: { select: { name: true, capacity: true } } },
       });
@@ -2978,6 +2984,7 @@ export class BookingService {
           eventType,
           bookingDetails: bookingDetails || [],
           createdBy,
+          updatedBy: '-',
         },
       });
 
@@ -3229,7 +3236,7 @@ export class BookingService {
 
       // ── CREATE ──
       const booked = await prisma.lawnBooking.create({
-        data: { memberId: member.Sno, lawnId: lawn.id, bookingDate: booking, endDate: endDate, numberOfDays: numberOfDays, guestsCount: numberOfGuests!, totalPrice: total, paymentStatus: paymentStatus as any, pricingType, paidAmount: paid, pendingAmount: owed, bookingTime: currentSlot as any, paidBy, guestName, guestContact: guestContact?.toString(), eventType, bookingDetails: bookingDetails || [], createdBy },
+        data: { memberId: member.Sno, lawnId: lawn.id, bookingDate: booking, endDate: endDate, numberOfDays: numberOfDays, guestsCount: numberOfGuests!, totalPrice: total, paymentStatus: paymentStatus as any, pricingType, paidAmount: paid, pendingAmount: owed, bookingTime: currentSlot as any, paidBy, guestName, guestContact: guestContact?.toString(), eventType, bookingDetails: bookingDetails || [], createdBy, updatedBy: '-' },
         include: { lawn: { select: { description: true, minGuests: true, maxGuests: true } } },
       });
 
@@ -3541,6 +3548,7 @@ export class BookingService {
         guestContact,
         bookingDetails: payload.bookingDetails || [],
         createdBy,
+        updatedBy: '-',
       },
     });
 
@@ -4022,6 +4030,7 @@ export class BookingService {
           guestName,
           guestContact,
           createdBy,
+          updatedBy: '-',
         },
         include: {
           photoshoot: {

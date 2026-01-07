@@ -133,6 +133,7 @@ function RuleForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
             [{ 'header': [1, 2, 3, false] }],
             ['bold', 'italic', 'underline', 'strike', 'blockquote'],
             [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+            [{ 'align': [] }],
             ['link', 'image'],
             [{ 'color': [] }, { 'background': [] }],
             ['clean']
@@ -142,7 +143,7 @@ function RuleForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
     const formats = [
         'header',
         'bold', 'italic', 'underline', 'strike', 'blockquote',
-        'list', 'bullet', 'indent',
+        'list', 'bullet', 'indent', 'align',
         'link', 'image', 'color', 'background'
     ]
 

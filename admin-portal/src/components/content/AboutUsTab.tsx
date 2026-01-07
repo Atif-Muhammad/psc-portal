@@ -4,12 +4,33 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Edit, Trash2, Plus } from "lucide-react";
 import { getAboutUs, upsertAboutUs, getHistory, createHistory, updateHistory, deleteHistory } from "../../../config/apis";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Quill editor configuration
+const quillModules = {
+    toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+        [{ 'align': [] }],
+        ['link', 'image'],
+        [{ 'color': [] }, { 'background': [] }],
+        ['clean']
+    ],
+};
+
+const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent', 'align',
+    'link', 'image', 'color', 'background'
+];
 
 export default function AboutUsTab() {
     const [clubInfo, setClubInfo] = useState("");
@@ -79,10 +100,14 @@ export default function AboutUsTab() {
         const formData = new FormData();
         formData.append("description", data.description);
 
-        // If it's a File object (new upload), it goes as a file.
-        // If it's a string (existing URL), it goes as a text field.
-        if (data.image) {
+        if (data.image instanceof File) {
             formData.append("image", data.image);
+        } else if (data.image) {
+            formData.append("image", data.image);
+        }
+
+        if (data.removeImage) {
+            formData.append("removeImage", "true");
         }
 
         if (isEdit) {
@@ -101,8 +126,15 @@ export default function AboutUsTab() {
                 <CardContent className="p-6 space-y-4">
                     <h3 className="text-xl font-bold">Club Info</h3>
                     <div>
-                        <Label>Description</Label>
-                        <Textarea value={clubInfo} onChange={(e) => setClubInfo(e.target.value)} rows={5} className="mt-2" />
+                        <Label className="mb-2 block">Description</Label>
+                        <ReactQuill
+                            theme="snow"
+                            value={clubInfo}
+                            onChange={setClubInfo}
+                            className="mt-2 h-64 mb-12"
+                            modules={quillModules}
+                            formats={quillFormats}
+                        />
                     </div>
                     <Button onClick={handleSaveInfo} disabled={upsertAboutUsMutation.isPending}>
                         {upsertAboutUsMutation.isPending ? "Saving..." : "Save Club Info"}
@@ -157,7 +189,7 @@ export default function AboutUsTab() {
                                     </div>
                                 )}
                                 <div className="p-4 flex-1 flex flex-col justify-between">
-                                    <p className="text-sm">{item.description}</p>
+                                    <div className="text-sm prose max-w-none" dangerouslySetInnerHTML={{ __html: item.description }} />
                                     <div className="flex justify-end gap-2 mt-2">
                                         <Button variant="ghost" size="icon" onClick={() => setEditHistory(item)}><Edit className="h-4 w-4" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => setDeleteHistoryData(item)}><Trash2 className="h-4 w-4" /></Button>
@@ -171,7 +203,7 @@ export default function AboutUsTab() {
 
             {/* History Dialogs */}
             <Dialog open={isAddHistory} onOpenChange={setIsAddHistory}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Add History</DialogTitle></DialogHeader>
                     <HistoryForm
                         onSubmit={handleHistorySubmit}
@@ -182,7 +214,7 @@ export default function AboutUsTab() {
             </Dialog>
 
             <Dialog open={!!editHistory} onOpenChange={() => setEditHistory(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Edit History</DialogTitle></DialogHeader>
                     {editHistory && (
                         <HistoryForm
@@ -214,7 +246,8 @@ export default function AboutUsTab() {
 function HistoryForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
     const [form, setForm] = useState({
         description: initialData?.description || "",
-        image: initialData?.image || null // Can be string (URL) or eventually File
+        image: initialData?.image || null, // Can be string (URL) or eventually File
+        removeImage: false // Track if user wants to remove existing image
     });
 
     // To track specifically the new file for preview, or use form.image if it's a File
@@ -223,24 +256,47 @@ function HistoryForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
     const handleFileChange = (e: any) => {
         const file = e.target.files[0];
         if (file) {
-            setForm({ ...form, image: file });
+            setForm({ ...form, image: file, removeImage: false });
             setPreview(URL.createObjectURL(file));
         }
+    };
+
+    const handleRemoveImage = () => {
+        setForm({ ...form, image: null, removeImage: true });
+        setPreview(null);
     };
 
     return (
         <div className="space-y-4 py-4">
             <div>
-                <Label>Description</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" />
+                <Label className="mb-2 block">Description</Label>
+                <ReactQuill
+                    theme="snow"
+                    value={form.description}
+                    onChange={(value) => setForm({ ...form, description: value })}
+                    className="mt-1 h-48 mb-12"
+                    modules={quillModules}
+                    formats={quillFormats}
+                />
             </div>
             <div>
                 <Label>Image</Label>
                 <Input type="file" accept="image/*" onChange={handleFileChange} className="mt-1" />
                 <div className="mt-2">
                     {preview ? (
-                        <div className="relative w-32 h-32 rounded border overflow-hidden">
-                            <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="relative inline-block">
+                            <div className="w-32 h-32 rounded border overflow-hidden">
+                                <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                                onClick={handleRemoveImage}
+                            >
+                                ×
+                            </Button>
                         </div>
                     ) : (
                         <p className="text-xs text-muted-foreground mt-1">No image selected</p>

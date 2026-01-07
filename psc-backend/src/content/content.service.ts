@@ -37,7 +37,7 @@ export class ContentService {
     }
 
     async getAllEvents() {
-        const events = await this.prisma.event.findMany({ orderBy: { createdAt: 'desc' } });
+        const events = await this.prisma.event.findMany({ orderBy: { startDate: 'desc' } });
         return events.map(e => ({
             ...e,
             images: JSON.parse(e.images as string || '[]')
@@ -207,6 +207,11 @@ export class ContentService {
 
     async updateClubHistory(id: number, data: any, updatedBy: string, file?: Express.Multer.File) {
         let imageUrl = data.image; // Keep existing if not replaced
+
+        if (data.removeImage === 'true' || data.removeImage === true) {
+            imageUrl = null;
+        }
+
         if (file) {
             const upload = await this.cloudinary.uploadFile(file);
             imageUrl = upload.url;

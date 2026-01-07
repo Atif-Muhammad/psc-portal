@@ -12,6 +12,28 @@ import { Edit, Trash2, Plus, Calendar } from "lucide-react";
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from "../../../config/apis";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Quill editor configuration
+const quillModules = {
+    toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+        [{ 'align': [] }],
+        ['link', 'image'],
+        [{ 'color': [] }, { 'background': [] }],
+        ['clean']
+    ],
+};
+
+const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent', 'align',
+    'link', 'image', 'color', 'background'
+];
 
 export default function AnnouncementsTab() {
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -96,14 +118,14 @@ export default function AnnouncementsTab() {
                                     <Button variant="ghost" size="icon" onClick={() => setDeleteData(item)}><Trash2 className="h-4 w-4" /></Button>
                                 </div>
                             </div>
-                            <p className="mt-3 text-sm">{item.description}</p>
+                            <div className="mt-3 text-sm prose max-w-none" dangerouslySetInnerHTML={{ __html: item.description }} />
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Add Announcement</DialogTitle></DialogHeader>
                     <AnnouncementForm
                         onSubmit={(data: any) => handleSubmit(data)}
@@ -114,7 +136,7 @@ export default function AnnouncementsTab() {
             </Dialog>
 
             <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Edit Announcement</DialogTitle></DialogHeader>
                     {editItem && (
                         <AnnouncementForm
@@ -158,8 +180,15 @@ function AnnouncementForm({ initialData, onSubmit, onCancel, isSubmitting }: any
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" />
             </div>
             <div>
-                <Label>Description</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" />
+                <Label className="mb-2 block">Description</Label>
+                <ReactQuill
+                    theme="snow"
+                    value={form.description}
+                    onChange={(value) => setForm({ ...form, description: value })}
+                    className="mt-1 h-48 mb-12"
+                    modules={quillModules}
+                    formats={quillFormats}
+                />
             </div>
             <div>
                 <Label>Date</Label>

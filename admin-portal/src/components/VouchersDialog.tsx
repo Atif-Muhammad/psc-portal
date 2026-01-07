@@ -2,11 +2,12 @@ import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Receipt } from "lucide-react";
+import { Loader2, Receipt, Download } from "lucide-react";
 import { Voucher, Booking } from "@/types/room-booking.type";
+import { exportVoucherPDF } from "@/lib/pdfExport";
 
 interface VouchersDialogProps {
-  viewVouchers: Booking | null;
+  viewVouchers: any;
   onClose: () => void;
   vouchers: Voucher[];
   isLoadingVouchers: boolean;
@@ -76,12 +77,29 @@ export const VouchersDialog = React.memo(({
                         Voucher #: {voucher.voucher_no}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">
-                        PKR {parseFloat(voucher.amount).toLocaleString()}
+                    <div className="text-right flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => exportVoucherPDF({
+                            ...voucher,
+                            memberName: viewVouchers?.memberName || viewVouchers?.member?.Name,
+                            membershipNo: viewVouchers?.Membership_No || viewVouchers?.member?.Membership_No
+                          })}
+                          title="Download PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="text-xs text-muted-foreground capitalize">
-                        {voucher.payment_mode.toLowerCase()}
+                      <div>
+                        <div className="text-lg font-bold text-green-600">
+                          PKR {parseFloat(voucher.amount).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground capitalize">
+                          {voucher.payment_mode.toLowerCase()}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -101,8 +119,9 @@ export const VouchersDialog = React.memo(({
                     </div>
                     <div>
                       <div className="font-medium">Issued At</div>
-                      <div>
-                        {new Date(voucher.issued_at).toLocaleDateString()}
+                      <div className="text-xs">
+                        {new Date(voucher.issued_at).toLocaleDateString()} {" "}
+                        {new Date(voucher.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                   </div>

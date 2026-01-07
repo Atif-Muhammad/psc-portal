@@ -11,6 +11,28 @@ import { useToast } from "@/hooks/use-toast";
 import { Edit, Trash2, Plus, Megaphone } from "lucide-react";
 import { getAds, createAd, updateAd, deleteAd } from "../../../config/apis";
 import { Switch } from "@/components/ui/switch";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Quill editor configuration
+const quillModules = {
+    toolbar: [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+        [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+        [{ 'align': [] }],
+        ['link', 'image'],
+        [{ 'color': [] }, { 'background': [] }],
+        ['clean']
+    ],
+};
+
+const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent', 'align',
+    'link', 'image', 'color', 'background'
+];
 
 export default function PromotionalAdsTab() {
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -101,14 +123,14 @@ export default function PromotionalAdsTab() {
                                     <Button variant="ghost" size="icon" onClick={() => setDeleteData(ad)}><Trash2 className="h-4 w-4" /></Button>
                                 </div>
                             </div>
-                            <p className="mt-2 text-sm line-clamp-3 text-muted-foreground">{ad.description}</p>
+                            <div className="mt-2 text-sm line-clamp-3 text-muted-foreground prose max-w-none" dangerouslySetInnerHTML={{ __html: ad.description }} />
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Add Promotion</DialogTitle></DialogHeader>
                     <AdForm
                         onSubmit={(data: any) => handleSubmit(data)}
@@ -119,7 +141,7 @@ export default function PromotionalAdsTab() {
             </Dialog>
 
             <Dialog open={!!editAd} onOpenChange={() => setEditAd(null)}>
-                <DialogContent>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>Edit Promotion</DialogTitle></DialogHeader>
                     {editAd && (
                         <AdForm
@@ -173,8 +195,15 @@ function AdForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="mt-1" />
             </div>
             <div>
-                <Label>Description</Label>
-                <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1" />
+                <Label className="mb-2 block">Description</Label>
+                <ReactQuill
+                    theme="snow"
+                    value={form.description}
+                    onChange={(value) => setForm({ ...form, description: value })}
+                    className="mt-1 h-32 mb-12"
+                    modules={quillModules}
+                    formats={quillFormats}
+                />
             </div>
             <div className="flex items-center gap-2">
                 <Switch checked={form.isActive} onCheckedChange={(c) => setForm({ ...form, isActive: c })} />
