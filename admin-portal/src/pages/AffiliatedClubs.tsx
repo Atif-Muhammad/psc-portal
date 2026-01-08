@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
+
 import { Plus, Edit, Trash2, Eye, Check, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,6 +22,7 @@ import {
   updateAffiliatedClubRequestStatus,
 } from "../../config/apis";
 import type { AffiliatedClub, CreateAffiliatedClubDto, AffiliatedClubRequest } from "@/types/affiliated-club.type";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AffiliatedClubs() {
   const [activeTab, setActiveTab] = useState("clubs");
@@ -123,6 +124,16 @@ export default function AffiliatedClubs() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: "File too large",
+          description: "Image must be under 5MB.",
+          variant: "destructive",
+        });
+        e.target.value = ""; // Reset input
+        return;
+      }
       setClubForm({ ...clubForm, file });
     }
   };
@@ -460,7 +471,7 @@ export default function AffiliatedClubs() {
                 rows={3}
               />
               <div className="grid gap-2">
-                <Label htmlFor="image">Club Image</Label>
+                <Label htmlFor="image">Club Image (Max 5MB)</Label>
                 <div className="flex items-center gap-4">
                   {(clubForm.image || clubForm.file) && (
                     <div className="relative">
@@ -494,7 +505,14 @@ export default function AffiliatedClubs() {
                 </div>
               </div>
 
-              <Label htmlFor="isActive">Active</Label>
+              <div className="flex items-center gap-2 mt-4">
+                <Switch
+                  id="isActive"
+                  checked={clubForm.isActive ?? true}
+                  onCheckedChange={(checked) => setClubForm({ ...clubForm, isActive: checked })}
+                />
+                <Label htmlFor="isActive">Active</Label>
+              </div>
             </div>
           </div>
 
@@ -527,111 +545,111 @@ export default function AffiliatedClubs() {
               </div>
             </div>
           )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setClubDialog(false)} disabled={createMutation.isPending || updateMutation.isPending}>
-            Cancel
-          </Button>
-          <Button onClick={editingClub ? handleUpdateClub : handleCreateClub} disabled={createMutation.isPending || updateMutation.isPending}>
-            {createMutation.isPending || updateMutation.isPending ? (
-              <>
-                <span className="animate-spin mr-2">⏳</span>
-                {editingClub ? "Updating..." : "Creating..."}
-              </>
-            ) : (
-              editingClub ? "Update" : "Create"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClubDialog(false)} disabled={createMutation.isPending || updateMutation.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={editingClub ? handleUpdateClub : handleCreateClub} disabled={createMutation.isPending || updateMutation.isPending}>
+              {createMutation.isPending || updateMutation.isPending ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  {editingClub ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                editingClub ? "Update" : "Create"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Request View Dialog */ }
-  <Dialog open={!!viewRequest} onOpenChange={() => setViewRequest(null)}>
-    <DialogContent className="max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>Request Details</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Club Name</p>
-            <p className="font-medium">{viewRequest?.affiliatedClub?.name}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Membership No</p>
-            <p className="font-medium">{viewRequest?.membershipNo}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Requested Date</p>
-            <p className="font-medium">
-              {viewRequest && new Date(viewRequest.requestedDate).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-
-        {viewRequest?.purpose && (
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Purpose</p>
-            <p className="font-medium">{viewRequest.purpose}</p>
-          </div>
-        )}
-
-        {viewRequest && (
-          <div className="mt-4 pt-4 border-t bg-gray-50/50 -mx-6 px-6 py-4">
-            <h3 className="font-semibold text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-              Audit Tracking
-            </h3>
+      {/* Request View Dialog */}
+      <Dialog open={!!viewRequest} onOpenChange={() => setViewRequest(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Request Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-[10px] text-gray-400 uppercase">Created By</Label>
-                <div className="text-xs font-medium">{viewRequest.createdBy || "System"}</div>
+                <p className="text-sm text-muted-foreground">Club Name</p>
+                <p className="font-medium">{viewRequest?.affiliatedClub?.name}</p>
               </div>
               <div>
-                <Label className="text-[10px] text-gray-400 uppercase">Created At</Label>
-                <div className="text-xs text-gray-600">
-                  {viewRequest.createdAt ? new Date(viewRequest.createdAt).toLocaleString("en-PK") : "N/A"}
-                </div>
+                <p className="text-sm text-muted-foreground">Membership No</p>
+                <p className="font-medium">{viewRequest?.membershipNo}</p>
               </div>
               <div>
-                <Label className="text-[10px] text-gray-400 uppercase">Last Updated By</Label>
-                <div className="text-xs font-medium">{viewRequest.updatedBy || viewRequest.createdBy || "System"}</div>
-              </div>
-              <div>
-                <Label className="text-[10px] text-gray-400 uppercase">Last Updated</Label>
-                <div className="text-xs text-gray-600">
-                  {viewRequest.updatedAt ? new Date(viewRequest.updatedAt).toLocaleString("en-PK") : "N/A"}
-                </div>
+                <p className="text-sm text-muted-foreground">Requested Date</p>
+                <p className="font-medium">
+                  {viewRequest && new Date(viewRequest.requestedDate).toLocaleDateString()}
+                </p>
               </div>
             </div>
+
+            {viewRequest?.purpose && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Purpose</p>
+                <p className="font-medium">{viewRequest.purpose}</p>
+              </div>
+            )}
+
+            {viewRequest && (
+              <div className="mt-4 pt-4 border-t bg-gray-50/50 -mx-6 px-6 py-4">
+                <h3 className="font-semibold text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                  Audit Tracking
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-[10px] text-gray-400 uppercase">Created By</Label>
+                    <div className="text-xs font-medium">{viewRequest.createdBy || "System"}</div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-gray-400 uppercase">Created At</Label>
+                    <div className="text-xs text-gray-600">
+                      {viewRequest.createdAt ? new Date(viewRequest.createdAt).toLocaleString("en-PK") : "N/A"}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-gray-400 uppercase">Last Updated By</Label>
+                    <div className="text-xs font-medium">{viewRequest.updatedBy || viewRequest.createdBy || "System"}</div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-gray-400 uppercase">Last Updated</Label>
+                    <div className="text-xs text-gray-600">
+                      {viewRequest.updatedAt ? new Date(viewRequest.updatedAt).toLocaleString("en-PK") : "N/A"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {viewRequest?.status === "PENDING" && (
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setViewRequest(null)}>
-            Close
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (viewRequest) handleRejectRequest(viewRequest.id);
-            }}
-            disabled={updateRequestStatusMutation.isPending}
-          >
-            {updateRequestStatusMutation.isPending ? "Processing..." : "Reject"}
-          </Button>
-          <Button
-            onClick={() => {
-              if (viewRequest) handleApproveRequest(viewRequest.id);
-            }}
-            disabled={updateRequestStatusMutation.isPending}
-          >
-            {updateRequestStatusMutation.isPending ? "Processing..." : "Approve"}
-          </Button>
-        </DialogFooter>
-      )}
-    </DialogContent>
-  </Dialog>
+          {viewRequest?.status === "PENDING" && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setViewRequest(null)}>
+                Close
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (viewRequest) handleRejectRequest(viewRequest.id);
+                }}
+                disabled={updateRequestStatusMutation.isPending}
+              >
+                {updateRequestStatusMutation.isPending ? "Processing..." : "Reject"}
+              </Button>
+              <Button
+                onClick={() => {
+                  if (viewRequest) handleApproveRequest(viewRequest.id);
+                }}
+                disabled={updateRequestStatusMutation.isPending}
+              >
+                {updateRequestStatusMutation.isPending ? "Processing..." : "Approve"}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

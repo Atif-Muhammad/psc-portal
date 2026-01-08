@@ -858,8 +858,8 @@ model deliveredNotis{
   notificationId Int
   notification Notification @relation(fields: [notificationId], references: [id])
   seen Boolean @default(false)
-  member Int
-  deliveredTo Member @relation(fields: [member], references: [Sno])
+  member String
+  deliveredTo Member @relation(fields: [member], references: [Membership_No])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-// import * as admin from 'firebase-admin';
+import * as admin from 'firebase-admin';
 import * as fs from 'fs';
 import * as path from 'path';
 import { QueueMessage, QueueMeta, QueueStatus } from './types';
@@ -11,7 +11,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 export class NotificationService {
     constructor(
         private readonly prisma: PrismaService,
-        // @Inject('FIREBASE_ADMIN') private readonly firebase: admin.app.App,
+        @Inject('FIREBASE_ADMIN') private readonly firebase: typeof admin,
     ) { }
 
     private readonly META_FILE = path.join(process.cwd(), 'src/notification', 'queue.meta.json');
@@ -251,19 +251,8 @@ export class NotificationService {
         });
     }
 
-    async memberNotis(id: number){
-        return await this.prisma.deliveredNotis.findMany({
-            where: {
-                member: id
-            },
-            orderBy: {
-                createdAt: 'desc'
-            }
-        });
-    }
 
-
-    @Cron(CronExpression.EVERY_SECOND)
+    @Cron(CronExpression.EVERY_10_SECONDS)
     async sendNoti() {
         const noti = await this.dequeue();
         if (!noti) return;
@@ -275,7 +264,7 @@ export class NotificationService {
                 Email: noti?.recipient
             },
             select: {
-                Sno: true,
+                Membership_No: true,
                 FCMToken: true,
             }
         });
@@ -291,17 +280,40 @@ export class NotificationService {
         // Send FCM if token exists
         if (member.FCMToken && notificationRecord) {
             try {
-                // await this.firebase.messaging().send({
-                //     token: member.FCMToken,
-                //     notification: {
-                //         title: notificationRecord.title,
-                //         body: notificationRecord.description || "",
-                //     },
-                //     data: {
-                //         notificationId: String(notificationRecord.id),
-                //         type: "general"
-                //     }
-                // });
+                const response =
+                    await this.firebase.messaging().sendEachForMulticast({
+                        tokens: [member.FCMToken],
+                        notification: {
+                            title: notificationRecord.title,
+                            body: notificationRecord.description ?? '',
+                        },
+                        // ADD THIS BLOCK:
+                        android: {
+                            priority: 'high',
+                            notification: {
+                                channelId: 'psc_default_channel', // MUST match the ID in MainApplication.kt
+                                priority: 'high',
+                                defaultSound: true,
+                                visibility: 'public',
+                            },
+                        },
+                        data: {
+                            notificationId: String(notificationRecord.id),
+                            type: 'general',
+                        },
+                    });
+
+                // 🧹 Clean invalid tokens
+                response.responses.forEach((r, idx) => {
+                    if (!r.success) {
+                        console.error(
+                            'FCM failed:',
+                            r.error?.message,
+                            'token:',
+                            member.FCMToken,
+                        );
+                    }
+                });
             } catch (error) {
                 console.error(`Failed to send FCM to ${noti.recipient}:`, error);
             }
@@ -311,7 +323,7 @@ export class NotificationService {
         await this.prisma.deliveredNotis.create({
             data: {
                 notificationId: noti?.noti_created!,
-                member: member.Sno,
+                member: member.Membership_No,
             }
         });
 
@@ -329,6 +341,20 @@ export class NotificationService {
         this.updateStatus(noti.id, 'DONE');
     }
 
+    async getMemberNotifications(membershipNo: string) {
+        return await this.prisma.notification.findMany({
+            where: {
+                deliveries: {
+                    some: {
+                        member: membershipNo
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: "desc"
+            }
+        })
+    }
 
     async updateSeen(notiID: number) {
         return await this.prisma.deliveredNotis.update({

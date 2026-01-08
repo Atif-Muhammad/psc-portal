@@ -1827,7 +1827,7 @@ export const sendNotification = async (payload: any): Promise<any> => {
 
 export const getNotifications = async (): Promise<any> => {
   try {
-    const response = await axios.get(`${base_url}/notification`, {
+    const response = await axios.get(`${base_url}/notification/notifications`, {
       withCredentials: true,
     });
     return response.data;

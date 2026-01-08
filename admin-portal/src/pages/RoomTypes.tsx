@@ -139,6 +139,17 @@ export default function RoomTypes() {
 
   // --- Image Handlers for Add Dialog ---
   const handleAddImageAdd = (files: File[]) => {
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      toast({
+        title: "File too large",
+        description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const totalImages = addPreviewImages.length + files.length;
     if (totalImages > 5) {
       toast({
@@ -164,6 +175,17 @@ export default function RoomTypes() {
 
   // --- Image Handlers for Edit Dialog ---
   const handleEditImageAdd = (files: File[]) => {
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      toast({
+        title: "File too large",
+        description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const totalImages = editPreviewImages.length + files.length;
     if (totalImages > 5) {
       toast({
@@ -410,8 +432,7 @@ export default function RoomTypes() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Upload images that represent this room type. Maximum 5
-                    images allowed.
+                    Maximum 5 images of size 5MB each.
                   </p>
                 </div>
               </div>

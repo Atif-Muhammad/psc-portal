@@ -45,7 +45,7 @@ export default function LawnCategories() {
   const createMutation = useMutation({
     mutationFn: createLawnCategory,
     onSuccess: () => {
-      qc.invalidateQueries({queryKey: ["lawnCategories"]});
+      qc.invalidateQueries({ queryKey: ["lawnCategories"] });
       toast({ title: "Category added" });
       setNewCat("");
       setNewImages([]);
@@ -64,7 +64,7 @@ export default function LawnCategories() {
   const updateMutation = useMutation({
     mutationFn: updateLawnCategory,
     onSuccess: () => {
-      qc.invalidateQueries({queryKey: ["lawnCategories"]});
+      qc.invalidateQueries({ queryKey: ["lawnCategories"] });
       toast({ title: "Category updated" });
       setEditCategory(null);
       setEditExistingImages([]);
@@ -83,7 +83,7 @@ export default function LawnCategories() {
   const deleteMutation = useMutation({
     mutationFn: deleteLawnCategory,
     onSuccess: () => {
-      qc.invalidateQueries({queryKey: ["lawnCategories"]});
+      qc.invalidateQueries({ queryKey: ["lawnCategories"] });
       toast({ title: "Category deleted" });
       setDeleteCategory(null);
     },
@@ -108,7 +108,7 @@ export default function LawnCategories() {
 
     const formData = new FormData();
     formData.append("category", newCat);
-    
+
     // Append images
     newImages.forEach((file) => {
       formData.append("files", file);
@@ -130,12 +130,12 @@ export default function LawnCategories() {
     const formData = new FormData();
     formData.append("id", editCategory.id.toString());
     formData.append("category", editName);
-    
+
     // Append existing images (publicIds)
     editExistingImages.forEach((publicId) => {
       formData.append("existingimgs", publicId);
     });
-    
+
     // Append new images
     editNewImages.forEach((file) => {
       formData.append("files", file);
@@ -196,12 +196,22 @@ export default function LawnCategories() {
               </div>
 
               <div>
-                <Label>Category Images (Max 5)</Label>
+                <Label>Category Images (Max 5, Max 5MB each)</Label>
                 <ImageUpload
                   images={newImages.map((f) => URL.createObjectURL(f))}
-                  onChange={(files) =>
-                    setNewImages((prev) => [...prev, ...files].slice(0, 5))
-                  }
+                  onChange={(files) => {
+                    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                    const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                    if (oversizedFiles.length > 0) {
+                      toast({
+                        title: "File too large",
+                        description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setNewImages((prev) => [...prev, ...files].slice(0, 5));
+                  }}
                   onRemove={(i) =>
                     setNewImages((prev) => prev.filter((_, idx) => idx !== i))
                   }
@@ -342,10 +352,21 @@ export default function LawnCategories() {
             )}
 
             <div>
-              <Label>Add New Images (Max 5 total)</Label>
+              <Label>Add New Images (Max 5 total, Max 5MB each)</Label>
               <ImageUpload
                 images={editNewImages.map((f) => URL.createObjectURL(f))}
                 onChange={(files) => {
+                  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                  const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                  if (oversizedFiles.length > 0) {
+                    toast({
+                      title: "File too large",
+                      description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
                   const totalImages = editExistingImages.length + editNewImages.length + files.length;
                   if (totalImages > 5) {
                     toast({

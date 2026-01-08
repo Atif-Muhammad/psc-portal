@@ -136,13 +136,36 @@ const ImageUploadSection = React.memo(function ImageUploadSection({ existingImag
   const total = existingImages.length + newImages.length;
   return (
     <div className="space-y-4">
-      <div className="flex justify-between"><Label className="text-lg font-semibold"><ImageIcon className="h-5 w-5 inline mr-2" />Images (Max {MAX_IMAGES})</Label><span className="text-sm text-muted-foreground">{total}/{MAX_IMAGES}</span></div>
+      <div className="flex justify-between"><Label className="text-lg font-semibold"><ImageIcon className="h-5 w-5 inline mr-2" />Images (Max {MAX_IMAGES}, Max 5MB each)</Label><span className="text-sm text-muted-foreground">{total}/{MAX_IMAGES}</span></div>
       <div className="grid grid-cols-5 gap-4">
         {existingImages.map((u, i) => <div key={`e-${i}`} className="relative group aspect-square border rounded-lg overflow-hidden"><img src={u} className="w-full h-full object-cover" /><button type="button" onClick={() => onRemoveExisting(i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100"><X className="h-4 w-4" /></button></div>)}
         {newImages.map((f, i) => <div key={`n-${i}`} className="relative group aspect-square border rounded-lg overflow-hidden"><img src={URL.createObjectURL(f)} className="w-full h-full object-cover" /><div className="absolute top-0 left-0 bg-blue-500 text-white text-xs px-1 rounded-br">New</div><button type="button" onClick={() => onRemoveNew(i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100"><X className="h-4 w-4" /></button></div>)}
         {total < MAX_IMAGES && <button type="button" onClick={() => ref.current?.click()} className="aspect-square border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-muted/50"><Upload className="h-8 w-8 text-muted-foreground" /><span className="text-xs text-muted-foreground">Add</span></button>}
       </div>
-      <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={e => { if (e.target.files) { onAddImages(Array.from(e.target.files).slice(0, MAX_IMAGES - total)); e.target.value = '' } }} />
+      <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={e => {
+        if (e.target.files) {
+          const files = Array.from(e.target.files);
+          const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+          const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+
+          if (oversizedFiles.length > 0) {
+            // We need to access toast here, but ImageUploadSection is outside main component.
+            // We can pass toast as prop or just alert as fallback, 
+            // OR better, since this is a small file, we can just use useToast hook if it was exported/available or pass onError callback.
+            // Actually, simpler: define toast inside if possible, 
+            // BUT hooks can't be used inside callbacks or non-component functions easily if not at top level.
+            // Wait, ImageUploadSection IS a component. I can use useToast hook inside it!
+            // But I need to import useToast if not available in scope? It is imported at top level.
+            // Let's rely on onAddImages being called with filtered files OR adding useToast to ImageUploadSection.
+            alert(`File too large: Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`);
+            e.target.value = '';
+            return;
+          }
+
+          onAddImages(files.slice(0, MAX_IMAGES - total));
+          e.target.value = ''
+        }
+      }} />
     </div>
   );
 });

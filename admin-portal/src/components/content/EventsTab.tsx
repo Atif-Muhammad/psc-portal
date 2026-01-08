@@ -212,7 +212,25 @@ function EventForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
 
     const handleFileChange = (e: any) => {
         if (e.target.files) {
-            setNewFiles((prev) => [...prev, ...Array.from(e.target.files as FileList)]);
+            const files = Array.from(e.target.files as FileList);
+            const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+            const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+
+            if (oversizedFiles.length > 0) {
+                // Assuming toast is available in scope or we use alert if not. 
+                // EventsTab has { toast } = useToast() in component scope.
+                // But handleFileChange is inside EventForm which receives props. 
+                // EventForm definition is at line 198. It does NOT seem to receive toast.
+                // I should import useToast hook inside EventForm or pass it.
+                // Wait, EventForm is defined in the same file. I can use proper hook usage.
+                // But I cannot call hook inside callback. 
+                // I can simply use alert for now or try to pass toast from parent.
+                // Actually, let's use alert to be safe and simple as I did in Sports.tsx
+                alert(`File too large: Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`);
+                e.target.value = ''; // Reset input
+                return;
+            }
+            setNewFiles((prev) => [...prev, ...files]);
         }
     };
 
@@ -265,7 +283,7 @@ function EventForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
 
             {/* Image Management Section */}
             <div>
-                <Label>Images (Max 5)</Label>
+                <Label>Images (Max 5, Max 5MB each)</Label>
                 <Input type="file" multiple accept="image/*" onChange={handleFileChange} className="mt-1" />
 
                 <div className="mt-4 space-y-4">

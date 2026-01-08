@@ -183,6 +183,12 @@ function AdForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
     const handleFileChange = (e: any) => {
         const file = e.target.files[0];
         if (file) {
+            const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`File too large: Image must be under 5MB.`);
+                e.target.value = ''; // Reset input
+                return;
+            }
             setForm({ ...form, image: file });
             setPreview(URL.createObjectURL(file));
         }
@@ -210,7 +216,7 @@ function AdForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
                 <Label>Active</Label>
             </div>
             <div>
-                <Label>Image</Label>
+                <Label>Image (Max 5MB)</Label>
                 <Input type="file" accept="image/*" onChange={handleFileChange} className="mt-1" />
                 <div className="mt-2">
                     {preview ? (

@@ -336,11 +336,23 @@ export default function Photoshoot() {
                   />
                 </div>
                 <div>
-                  <Label>Package Images (Max 5)</Label>
+                  <Label>Package Images (Max 5, Max 5MB each)</Label>
                   <div className="mt-2">
                     <ImageUpload
                       images={form.images.map(f => URL.createObjectURL(f))}
-                      onChange={(files) => setForm(prev => ({ ...prev, images: [...prev.images, ...files].slice(0, 5) }))}
+                      onChange={(files) => {
+                        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                        const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                        if (oversizedFiles.length > 0) {
+                          toast({
+                            title: "File too large",
+                            description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setForm(prev => ({ ...prev, images: [...prev.images, ...files].slice(0, 5) }));
+                      }}
                       onRemove={(index) => setForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }))}
                       maxImages={5}
                     />
@@ -911,17 +923,29 @@ export default function Photoshoot() {
               />
             </div>
             <div>
-              <Label>Package Images (Max 5)</Label>
+              <Label>Package Images (Max 5, Max 5MB each)</Label>
               <div className="mt-2">
                 <ImageUpload
                   images={[
                     ...editImagePreviews,
                     ...editForm.images.map(f => URL.createObjectURL(f))
                   ]}
-                  onChange={(files) => setEditForm(prev => ({
-                    ...prev,
-                    images: [...prev.images, ...files].slice(0, 5 - prev.existingImages.length)
-                  }))}
+                  onChange={(files) => {
+                    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                    const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                    if (oversizedFiles.length > 0) {
+                      toast({
+                        title: "File too large",
+                        description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setEditForm(prev => ({
+                      ...prev,
+                      images: [...prev.images, ...files].slice(0, 5 - prev.existingImages.length)
+                    }));
+                  }}
                   onRemove={(index) => {
                     if (index < editImagePreviews.length) {
                       // Removing existing image

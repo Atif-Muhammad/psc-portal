@@ -1562,15 +1562,25 @@ export default function Halls() {
                   />
                 </div>
                 <div>
-                  <Label>Hall Images (Max 5)</Label>
+                  <Label>Hall Images (Max 5, Max 5MB each)</Label>
                   <ImageUpload
                     images={form.images.map((f) => URL.createObjectURL(f))}
-                    onChange={(files) =>
+                    onChange={(files) => {
+                      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                      const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                      if (oversizedFiles.length > 0) {
+                        toast({
+                          title: "File too large",
+                          description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       setForm((prev) => ({
                         ...prev,
                         images: [...prev.images, ...files].slice(0, 5),
-                      }))
-                    }
+                      }));
+                    }}
                     onRemove={(i) =>
                       setForm((prev) => ({
                         ...prev,
@@ -2318,15 +2328,25 @@ export default function Halls() {
               </div>
             </div>
             <div>
-              <Label>Add New Images</Label>
+              <Label>Add New Images (Max 5MB each)</Label>
               <ImageUpload
                 images={editForm.newImages.map((f) => URL.createObjectURL(f))}
-                onChange={(files) =>
+                onChange={(files) => {
+                  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                  const oversizedFiles = files.filter((f) => f.size > MAX_FILE_SIZE);
+                  if (oversizedFiles.length > 0) {
+                    toast({
+                      title: "File too large",
+                      description: `Each image must be under 5MB. ${oversizedFiles.length} file(s) exceeded the limit.`,
+                      variant: "destructive",
+                    });
+                    return;
+                  }
                   setEditForm((prev) => ({
                     ...prev,
                     newImages: [...prev.newImages, ...files].slice(0, 5),
-                  }))
-                }
+                  }));
+                }}
                 onRemove={(i) =>
                   setEditForm((prev) => ({
                     ...prev,

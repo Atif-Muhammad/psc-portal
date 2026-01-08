@@ -156,25 +156,29 @@ export class AuthController {
     async userWho(
         @Req() req: { user: { id: string | undefined; name: string | undefined; FCMToken: string | null; role: string | undefined, permissions: any[] } },
     ) {
-        const admin = await this.authService.checkAdmin(Number(req.user?.id!));
-        if (!admin) {
+        if (req?.user?.role === RolesEnum.ADMIN || req?.user?.role === RolesEnum.SUPER_ADMIN) {
+            const admin = await this.authService.checkAdmin(Number(req.user?.id!));
+            if (!admin) {
+                throw new HttpException(
+                    'no admin found.',
+                    HttpStatus.FORBIDDEN,
+                );
+            }
+            return {
+                id: req.user?.id,
+                name: req.user?.name,
+                role: req.user?.role,
+                permissions: req.user?.permissions
+            }
+        }
+        const activeUser = await this.authService.checkActive(String(req.user?.id!));
+        if (!activeUser) {
             throw new HttpException(
-                'no admin found.',
+                'User is not active. Please contact support.',
                 HttpStatus.FORBIDDEN,
             );
         }
-        if (req?.user?.role != RolesEnum.ADMIN) {
-            if (req?.user?.role != RolesEnum.SUPER_ADMIN) {
-                const activeUser = await this.authService.checkActive(req.user?.id!);
-                if (!activeUser) {
-                    throw new HttpException(
-                        'User is not active. Please contact support.',
-                        HttpStatus.FORBIDDEN,
-                    );
-                }
-            }
-        }
-        return { id: req.user?.id, name: req.user?.name, FCMToken: req.user.FCMToken, role: req.user?.role, permissions: req.user?.permissions };
+        return { id: req.user?.id, name: req.user?.name, FCMToken: activeUser?.FCMToken, role: req.user?.role, permissions: req.user?.permissions };
     }
 
 
@@ -200,9 +204,9 @@ export class AuthController {
 
     @Post('sendOTP/member')
     async sendOTP(@Body() payload: { memberID: string }) {
-        
+
         const member = await this.authService.getMember(payload?.memberID);
-        if(member.Status !== "active") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
+        if (member.Status !== "active") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
         // generate an OTP and combine with OTP_MSG
         const otp = generateRandomNumber(4) || 1234;
         // store in member table

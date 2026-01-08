@@ -70,8 +70,6 @@ export default function Notifications() {
 
   const { mutate: handleSend, isPending: isSendingNotification } = useMutation({
     mutationFn: async () => {
-      // Logic for sending notification
-      // Now sending a single request with all flags
 
       const payload = {
         title: notificationTitle,
@@ -125,11 +123,6 @@ export default function Notifications() {
     return selectedMembers.some(m => m.Membership_No === membershipNo);
   }
 
-  // Determine if manual selection should be shown
-  // We hide it only if "Send to All" is specifically checked OR if we decide 
-  // that status selection also disables manual (user didn't specify, but usually additive).
-  // Assuming additive: Users can check "Active" AND select "Some Inactive Guy".
-  // However, "Send to All" logically overrides everything.
   const showManualSelection = !sendToAll;
 
   // Determine button disabled state

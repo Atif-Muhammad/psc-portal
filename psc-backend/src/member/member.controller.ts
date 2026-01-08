@@ -19,10 +19,11 @@ import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CreateMemberDto } from './dtos/create-member.dto';
 import { MemberService } from './member.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Controller('member')
 export class MemberController {
-  constructor(private member: MemberService) { }
+  constructor(private member: MemberService, private notifications: NotificationService) { }
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
@@ -82,6 +83,13 @@ export class MemberController {
       search,
       status,
     });
+  }
+
+
+  @UseGuards(JwtAccGuard)
+  @Get('notifications')
+  async getNotifications(@Req() req: {user: {id: string}}) {
+    return await this.notifications.getMemberNotifications(req.user?.id);
   }
 
 }
