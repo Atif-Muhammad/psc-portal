@@ -14,7 +14,22 @@ export class NotificationService {
         @Inject('FIREBASE_ADMIN') private readonly firebase: typeof admin,
     ) { }
 
-    private readonly META_FILE = path.join(process.cwd(), 'src/notification', 'queue.meta.json');
+    private readonly DATA_DIR = path.join(process.cwd(), 'data', 'notification');
+
+    private readonly META_FILE = path.join(
+        this.DATA_DIR,
+        'queue.meta.json'
+    );
+
+    private readonly QUEUE_FILE = path.join(
+        this.DATA_DIR,
+        'queue.jsonl'
+    );
+    private ensureDataDir() {
+        if (!fs.existsSync(this.DATA_DIR)) {
+            fs.mkdirSync(this.DATA_DIR, { recursive: true });
+        }
+    }
 
     private readonly defaultMeta: QueueMeta = {
         readOffset: 0,
@@ -27,6 +42,7 @@ export class NotificationService {
     };
 
     loadMeta(): QueueMeta {
+        this.ensureDataDir();
         if (!fs.existsSync(this.META_FILE)) {
             this.saveMeta(this.defaultMeta);
             return { ...this.defaultMeta };
@@ -35,10 +51,9 @@ export class NotificationService {
     }
 
     saveMeta(meta: QueueMeta): void {
+        this.ensureDataDir();
         fs.writeFileSync(this.META_FILE, JSON.stringify(meta, null, 2));
     }
-
-    private readonly QUEUE_FILE = path.join(process.cwd(), 'src/notification', 'queue.jsonl');
 
     recalc(): void {
         const meta = this.loadMeta();
