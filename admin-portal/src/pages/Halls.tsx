@@ -32,6 +32,7 @@ import {
   DollarSign,
   Settings,
   DoorOpen,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -2317,14 +2318,37 @@ export default function Halls() {
             <div>
               <Label>Current Images</Label>
               <div className="flex flex-wrap gap-3 mt-2">
-                {editHall?.images?.map((img: any, i: number) => (
-                  <img
-                    key={i}
-                    src={img.url || img}
-                    alt="hall"
-                    className="h-24 w-24 object-cover rounded border"
-                  />
-                ))}
+                {editHall?.images?.map((img: any, i: number) => {
+                  const imageId = img.publicId || img.url || img;
+                  // Only show if not removed
+                  if (!editForm.existingImages.includes(imageId)) return null;
+
+                  return (
+                    <div key={i} className="relative group">
+                      <img
+                        src={img.url || img}
+                        alt="hall"
+                        className="h-24 w-24 object-cover rounded border"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        type="button"
+                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          setEditForm((prev) => ({
+                            ...prev,
+                            existingImages: prev.existingImages.filter(
+                              (id) => id !== imageId
+                            ),
+                          }));
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div>

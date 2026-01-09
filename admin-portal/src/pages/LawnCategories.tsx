@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, X } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogTrigger, DialogFooter
@@ -339,14 +339,33 @@ export default function LawnCategories() {
               <div>
                 <Label>Current Images</Label>
                 <div className="flex flex-wrap gap-3 mt-2">
-                  {editCategory.images.map((img: any, i: number) => (
-                    <img
-                      key={i}
-                      src={img.url || img}
-                      alt="category"
-                      className="h-24 w-24 object-cover rounded border"
-                    />
-                  ))}
+                  {editCategory.images.map((img: any, i: number) => {
+                    const imageId = img.publicId || img.url || img;
+                    if (!editExistingImages.includes(imageId)) return null;
+
+                    return (
+                      <div key={i} className="relative group">
+                        <img
+                          src={img.url || img}
+                          alt="category"
+                          className="h-24 w-24 object-cover rounded border"
+                        />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          type="button"
+                          className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            setEditExistingImages((prev) =>
+                              prev.filter((id) => id !== imageId)
+                            );
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
