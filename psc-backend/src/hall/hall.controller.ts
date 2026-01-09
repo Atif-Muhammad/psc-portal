@@ -42,7 +42,7 @@ export class HallController {
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 5))
   @Post('create/hall')
   async createHall(
     @UploadedFiles() files: Express.Multer.File[],
@@ -55,7 +55,7 @@ export class HallController {
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 5))
   @Patch('update/hall')
   async updateHall(
     @UploadedFiles() files: Express.Multer.File[],
