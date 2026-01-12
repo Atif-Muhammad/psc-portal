@@ -19,6 +19,7 @@ import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, addYears, startOfDay } from "date-fns";
 import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
+import { Voucher } from "@/types/room-booking.type";
 
 interface Member {
   id: number;
@@ -93,21 +94,7 @@ export interface LawnBooking {
 }
 
 
-interface Voucher {
-  id: number;
-  voucher_no: string;
-  booking_type: string;
-  booking_id: number;
-  membership_no: string;
-  amount: string;
-  payment_mode: string;
-  voucher_type: string;
-  status: string;
-  issued_by: string;
-  issued_at: string;
-  remarks?: string;
-  transaction_id?: string;
-}
+
 
 
 // Add this component before the LawnBookings component
@@ -281,6 +268,7 @@ const getAvailableLawnTimeSlots = (
   // Check existing bookings for this lawn on this date (Inclusive check)
   const bookedSlots = bookings
     .filter(b => {
+      if ((b as any).isCancelled) return false;
       if (b.lawn?.id?.toString() !== lawnId) return false;
       const start = parseLocalDate(b.bookingDate as string);
       const end = b.endDate ? parseLocalDate(b.endDate as string) : start;
@@ -290,7 +278,8 @@ const getAvailableLawnTimeSlots = (
       const target = new Date(dateStart);
       target.setHours(0, 0, 0, 0);
 
-      return target >= start && target <= end && (b.bookingTime === "ALL" || b.bookingTime === ""); // Handle specific time slots if needed, but usually lawn bookings are per slot or full day
+      // Check if target date falls within booking range
+      return target >= start && target <= end;
     })
     .map(b => b.bookingTime || "");
 
@@ -298,7 +287,7 @@ const getAvailableLawnTimeSlots = (
   // If a booking is "ALL" or blank, it might mean the whole day.
   // The current app seems to use MORNING, EVENING, NIGHT.
   const bookedDetailsSlots = bookings
-    .filter(b => b.lawn?.id?.toString() === lawnId)
+    .filter(b => b.lawn?.id?.toString() === lawnId && !(b as any).isCancelled)
     .flatMap(b => {
       const details = (b.bookingDetails as any[]) || [];
       return details
@@ -856,7 +845,7 @@ export default function LawnBookings() {
     setMemberSearch("");
     setShowMemberResults(false);
     setGuestSec({
-      paidBy: "",
+      paidBy: "MEMBER",
       guestName: "",
       guestContact: ""
     });
@@ -924,7 +913,6 @@ export default function LawnBookings() {
       guestName: guestSec.guestName,
       guestContact: guestSec.guestContact
     };
-
     createMutation.mutate(payload);
   };
 

@@ -461,6 +461,7 @@ export class LawnService {
 
       // Check for conflicting bookings: Booking on endDate is NOT allowed (inclusive)
       const conflictingBookings = lawn.bookings.filter((booking) => {
+        if (booking.isCancelled) return false;
         const bookingDate = new Date(booking.bookingDate);
         return bookingDate >= startDate && bookingDate <= endDate;
       });
@@ -532,6 +533,7 @@ export class LawnService {
           }
         },
         bookings: {
+          where: {isCancelled: false},
           include: {
             member: { select: { Name: true, Membership_No: true } }
           }
@@ -721,6 +723,7 @@ export class LawnService {
             bookingDate: { lte: reservedTo },
             endDate: { gte: reservedFrom },
             bookingTime: timeSlot as any,
+            isCancelled: false,
           },
           include: { lawn: { include: { lawnCategory: true } } },
         });

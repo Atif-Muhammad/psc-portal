@@ -40,6 +40,7 @@ export class HallService {
           },
         },
         bookings: {
+          where: { isCancelled: false },
           include: {
             member: {
               select: {
@@ -193,6 +194,7 @@ export class HallService {
 
       // Check for conflicting bookings
       const conflictingBookings = hall.bookings.filter((booking) => {
+        if (booking.isCancelled) return false;
         const bookingDate = new Date(booking.bookingDate);
         return bookingDate >= startDate && bookingDate <= endDate;
       });
@@ -507,11 +509,16 @@ export class HallService {
         }
 
         // MODIFIED: Check for booking conflicts (inclusive ranges)
+        // Create end-of-day for the query upper bound
+        const toDateEnd = new Date(toDateOnly);
+        toDateEnd.setHours(23, 59, 59, 999);
+
         const conflictingBookings = (await prisma.hallBooking.findMany({
           where: {
             hallId: { in: hallIds },
-            bookingDate: { lte: toDateOnly },
+            bookingDate: { lte: toDateEnd },
             endDate: { gte: fromDateOnly },
+            isCancelled: false,
           },
           include: { hall: { select: { name: true } } },
         })) as any[];
@@ -526,17 +533,25 @@ export class HallService {
               // Granular check for overlapping dates and time slots
               const conflictFound = bDetails.find((d: any) => {
                 const dDate = new Date(d.date);
-                dDate.setHours(0, 0, 0, 0);
+                // Compare using local date string (YYYY-MM-DD)
+                const dDateStr = dDate.toLocaleDateString('en-CA');
+                const fromDateStr = fromDateOnly.toLocaleDateString('en-CA');
+                const toDateStr = toDateOnly.toLocaleDateString('en-CA');
+
+                // For range check, we can compare the strings if they are ISO/YMD format
+                // But simplified: check if dDateStr is within [fromDateStr, toDateStr]
+                // Actually strings comparison works for YYYY-MM-DD: "2026-01-23" >= "2026-01-23"
+
                 return (
-                  dDate.getTime() >= fromDateOnly.getTime() &&
-                  dDate.getTime() <= toDateOnly.getTime() &&
-                  d.timeSlot === timeSlot
+                  dDateStr >= fromDateStr &&
+                  dDateStr <= toDateStr &&
+                  d.timeSlot?.toUpperCase() === timeSlot?.toUpperCase()
                 );
               });
               if (conflictFound) hasConflict = true;
             } else {
               // Legacy/Fallback check
-              if (book.bookingTime === timeSlot) {
+              if (book.bookingTime?.toUpperCase() === timeSlot?.toUpperCase()) {
                 hasConflict = true;
               }
             }
@@ -556,21 +571,19 @@ export class HallService {
           }
         }
 
-        // MODIFIED: Check for other reservation conflicts
-        const conflictingReservations = await prisma.hallReservation.findMany({
+        // MODIFIED: Check for other reservation conflicts case-insensitively
+        // Fetch all overlapping reservations first, then filter by slot
+        const potentialReservations = await prisma.hallReservation.findMany({
           where: {
             hallId: { in: hallIds },
-            OR: [
-              {
-                // Reservation overlaps with new reservation period
-                // MODIFIED: Using day-only comparison for same time slot
-                reservedFrom: { lte: toDateOnly }, // existing reservation starts on or before new reservation ends
-                reservedTo: { gte: fromDateOnly }, // existing reservation ends on or after new reservation starts
-                timeSlot: timeSlot, // Same time slot conflict
-              },
-            ],
+            reservedFrom: { lte: toDateOnly },
+            reservedTo: { gte: fromDateOnly },
           },
           include: { hall: { select: { name: true } } },
+        });
+
+        const conflictingReservations = potentialReservations.filter((res) => {
+          return res.timeSlot?.toUpperCase() === timeSlot?.toUpperCase();
         });
 
         if (conflictingReservations.length > 0) {

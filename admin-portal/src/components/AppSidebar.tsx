@@ -17,7 +17,8 @@ import {
   Bell,
   Lock,
   NotebookTabsIcon,
-  Text
+  Text,
+  Utensils
 } from "lucide-react";
 
 import {
@@ -61,7 +62,8 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/notifications": "Notifications",
   "/calendar": "Calendar",
   "/contents": "Contents",
-  "/bookings": "Bookings"
+  "/bookings": "Bookings",
+  "/messing": "Messing"
 };
 
 const menuItems = [
@@ -104,6 +106,7 @@ const menuItems = [
       { title: "Photoshoot Bookings", url: "/bookings/photoshoot" },
     ],
   },
+  { title: "Messing", url: "/messing", icon: Utensils },
   { title: "Bookings", url: "/bookings", icon: NotebookTabsIcon },
   { title: "Sports", url: "/sports", icon: Trophy },
   { title: "Affiliated Clubs", url: "/affiliated-clubs", icon: Building },

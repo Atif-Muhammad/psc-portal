@@ -772,6 +772,7 @@ export class RoomService {
                 checkOut: { gt: fromDate }, // checkOut after reservation start
               },
             ],
+            isCancelled: false
           },
           include: {
             rooms: {

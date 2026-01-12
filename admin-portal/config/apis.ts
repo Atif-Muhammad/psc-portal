@@ -1,6 +1,6 @@
 import axios from "axios";
-// const base_url = "http://localhost:3000/api";
-const base_url = "http://193.203.169.122:8080/api";
+const base_url = "http://localhost:3000/api";
+// const base_url = "http://193.203.169.122:8080/api";
 
 export const authAdmin = async (data: any): Promise<any> => {
   try {
@@ -1867,5 +1867,85 @@ export const getMemberBookings = async (membershipNo: string): Promise<any> => {
     return response.data;
   } catch (error: any) {
     throw { message: error.response?.data?.message || "Error fetching bookings", status: error.response?.status || 500 };
+  }
+};
+
+// -------------------- MESSING -------------------- //
+
+export const createMessingCategory = async (data: any) => {
+  try {
+    const response = await axios.post(`${base_url}/messing/category`, data, {
+      withCredentials: true,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error creating category", status: error.response?.status || 500 };
+  }
+};
+
+export const getMessingCategories = async () => {
+  try {
+    const response = await axios.get(`${base_url}/messing/category`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching categories", status: error.response?.status || 500 };
+  }
+};
+
+export const updateMessingCategory = async ({ id, updates }: any) => {
+  try {
+    const response = await axios.patch(`${base_url}/messing/category/${id}`, updates, {
+      withCredentials: true,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error updating category", status: error.response?.status || 500 };
+  }
+};
+
+export const deleteMessingCategory = async (id: number) => {
+  try {
+    const response = await axios.delete(`${base_url}/messing/category/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error deleting category", status: error.response?.status || 500 };
+  }
+};
+
+export const createMessingItem = async (data: any) => {
+  try {
+    const response = await axios.post(`${base_url}/messing/item`, data, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error creating item", status: error.response?.status || 500 };
+  }
+};
+
+export const getMessingItemsByCategory = async (categoryId: number) => {
+  try {
+    const response = await axios.get(`${base_url}/messing/item/category/${categoryId}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching items", status: error.response?.status || 500 };
+  }
+};
+
+export const updateMessingItem = async ({ id, updates }: any) => {
+  try {
+    const response = await axios.patch(`${base_url}/messing/item/${id}`, updates, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error updating item", status: error.response?.status || 500 };
+  }
+};
+
+export const deleteMessingItem = async (id: number) => {
+  try {
+    const response = await axios.delete(`${base_url}/messing/item/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error deleting item", status: error.response?.status || 500 };
   }
 };

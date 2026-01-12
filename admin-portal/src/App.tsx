@@ -31,6 +31,7 @@ import ClubRequestForm from "./pages/test/ClubRequestForm";
 import PermissionDenied from "./pages/PermissionDenied";
 import Bookings from "./pages/Bookings";
 import Content from "./pages/Content";
+import Messing from "./pages/Messing";
 
 const queryClient = new QueryClient();
 
@@ -57,7 +58,8 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/notifications": "Notifications",
   "/calendar": "Calendar",
   "/contents": "Contents",
-  "/bookings": "Bookings"
+  "/bookings": "Bookings",
+  "/messing": "Messing"
 };
 
 // All routes in order for redirect
@@ -82,6 +84,7 @@ const ALL_ROUTES = [
   { path: "/lawns/categories", label: "Lawn Categories" },
   { path: "/accounts", label: "Accounts" },
   { path: "/contents", label: "Contents" },
+  { path: "/messing", label: "Messing" }
 ];
 
 // Higher-order component to wrap pages with permission check
@@ -294,6 +297,7 @@ const ProtectedNotifications = withPermissions(Notifications);
 const ProtectedCalendar = withPermissions(Calendar);
 const ProtectedBookings = withPermissions(Bookings);
 const ProtectedContents = withPermissions(Content);
+const ProtectedMessing = withPermissions(Messing);
 
 // Permission Denied page doesn't need permissions check
 function PermissionDeniedPage() {
@@ -342,6 +346,7 @@ function App() {
               <Route path="/calendar" element={<ProtectedCalendar />} />
               <Route path="/bookings" element={<ProtectedBookings />} />
               <Route path="/contents" element={<ProtectedContents />} />
+              <Route path="/messing" element={<ProtectedMessing />} />
             </Route>
 
             {/* Catch-all route */}

@@ -798,6 +798,7 @@ model Event {
 model ClubRule {
   id        Int      @id @default(autoincrement())
   content   String   @db.LongText // Rich text content
+
   type      String   @default("CLUB") // CLUB, ROOM, HALL, LAWN, PHOTOSHOOT
   isActive  Boolean  @default(true)
 
@@ -806,6 +807,40 @@ model ClubRule {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// MESSING MODULE
+
+model MessingCategory {
+  id        Int      @id @unique @default(autoincrement())
+  category  String   @db.VarChar(200)
+  images    Json     @default("[]") // Array of image URLs, max 5
+  
+  items     MessingItem[]
+
+  createdBy String @default("")
+  updatedBy String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MessingItem {
+  id                Int             @id @unique @default(autoincrement())
+  messingCategoryId Int
+  messingCategory   MessingCategory @relation(fields: [messingCategoryId], references: [id], onDelete: Cascade)
+  
+  name        String  @db.VarChar(200)
+  description String? @db.Text
+  price       Decimal @default(0.00) @db.Decimal(30, 2)
+  
+  createdBy String @default("")
+  updatedBy String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([messingCategoryId])
 }
 
 model Announcement {

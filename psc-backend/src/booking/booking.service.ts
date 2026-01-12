@@ -167,6 +167,7 @@ export class BookingService {
             booking: {
               checkIn: { lt: checkOutDate },
               checkOut: { gt: checkInDate },
+              isCancelled: false,
             }
           }
         },
@@ -437,6 +438,7 @@ export class BookingService {
             booking: {
               checkIn: { lt: newCheckOut },
               checkOut: { gt: newCheckIn },
+              isCancelled: false,
             }
           }
         },
@@ -1611,18 +1613,22 @@ export class BookingService {
           );
         }
 
-        // 2. Check Existing Bookings
-        // Query conflicts impacting this specific date
-        const existingBooking = await prisma.hallBooking.findFirst({
+        // 2. Check Existing Bookings (Robust Loop)
+        const dayStart = new Date(currentCheckDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(currentCheckDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const existingBookings = await prisma.hallBooking.findMany({
           where: {
             hallId: hall.id,
-            bookingDate: { lte: currentCheckDate },
-            endDate: { gte: currentCheckDate },
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
             isCancelled: false,
           },
         });
 
-        if (existingBooking) {
+        for (const existingBooking of existingBookings) {
           const details = existingBooking.bookingDetails as any[];
           let hasConflict = false;
 
@@ -1630,16 +1636,16 @@ export class BookingService {
             // Check if existing booking has THIS slot on THIS date
             const conflictDetail = details.find((d: any) => {
               const dDate = new Date(d.date);
-              dDate.setHours(0, 0, 0, 0);
+              // Compare using local date string (YYYY-MM-DD)
               return (
-                dDate.getTime() === currentCheckDate.getTime() &&
-                d.timeSlot === currentSlot
+                dDate.toLocaleDateString('en-PK') === currentCheckDate.toLocaleDateString('en-PK') &&
+                d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
               );
             });
             if (conflictDetail) hasConflict = true;
           } else {
             // Legacy/Fallback: blocks its `bookingTime`
-            if (existingBooking.bookingTime === currentSlot) {
+            if (existingBooking.bookingTime?.toUpperCase() === currentSlot?.toUpperCase()) {
               hasConflict = true;
             }
           }
@@ -1652,19 +1658,19 @@ export class BookingService {
         }
 
         // 3. Check Reservations (Inclusive of the day)
-        const dayStart = new Date(currentCheckDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentCheckDate);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const reservation = await prisma.hallReservation.findFirst({
+        
+        // Fetch all reservations for the day range, then filter by timeslot case-insensitively
+        const possibleReservations = await prisma.hallReservation.findMany({
           where: {
             hallId: hall.id,
             reservedFrom: { lte: dayEnd },
             reservedTo: { gte: dayStart },
-            timeSlot: currentSlot,
           },
         });
+
+        const reservation = possibleReservations.find(res =>
+          res.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
+        );
 
         if (reservation) {
           throw new ConflictException(
@@ -1921,28 +1927,35 @@ export class BookingService {
           const currentSlot = detail.timeSlot;
 
           // existingBooking conflict check
-          const conflictingBooking = await prisma.hallBooking.findFirst({
+          const dayStart = new Date(currentCheckDate);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(currentCheckDate);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          const conflictingBookings = await prisma.hallBooking.findMany({
             where: {
               hallId: Number(entityId),
               id: { not: Number(id) },
-              bookingDate: { lte: currentCheckDate },
-              endDate: { gte: currentCheckDate },
+              bookingDate: { lte: dayEnd },
+              endDate: { gte: dayStart },
               isCancelled: false,
             },
           });
 
-          if (conflictingBooking) {
+          for (const conflictingBooking of conflictingBookings) {
             const cDetails = conflictingBooking.bookingDetails as any[];
             let hasConflict = false;
             if (cDetails && Array.isArray(cDetails) && cDetails.length > 0) {
               const conflict = cDetails.find((d: any) => {
                 const dDate = new Date(d.date);
-                dDate.setHours(0, 0, 0, 0);
-                return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+                return (
+                  dDate.toLocaleDateString('en-CA') === currentCheckDate.toLocaleDateString('en-CA') &&
+                  d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
+                );
               });
               if (conflict) hasConflict = true;
             } else {
-              if (conflictingBooking.bookingTime === currentSlot) hasConflict = true;
+              if (conflictingBooking.bookingTime?.toUpperCase() === currentSlot?.toUpperCase()) hasConflict = true;
             }
 
             if (hasConflict) {
@@ -1953,19 +1966,19 @@ export class BookingService {
           }
 
           // Reservation conflict check (Inclusive of the day)
-          const dayStart = new Date(currentCheckDate);
-          dayStart.setHours(0, 0, 0, 0);
-          const dayEnd = new Date(currentCheckDate);
-          dayEnd.setHours(23, 59, 59, 999);
 
-          const conflictingReservation = await prisma.hallReservation.findFirst({
+          // Fetch all reservations then filter case-insensitively
+          const possibleReservations = await prisma.hallReservation.findMany({
             where: {
               hallId: Number(entityId),
-              timeSlot: currentSlot,
               reservedFrom: { lte: dayEnd },
               reservedTo: { gte: dayStart },
             },
           });
+
+          const conflictingReservation = possibleReservations.find(res =>
+            res.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
+          );
 
           if (conflictingReservation) {
             throw new ConflictException(
@@ -2271,27 +2284,35 @@ export class BookingService {
           throw new ConflictException(`Hall '${hall.name}' out of order on ${currentCheckDate.toDateString()}`);
         }
 
-        // 2. Check Existing Bookings
-        const existingBooking = await prisma.hallBooking.findFirst({
+        // 2. Check Existing Bookings (Robust Loop)
+        const dayStart = new Date(currentCheckDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(currentCheckDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const existingBookings = await prisma.hallBooking.findMany({
           where: {
             hallId: hall.id,
-            bookingDate: { lte: currentCheckDate },
-            endDate: { gte: currentCheckDate },
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
+            isCancelled: false,
           },
         });
 
-        if (existingBooking) {
+        for (const existingBooking of existingBookings) {
           const details = existingBooking.bookingDetails as any[];
           let hasConflict = false;
           if (details && Array.isArray(details) && details.length > 0) {
             const conflict = details.find((d: any) => {
               const dDate = new Date(d.date);
-              dDate.setHours(0, 0, 0, 0);
-              return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+              return (
+                dDate.toLocaleDateString('en-CA') === currentCheckDate.toLocaleDateString('en-CA') &&
+                d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
+              );
             });
             if (conflict) hasConflict = true;
           } else {
-            if (existingBooking.bookingTime === currentSlot) hasConflict = true;
+            if (existingBooking.bookingTime?.toUpperCase() === currentSlot?.toUpperCase()) hasConflict = true;
           }
 
           if (hasConflict) {
@@ -2299,20 +2320,18 @@ export class BookingService {
           }
         }
 
-        // 3. Check Reservations (Inclusive of the day)
-        const dayStart = new Date(currentCheckDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentCheckDate);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const conflictingReservation = await prisma.hallReservation.findFirst({
+        // 3. Check Reservations (Inclusive of the day, case-insensitive)
+        const possibleReservations = await prisma.hallReservation.findMany({
           where: {
             hallId: hall.id,
-            timeSlot: currentSlot,
             reservedFrom: { lte: dayEnd },
             reservedTo: { gte: dayStart },
           },
         });
+
+        const conflictingReservation = possibleReservations.find(res =>
+          res.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
+        );
 
         if (conflictingReservation) {
           throw new ConflictException(
@@ -2843,7 +2862,7 @@ export class BookingService {
       paymentMode,
       numberOfGuests,
       eventTime,
-      paidBy = 'MEMBER',
+      paidBy,
       guestName,
       guestContact,
       eventType,
@@ -2900,16 +2919,42 @@ export class BookingService {
         if (outOfOrderConflict) throw new ConflictException(`Lawn out of order on ${currentCheckDate.toDateString()}`);
 
         // 2. Existing Bookings
-        const confBooking = await prisma.lawnBooking.findFirst({
+        const existingBookings = await prisma.lawnBooking.findMany({
           where: {
             lawnId: lawn.id,
             bookingDate: { lte: currentCheckDate },
             endDate: { gte: currentCheckDate },
-            bookingTime: currentSlot as any,
             isCancelled: false, // Ignore cancelled bookings
           },
         });
-        if (confBooking) throw new ConflictException(`Lawn already booked for ${currentSlot} on ${currentCheckDate.toDateString()}`);
+
+        for (const existingBooking of existingBookings) {
+          const details = existingBooking.bookingDetails as any[];
+          let hasConflict = false;
+
+          if (details && Array.isArray(details) && details.length > 0) {
+            const conflictDetail = details.find((d: any) => {
+              const dDate = new Date(d.date);
+              dDate.setHours(0, 0, 0, 0);
+              return (
+                dDate.getTime() === currentCheckDate.getTime() &&
+                d.timeSlot === currentSlot
+              );
+            });
+            if (conflictDetail) hasConflict = true;
+          } else {
+            // Fallback: Check main bookingTime
+            if (existingBooking.bookingTime === currentSlot) {
+              hasConflict = true;
+            }
+          }
+
+          if (hasConflict) {
+            throw new ConflictException(
+              `Lawn already booked for ${currentSlot} on ${currentCheckDate.toDateString()}`,
+            );
+          }
+        }
 
         // 3. Reservations
         const dayStart = new Date(currentCheckDate);
@@ -2962,7 +3007,7 @@ export class BookingService {
         owed = total - paid;
       }
       if (isToBill) { amountToBalance = owed; owed = 0; }
-
+      
       // ── CREATE ──
       const booked = await prisma.lawnBooking.create({
         data: {
@@ -3070,10 +3115,25 @@ export class BookingService {
         });
         if (outOfOrderConflict) throw new ConflictException('Lawn out of service');
 
-        const confBooking = await prisma.lawnBooking.findFirst({
-          where: { lawnId: lawn.id, id: { not: Number(id) }, bookingDate: { lte: currentCheckDate }, endDate: { gte: currentCheckDate }, bookingTime: currentSlot as any, isCancelled: false },
+        const existingBookings = await prisma.lawnBooking.findMany({
+          where: { lawnId: lawn.id, id: { not: Number(id) }, bookingDate: { lte: currentCheckDate }, endDate: { gte: currentCheckDate }, isCancelled: false },
         });
-        if (confBooking) throw new ConflictException('Lawn already booked');
+
+        for (const existingBooking of existingBookings) {
+          const details = existingBooking.bookingDetails as any[];
+          let hasConflict = false;
+          if (details && Array.isArray(details) && details.length > 0) {
+            const conflictDetail = details.find((d: any) => {
+              const dDate = new Date(d.date);
+              dDate.setHours(0, 0, 0, 0);
+              return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+            });
+            if (conflictDetail) hasConflict = true;
+          } else {
+            if (existingBooking.bookingTime === currentSlot) hasConflict = true;
+          }
+          if (hasConflict) throw new ConflictException('Lawn already booked');
+        }
 
         const dayStart = new Date(currentCheckDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(currentCheckDate); dayEnd.setHours(23, 59, 59, 999);
@@ -3197,10 +3257,25 @@ export class BookingService {
         });
         if (outOfOrderConflict) throw new ConflictException(`Lawn out of order on ${currentCheckDate.toDateString()}`);
 
-        const confBooking = await prisma.lawnBooking.findFirst({
-          where: { lawnId: lawn.id, bookingDate: { lte: currentCheckDate }, endDate: { gte: currentCheckDate }, bookingTime: currentSlot as any, isCancelled: false },
+        const existingBookings = await prisma.lawnBooking.findMany({
+          where: { lawnId: lawn.id, bookingDate: { lte: currentCheckDate }, endDate: { gte: currentCheckDate }, isCancelled: false },
         });
-        if (confBooking) throw new ConflictException(`Lawn already booked on ${currentCheckDate.toDateString()}`);
+
+        for (const existingBooking of existingBookings) {
+          const details = existingBooking.bookingDetails as any[];
+          let hasConflict = false;
+          if (details && Array.isArray(details) && details.length > 0) {
+            const conflictDetail = details.find((d: any) => {
+              const dDate = new Date(d.date);
+              dDate.setHours(0, 0, 0, 0);
+              return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+            });
+            if (conflictDetail) hasConflict = true;
+          } else {
+            if (existingBooking.bookingTime === currentSlot) hasConflict = true;
+          }
+          if (hasConflict) throw new ConflictException(`Lawn already booked on ${currentCheckDate.toDateString()}`);
+        }
 
         const dayStart = new Date(currentCheckDate); dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(currentCheckDate); dayEnd.setHours(23, 59, 59, 999);

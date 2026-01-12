@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, addDays, format, parse } from "date-fns";
+import { differenceInCalendarDays, addDays, format, parse, isSameDay } from "date-fns";
 import {
   Hall,
   HallBooking,
@@ -201,6 +201,9 @@ export const getUnavailableTimeSlotsForDate = (
 
   // Check bookings for this date (already filtered by hallId in callers, but we double check here)
   bookings.filter(booking => booking.hallId?.toString() === hallId).forEach(booking => {
+    // Skip cancelled bookings
+    if ((booking as any).isCancelled) return;
+
     // 1. Check granular bookingDetails if available
     if (booking.bookingDetails && Array.isArray(booking.bookingDetails)) {
       booking.bookingDetails.forEach((detail: any) => {
@@ -209,8 +212,9 @@ export const getUnavailableTimeSlotsForDate = (
         const dDate = parseLocalDate(detail.date);
         const detailDateStr = format(dDate, "yyyy-MM-dd");
         if (detailDateStr === dateString && detail.timeSlot) {
-          if (!unavailableSlots.includes(detail.timeSlot)) {
-            unavailableSlots.push(detail.timeSlot);
+          const detailSlot = detail.timeSlot.toUpperCase();
+          if (!unavailableSlots.includes(detailSlot)) {
+            unavailableSlots.push(detailSlot);
           }
         }
       });
@@ -218,9 +222,19 @@ export const getUnavailableTimeSlotsForDate = (
     // 2. Fallback to legacy bookingTime for backward compatibility
     else if (booking.bookingTime) {
       const bDate = parseLocalDate(booking.bookingDate as string);
-      const bDateString = format(bDate, "yyyy-MM-dd");
-      if (bDateString === dateString && !unavailableSlots.includes(booking.bookingTime)) {
-        unavailableSlots.push(booking.bookingTime);
+      const bEndDate = booking.endDate ? parseLocalDate(booking.endDate as string) : bDate;
+
+      // Normalize dates to midnight
+      bDate.setHours(0, 0, 0, 0);
+      bEndDate.setHours(0, 0, 0, 0);
+      const targetDate = parseLocalDate(dateString); // dateString is yyyy-MM-dd
+      targetDate.setHours(0, 0, 0, 0);
+
+      if (targetDate >= bDate && targetDate <= bEndDate) {
+        const normalizedSlot = booking.bookingTime?.toUpperCase();
+        if (normalizedSlot && !unavailableSlots.includes(normalizedSlot)) {
+          unavailableSlots.push(normalizedSlot);
+        }
       }
     }
   });
@@ -240,8 +254,9 @@ export const getUnavailableTimeSlotsForDate = (
   });
 
   dateReservations.forEach(reservation => {
-    if (reservation.timeSlot && !unavailableSlots.includes(reservation.timeSlot)) {
-      unavailableSlots.push(reservation.timeSlot);
+    const rSlot = reservation.timeSlot?.toUpperCase();
+    if (rSlot && !unavailableSlots.includes(rSlot)) {
+      unavailableSlots.push(rSlot);
     }
   });
 
@@ -343,8 +358,7 @@ export const checkHallConflicts = (
     let currentSlot = timeSlot;
     if (bookingDetails && Array.isArray(bookingDetails)) {
       const detail = bookingDetails.find(d => {
-        const dDate = format(new Date(d.date), "yyyy-MM-dd");
-        return dDate === dateString;
+        return isSameDay(parseLocalDate(d.date), targetDate);
       });
       if (detail) currentSlot = detail.timeSlot;
     }
@@ -361,21 +375,20 @@ export const checkHallConflicts = (
 
     // 2. Check Bookings
     const isBooked = bookings.some(b => {
+      if ((b as any).isCancelled) return false;
       if (excludeBookingId && b.id?.toString() === excludeBookingId?.toString()) return false;
 
       // Check granular details first
       if (b.bookingDetails && Array.isArray(b.bookingDetails)) {
         return b.hallId?.toString() === hallId && b.bookingDetails.some((d: any) => {
           const dDate = parseLocalDate(d.date);
-          const detailDateStr = format(dDate, "yyyy-MM-dd");
-          return detailDateStr === dateString && d.timeSlot === currentSlot;
+          return isSameDay(dDate, targetDate) && d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase();
         });
       }
 
       // Fallback to legacy
       const bDate = parseLocalDate(b.bookingDate as string);
-      const bDateStr = format(bDate, "yyyy-MM-dd");
-      return b.hallId?.toString() === hallId && bDateStr === dateString && b.bookingTime === currentSlot;
+      return b.hallId?.toString() === hallId && isSameDay(bDate, targetDate) && b.bookingTime?.toUpperCase() === currentSlot?.toUpperCase();
     });
 
     if (isBooked) {
@@ -397,7 +410,7 @@ export const checkHallConflicts = (
       const d = new Date(targetDate);
       d.setHours(0, 0, 0, 0);
 
-      return r.hallId?.toString() === hallId && d >= rStart && d <= rEnd && r.timeSlot === currentSlot;
+      return r.hallId?.toString() === hallId && d >= rStart && d <= rEnd && r.timeSlot?.toUpperCase() === currentSlot?.toUpperCase();
     });
 
     if (isReserved) {

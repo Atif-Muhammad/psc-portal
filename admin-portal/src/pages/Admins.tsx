@@ -49,7 +49,8 @@ const modules = [
   "Accounts",
   "Affiliated Clubs",
   "Contents",
-  "Admin Reservations"
+  "Admin Reservations",
+  "Messing"
 ];
 
 export default function Admins() {
