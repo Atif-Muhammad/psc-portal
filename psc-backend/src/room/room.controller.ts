@@ -43,6 +43,7 @@ export class RoomController {
       type: payload.type,
       priceMember: payload.priceMember,
       priceGuest: payload.priceGuest,
+      priceForces: payload.priceForces,
       existingimgs: payload.existingimgs || [], // For create, this should usually be empty
     };
 
@@ -84,6 +85,7 @@ export class RoomController {
       type: payload.type,
       priceMember: payload.priceMember,
       priceGuest: payload.priceGuest,
+      priceForces: payload.priceForces,
       existingimgs: existingimgs,
     };
 

@@ -42,6 +42,7 @@ interface RoomType {
   type: string;
   priceMember: number;
   priceGuest: number;
+  priceForces: number;
   images?: { url: string; publicId: string }[];
 }
 
@@ -64,12 +65,14 @@ export default function RoomTypes() {
     type: "",
     priceMember: "",
     priceGuest: "",
+    priceForces: "",
   });
 
   const [editFormData, setEditFormData] = useState({
     type: "",
     priceMember: "",
     priceGuest: "",
+    priceForces: "",
   });
 
   // --- Queries ---
@@ -121,6 +124,7 @@ export default function RoomTypes() {
       type: "",
       priceMember: "",
       priceGuest: "",
+      priceForces: "",
     });
     setAddImages([]);
     setAddPreviewImages([]);
@@ -131,6 +135,7 @@ export default function RoomTypes() {
       type: "",
       priceMember: "",
       priceGuest: "",
+      priceForces: "",
     });
     setEditImages([]);
     setEditExistingImages([]);
@@ -232,6 +237,7 @@ export default function RoomTypes() {
     fd.append("type", formData.type);
     fd.append("priceMember", formData.priceMember);
     fd.append("priceGuest", formData.priceGuest);
+    fd.append("priceForces", formData.priceForces);
 
     // Add images
     addImages.forEach((file) => fd.append("files", file));
@@ -244,6 +250,7 @@ export default function RoomTypes() {
     fd.append("type", editFormData.type);
     fd.append("priceMember", editFormData.priceMember);
     fd.append("priceGuest", editFormData.priceGuest);
+    fd.append("priceForces", editFormData.priceForces);
 
     // Add new images
     editImages.forEach((file) => fd.append("files", file));
@@ -258,7 +265,7 @@ export default function RoomTypes() {
 
   // --- Form Handlers ---
   const handleAdd = () => {
-    if (!formData.type || !formData.priceMember || !formData.priceGuest) {
+    if (!formData.type || !formData.priceMember || !formData.priceGuest || !formData.priceForces) {
       toast({ title: "All fields are required", variant: "destructive" });
       return;
     }
@@ -266,7 +273,8 @@ export default function RoomTypes() {
     // Validate numeric values
     if (
       isNaN(Number(formData.priceMember)) ||
-      isNaN(Number(formData.priceGuest))
+      isNaN(Number(formData.priceGuest)) ||
+      isNaN(Number(formData.priceForces))
     ) {
       toast({ title: "Prices must be valid numbers", variant: "destructive" });
       return;
@@ -277,6 +285,7 @@ export default function RoomTypes() {
       type: formData.type,
       priceMember: formData.priceMember,
       priceGuest: formData.priceGuest,
+      priceForces: formData.priceForces,
       imageCount: addImages.length,
     });
 
@@ -289,6 +298,7 @@ export default function RoomTypes() {
       type: type.type,
       priceMember: type.priceMember.toString(),
       priceGuest: type.priceGuest.toString(),
+      priceForces: (type.priceForces || 0).toString(),
     });
 
     // Set existing images for editing
@@ -304,7 +314,8 @@ export default function RoomTypes() {
     if (
       !editFormData.type ||
       !editFormData.priceMember ||
-      !editFormData.priceGuest
+      !editFormData.priceGuest ||
+      !editFormData.priceForces
     ) {
       toast({ title: "All fields are required", variant: "destructive" });
       return;
@@ -313,7 +324,8 @@ export default function RoomTypes() {
     // Validate numeric values
     if (
       isNaN(Number(editFormData.priceMember)) ||
-      isNaN(Number(editFormData.priceGuest))
+      isNaN(Number(editFormData.priceGuest)) ||
+      isNaN(Number(editFormData.priceForces))
     ) {
       toast({ title: "Prices must be valid numbers", variant: "destructive" });
       return;
@@ -325,6 +337,7 @@ export default function RoomTypes() {
       type: editFormData.type,
       priceMember: editFormData.priceMember,
       priceGuest: editFormData.priceGuest,
+      priceForces: editFormData.priceForces,
       existingImages: editExistingImages.length,
       newImages: editImages.length,
     });
@@ -385,7 +398,7 @@ export default function RoomTypes() {
                     placeholder="e.g., Deluxe Room, Suite"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label>Member Price (PKR) *</Label>
                     <Input
@@ -411,6 +424,22 @@ export default function RoomTypes() {
                         setFormData((prev) => ({
                           ...prev,
                           priceGuest: e.target.value,
+                        }))
+                      }
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <Label>Forces Price (PKR) *</Label>
+                    <Input
+                      type="number"
+                      value={formData.priceForces}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          priceForces: e.target.value,
                         }))
                       }
                       placeholder="0"
@@ -457,6 +486,7 @@ export default function RoomTypes() {
                 <TableHead>Type</TableHead>
                 <TableHead>Member Price</TableHead>
                 <TableHead>Guest Price</TableHead>
+                <TableHead>Forces Price</TableHead>
                 <TableHead>Images</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -467,6 +497,7 @@ export default function RoomTypes() {
                   <TableCell className="font-medium">{type.type}</TableCell>
                   <TableCell>PKR {type.priceMember}</TableCell>
                   <TableCell>PKR {type.priceGuest}</TableCell>
+                  <TableCell>PKR {type.priceForces || 0}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       {type.images?.slice(0, 3)?.map((img: any, i: number) => (
@@ -530,7 +561,7 @@ export default function RoomTypes() {
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Member Price (PKR) *</Label>
                 <Input
@@ -555,6 +586,21 @@ export default function RoomTypes() {
                     setEditFormData((p) => ({
                       ...p,
                       priceGuest: e.target.value,
+                    }))
+                  }
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <Label>Forces Price (PKR) *</Label>
+                <Input
+                  type="number"
+                  value={editFormData.priceForces}
+                  onChange={(e) =>
+                    setEditFormData((p) => ({
+                      ...p,
+                      priceForces: e.target.value,
                     }))
                   }
                   min="0"

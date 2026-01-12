@@ -68,9 +68,9 @@ export class RoomService {
       }
 
       // Validate required fields
-      if (!payload.type || !payload.priceMember || !payload.priceGuest) {
+      if (!payload.type || !payload.priceMember || !payload.priceGuest || !payload.priceForces) {
         throw new HttpException(
-          'Type, priceMember, and priceGuest are required fields',
+          'Type, priceMember, priceGuest, and priceForces are required fields',
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -81,6 +81,7 @@ export class RoomService {
           type: capitalizeWords(payload.type),
           priceMember: Number(payload.priceMember),
           priceGuest: Number(payload.priceGuest),
+          priceForces: Number(payload.priceForces),
           images: uploadedImages,
           createdBy,
         },
@@ -214,6 +215,8 @@ export class RoomService {
         updateData.priceMember = Number(payload.priceMember);
       if (payload.priceGuest)
         updateData.priceGuest = Number(payload.priceGuest);
+      if (payload.priceForces)
+        updateData.priceForces = Number(payload.priceForces);
 
       return await this.prismaService.roomType.update({
         where: { id },

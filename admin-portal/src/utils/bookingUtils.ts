@@ -211,7 +211,9 @@ export const calculatePrice = (
   const pricePerDay =
     pricingType === "member"
       ? parseInt(roomType.priceMember)
-      : parseInt(roomType.priceGuest);
+      : pricingType === "forces"
+        ? parseInt(roomType.priceForces || "0")
+        : parseInt(roomType.priceGuest);
 
   return days * pricePerDay;
 };

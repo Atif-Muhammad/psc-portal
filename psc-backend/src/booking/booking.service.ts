@@ -252,7 +252,7 @@ export class BookingService {
         rooms: {
           create: rooms.map(r => ({
             roomId: r.id,
-            priceAtBooking: pricingType === 'member' ? r.roomType.priceMember : r.roomType.priceGuest
+            priceAtBooking: pricingType === 'member' ? r.roomType.priceMember : (pricingType === 'forces' ? (r.roomType.priceForces || 0) : r.roomType.priceGuest)
           }))
         },
         checkIn: checkInDate,
@@ -563,7 +563,7 @@ export class BookingService {
           deleteMany: {},
           create: rooms.map(r => ({
             roomId: r.id,
-            priceAtBooking: (pricingType ?? booking.pricingType) === 'member' ? r.roomType.priceMember : r.roomType.priceGuest
+            priceAtBooking: (pricingType ?? booking.pricingType) === 'member' ? r.roomType.priceMember : ((pricingType ?? booking.pricingType) === 'forces' ? (r.roomType.priceForces || 0) : r.roomType.priceGuest)
           }))
         },
         checkIn: newCheckIn,
@@ -1039,7 +1039,9 @@ export class BookingService {
           const pricePerNight =
             pricingType === 'member'
               ? room.roomType.priceMember
-              : room.roomType.priceGuest;
+              : pricingType === 'forces'
+                ? (room.roomType.priceForces || 0)
+                : room.roomType.priceGuest;
           calculatedTotal += Number(pricePerNight) * nights;
         }
       }
@@ -1658,7 +1660,7 @@ export class BookingService {
         }
 
         // 3. Check Reservations (Inclusive of the day)
-        
+
         // Fetch all reservations for the day range, then filter by timeslot case-insensitively
         const possibleReservations = await prisma.hallReservation.findMany({
           where: {
@@ -3007,7 +3009,7 @@ export class BookingService {
         owed = total - paid;
       }
       if (isToBill) { amountToBalance = owed; owed = 0; }
-      
+
       // ── CREATE ──
       const booked = await prisma.lawnBooking.create({
         data: {

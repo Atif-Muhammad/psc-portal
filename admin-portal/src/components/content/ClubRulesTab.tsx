@@ -1,10 +1,9 @@
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Edit, Trash2, Plus } from "lucide-react";
+import { Edit, Trash2, Plus, Eye } from "lucide-react";
 import { getRules, createRule, updateRule, deleteRule } from "../../../config/apis";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -20,6 +19,7 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [editRule, setEditRule] = useState<any>(null);
     const [deleteData, setDeleteData] = useState<any>(null);
+    const [previewRule, setPreviewRule] = useState<any>(null);
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -27,6 +27,8 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
         queryKey: ["content_rules", type],
         queryFn: () => getRules(type),
     });
+
+    // ... (mutations remain same)
 
     const createMutation = useMutation({
         mutationFn: (data: any) => createRule({ ...data, type }),
@@ -84,8 +86,14 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
                     <Card key={rule.id}>
                         <CardContent className="p-6">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: rule.content }} />
+                                <div className="ql-snow max-h-[200px] overflow-hidden relative group">
+                                    <div className="ql-editor prose max-w-none p-0" dangerouslySetInnerHTML={{ __html: rule.content }} />
+                                    <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                                </div>
                                 <div className="flex gap-2 shrink-0 ml-4">
+                                    <Button variant="ghost" size="icon" onClick={() => setPreviewRule(rule)} title="Preview">
+                                        <Eye className="h-4 w-4" />
+                                    </Button>
                                     <Button variant="ghost" size="icon" onClick={() => setEditRule(rule)}><Edit className="h-4 w-4" /></Button>
                                     <Button variant="ghost" size="icon" onClick={() => setDeleteData(rule)}><Trash2 className="h-4 w-4" /></Button>
                                 </div>
@@ -94,6 +102,20 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
                     </Card>
                 ))}
             </div>
+
+            <Dialog open={!!previewRule} onOpenChange={() => setPreviewRule(null)}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Preview Rule</DialogTitle>
+                    </DialogHeader>
+                    <div className="ql-snow py-4">
+                        <div className="ql-editor prose max-w-none p-0" dangerouslySetInnerHTML={{ __html: previewRule?.content }} />
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setPreviewRule(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

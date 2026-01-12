@@ -19,6 +19,7 @@ export interface RoomType {
   type: string;
   priceMember: string;
   priceGuest: string;
+  priceForces: string;
   createdBy?: string;
   updatedBy?: string;
   createdAt?: string;
@@ -94,8 +95,8 @@ export interface BookingForm {
   category: string;
   roomTypeId: string;
   roomId: string;
-  pricingType: "member" | "guest";
-  paidBy: "MEMBER" | "GUEST",
+  pricingType: "member" | "guest" | "forces";
+  paidBy: "MEMBER" | "GUEST" | "FORCES",
   guestName: "",
   guestContact: "",
   checkIn: string;

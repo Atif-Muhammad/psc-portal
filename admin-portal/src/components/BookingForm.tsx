@@ -114,7 +114,7 @@ export const BookingFormComponent = React.memo(({
                   {roomTypes?.map((type: RoomType) => (
                     <SelectItem key={type.id} value={type.id.toString()}>
                       {type.type} — PKR {parseInt(type.priceMember).toLocaleString()} (Member) / PKR{" "}
-                      {parseInt(type.priceGuest).toLocaleString()} (Guest)
+                      {parseInt(type.priceGuest).toLocaleString()} (Guest) / PKR {parseInt(type.priceForces || "0").toLocaleString()} (Forces)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -200,6 +200,7 @@ export const BookingFormComponent = React.memo(({
               <SelectContent>
                 <SelectItem value="member">Member</SelectItem>
                 <SelectItem value="guest">Guest</SelectItem>
+                <SelectItem value="forces">Forces</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -209,7 +210,7 @@ export const BookingFormComponent = React.memo(({
 
 
       {/* Guest INFORMATION */}
-      {form.pricingType == "guest" && <div className="p-4 rounded-xl border bg-white shadow-sm">
+      {(form.pricingType == "guest" || form.pricingType == "forces") && <div className="p-4 rounded-xl border bg-white shadow-sm">
         <h3 className="text-lg font-semibold mb-4">Guest Information</h3>
 
         <div className="flex  flex-col">
@@ -261,6 +262,7 @@ export const BookingFormComponent = React.memo(({
               <SelectContent>
                 <SelectItem value="MEMBER">Member</SelectItem>
                 <SelectItem value="GUEST">Guest</SelectItem>
+                <SelectItem value="FORCES">Forces</SelectItem>
               </SelectContent>
             </Select>
 

@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE `hallbooking` MODIFY `paidBy` ENUM('MEMBER', 'GUEST', 'FORCES') NOT NULL DEFAULT 'MEMBER';
+
+-- AlterTable
+ALTER TABLE `lawnbooking` MODIFY `paidBy` ENUM('MEMBER', 'GUEST', 'FORCES') NOT NULL DEFAULT 'MEMBER';
+
+-- AlterTable
+ALTER TABLE `photoshootbooking` MODIFY `paidBy` ENUM('MEMBER', 'GUEST', 'FORCES') NOT NULL DEFAULT 'MEMBER';
+
+-- AlterTable
+ALTER TABLE `roombooking` MODIFY `paidBy` ENUM('MEMBER', 'GUEST', 'FORCES') NOT NULL DEFAULT 'MEMBER';

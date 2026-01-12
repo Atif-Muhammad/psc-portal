@@ -104,6 +104,7 @@ enum PaymentStatus {
 enum PaidBy {
   MEMBER
   GUEST
+  FORCES
 }
 
 model RoomBooking {
@@ -352,6 +353,7 @@ model RoomType {
   type        String  @db.VarChar(50)
   priceMember Decimal @default(0.00) @db.Decimal(30, 2)
   priceGuest  Decimal @default(0.00) @db.Decimal(30, 2)
+  priceForces Decimal? @default(0.00) @db.Decimal(30, 2)
 
   images Json @default("[]")
 
