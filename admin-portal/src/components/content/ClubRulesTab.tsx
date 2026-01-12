@@ -86,8 +86,8 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
                     <Card key={rule.id}>
                         <CardContent className="p-6">
                             <div className="flex justify-between items-start mb-4">
-                                <div className="ql-snow max-h-[200px] overflow-hidden relative group">
-                                    <div className="ql-editor prose max-w-none p-0" dangerouslySetInnerHTML={{ __html: rule.content }} />
+                                <div className="ql-snow max-h-[200px] overflow-x-auto relative group">
+                                    <div className="ql-editor prose max-w-none p-0 overflow-x-auto" dangerouslySetInnerHTML={{ __html: rule.content }} />
                                     <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none" />
                                 </div>
                                 <div className="flex gap-2 shrink-0 ml-4">
@@ -104,12 +104,14 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
             </div>
 
             <Dialog open={!!previewRule} onOpenChange={() => setPreviewRule(null)}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader>
                         <DialogTitle>Preview Rule</DialogTitle>
                     </DialogHeader>
-                    <div className="ql-snow py-4">
-                        <div className="ql-editor prose max-w-none p-0" dangerouslySetInnerHTML={{ __html: previewRule?.content }} />
+                    <div className="py-4 max-w-full overflow-x-auto">
+                        <div className="ql-snow">
+                            <div className="ql-editor prose max-w-none p-0" dangerouslySetInnerHTML={{ __html: previewRule?.content }} />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button onClick={() => setPreviewRule(null)}>Close</Button>
@@ -118,14 +120,14 @@ export default function ClubRulesTab({ type, title }: ClubRulesTabProps) {
             </Dialog>
 
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader><DialogTitle>Add Rule Section</DialogTitle></DialogHeader>
                     <RuleForm onSubmit={(data: any) => handleSubmit(data)} onCancel={() => setIsAddOpen(false)} isSubmitting={isSubmitting} />
                 </DialogContent>
             </Dialog>
 
             <Dialog open={!!editRule} onOpenChange={() => setEditRule(null)}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader><DialogTitle>Edit Rule Section</DialogTitle></DialogHeader>
                     {editRule && <RuleForm initialData={editRule} onSubmit={(data: any) => handleSubmit(data, true)} onCancel={() => setEditRule(null)} isSubmitting={isSubmitting} />}
                 </DialogContent>
@@ -170,18 +172,22 @@ function RuleForm({ initialData, onSubmit, onCancel, isSubmitting }: any) {
     ]
 
     return (
-        <div className="space-y-4 py-4">
-            <ReactQuill
-                theme="snow"
-                value={content}
-                onChange={setContent}
-                className="h-64 mb-12"
-                modules={modules}
-                formats={formats}
-            />
+        <div className="space-y-4 py-4 max-w-full overflow-x-hidden">
+            <div className="w-full overflow-x-auto border rounded-md">
+                <div className="ql-snow">
+                    <ReactQuill
+                        theme="snow"
+                        value={content}
+                        onChange={setContent}
+                        className="h-64 mb-12"
+                        modules={modules}
+                        formats={formats}
+                    />
+                </div>
+            </div>
 
             {initialData && (
-                <div className="mt-6 pt-4 border-t bg-gray-50/50 -mx-6 px-6 py-4">
+                <div className="mt-6 pt-4 border-t bg-gray-50/50 px-6 py-4 rounded-md">
                     <h3 className="font-semibold text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
                         Audit Tracking
                     </h3>
