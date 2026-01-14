@@ -81,10 +81,10 @@ export const BookingsTable = React.memo(({
                   )}
                 </TableCell>
                 <TableCell>
-                  {new Date(booking.checkIn).toLocaleString()}
+                  {new Date(booking.checkIn).toLocaleDateString()}
                 </TableCell>
                 <TableCell>
-                  {new Date(booking.checkOut).toLocaleString()}
+                  {new Date(booking.checkOut).toLocaleDateString()}
                 </TableCell>
                 <TableCell>
                   PKR {booking.totalPrice?.toLocaleString()}

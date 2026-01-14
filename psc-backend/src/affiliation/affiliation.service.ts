@@ -170,7 +170,7 @@ export class AffiliationService {
     // Check if club exists
     const club = await this.prismaService.affiliatedClub.findFirst({
       where: { id: payload.affiliatedClubId },
-      select: { email: true }
+      select: { email: true, name: true }
     })
     if (!club) {
       throw new HttpException('Club not found', HttpStatus.NOT_FOUND);
@@ -179,7 +179,7 @@ export class AffiliationService {
     // Check if member exists
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: payload.membershipNo.toString() },
-      select: { Email: true }
+      select: { Email: true, Name: true, Membership_No: true, Contact_No: true }
     })
     if (!member) {
       throw new HttpException('Member not found', HttpStatus.NOT_FOUND);
