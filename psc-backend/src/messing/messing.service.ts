@@ -12,7 +12,7 @@ export class MessingService {
     // --- Category CRUD ---
 
     async createCategory(data: any, files: Array<Express.Multer.File>, createdBy: string) {
-        let uploadedImages:any[] = [];
+        let uploadedImages: any[] = [];
         if (files && files.length > 0) {
             for (const file of files) {
                 const result = await this.cloudinaryService.uploadFile(file);
@@ -35,7 +35,7 @@ export class MessingService {
         return this.prisma.messingCategory.findMany({
             include: {
                 _count: {
-                    select: { items: true }
+                    select: { subCategories: true }
                 }
             },
             orderBy: {
@@ -48,7 +48,7 @@ export class MessingService {
         const category = await this.prisma.messingCategory.findUnique({
             where: { id },
             include: {
-                items: true
+                subCategories: true
             }
         });
         if (!category) throw new NotFoundException('Category not found');
@@ -106,24 +106,83 @@ export class MessingService {
         });
     }
 
+    // --- Sub-Category CRUD ---
+
+    async createSubCategory(data: any, createdBy: string) {
+        return this.prisma.messingSubCategory.create({
+            data: {
+                name: data.name,
+                messingCategoryId: Number(data.messingCategoryId),
+                createdBy,
+                updatedBy: createdBy
+            }
+        });
+    }
+
+    async getSubCategoriesByCategory(categoryId: number) {
+        return this.prisma.messingSubCategory.findMany({
+            where: { messingCategoryId: categoryId },
+            include: {
+                _count: {
+                    select: { items: true }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+    }
+
+    async getSubCategoryById(id: number) {
+        const subCategory = await this.prisma.messingSubCategory.findUnique({
+            where: { id },
+            include: {
+                items: true
+            }
+        });
+        if (!subCategory) throw new NotFoundException('Sub-category not found');
+        return subCategory;
+    }
+
+    async updateSubCategory(id: number, data: any, updatedBy: string) {
+        await this.getSubCategoryById(id);
+        return this.prisma.messingSubCategory.update({
+            where: { id },
+            data: {
+                name: data.name,
+                updatedBy
+            }
+        });
+    }
+
+    async deleteSubCategory(id: number) {
+        await this.getSubCategoryById(id);
+        return this.prisma.messingSubCategory.delete({
+            where: { id }
+        });
+    }
+
     // --- Menu Items CRUD ---
 
     async createItem(data: any, createdBy: string) {
         return this.prisma.messingItem.create({
             data: {
-                ...data,
+                name: data.name,
+                description: data.description,
+                price: data.price,
+                messingSubCategoryId: Number(data.messingSubCategoryId),
                 createdBy,
                 updatedBy: createdBy
             },
             include: {
-                messingCategory: true
+                messingSubCategory: true
             }
         });
     }
 
-    async getItemsByCategory(categoryId: number) {
+    async getItemsBySubCategory(subCategoryId: number) {
         return this.prisma.messingItem.findMany({
-            where: { messingCategoryId: categoryId },
+            where: { messingSubCategoryId: subCategoryId },
             orderBy: {
                 createdAt: 'desc'
             }
@@ -133,7 +192,7 @@ export class MessingService {
     async getItemById(id: number) {
         const item = await this.prisma.messingItem.findUnique({
             where: { id },
-            include: { messingCategory: true }
+            include: { messingSubCategory: true }
         });
         if (!item) throw new NotFoundException('Item not found');
         return item;

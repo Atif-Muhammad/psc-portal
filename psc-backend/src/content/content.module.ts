@@ -9,5 +9,6 @@ import { PrismaModule } from '../prisma/prisma.module';
     imports: [CloudinaryModule, PrismaModule],
     controllers: [ContentController],
     providers: [ContentService],
+    exports: [ContentService],
 })
 export class ContentModule { }

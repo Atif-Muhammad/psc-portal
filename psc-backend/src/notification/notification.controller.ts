@@ -5,10 +5,14 @@ import { v4 as uuid } from 'uuid';
 import { MemberStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
+import { ContentService } from 'src/content/content.service';
 
 @Controller('notification')
 export class NotificationController {
-    constructor(private readonly notificationService: NotificationService) { }
+    constructor(
+        private readonly notificationService: NotificationService,
+        private readonly contentService: ContentService
+    ) { }
 
 
     @UseGuards(JwtAccGuard)
@@ -28,8 +32,14 @@ export class NotificationController {
             addEmails(list);
         } else {
             // Check target statuses
-            if (payload.targetStatuses && Array.isArray(payload.targetStatuses)) {
-                for (const status of payload.targetStatuses) {
+            const targetStatuses = payload.targetStatuses ? [...payload.targetStatuses] : [];
+
+            if (payload.isAnnouncement && !targetStatuses.includes('active')) {
+                targetStatuses.push('active');
+            }
+
+            if (targetStatuses.length > 0) {
+                for (const status of targetStatuses) {
                     const list = await this.notificationService.getEmailsByStatus(status as MemberStatus);
                     addEmails(list);
                 }
@@ -49,6 +59,15 @@ export class NotificationController {
             description: payload.description,
         }, adminName);
 
+        if (payload.isAnnouncement) {
+            await this.contentService.createAnnouncement({
+                title: payload.title,
+                description: payload.description,
+                date: new Date(),
+                isActive: true
+            }, adminName);
+        }
+
         for (const [emailStr, emailObj] of allEmails) {
             await this.notificationService.enqueue({
                 id: uuid(),
@@ -63,7 +82,7 @@ export class NotificationController {
     async getNotifications() {
         return this.notificationService.getNotifications();
     }
-    
+
 
     @Patch("update-seen")
     async updateSeen(@Body("notiID") notiID: number) {

@@ -16,7 +16,7 @@ export class MessingController {
         const createdBy = req.user.username || '';
         return this.messingService.createCategory(body, files, createdBy);
     }
-
+    @UseGuards(JwtAccGuard)
     @Get('category')
     getCategories() {
         return this.messingService.getCategories();
@@ -47,25 +47,64 @@ export class MessingController {
         return this.messingService.deleteCategory(id);
     }
 
+    // --- Sub-Categories ---
+
+    @Post('subcategory')
+    @UseGuards(JwtAccGuard)
+    createSubCategory(@Body() body: any, @Request() req) {
+        const createdBy = req.user.username || '';
+        return this.messingService.createSubCategory(body, createdBy);
+    }
+
+    @Get('subcategory/category/:categoryId')
+    @UseGuards(JwtAccGuard)
+    getSubCategoriesByCategory(@Param('categoryId', ParseIntPipe) categoryId: number) {
+        return this.messingService.getSubCategoriesByCategory(categoryId);
+    }
+
+    @Get('subcategory/:id')
+    @UseGuards(JwtAccGuard)
+    getSubCategoryById(@Param('id', ParseIntPipe) id: number) {
+        return this.messingService.getSubCategoryById(id);
+    }
+
+    @Patch('subcategory/:id')
+    @UseGuards(JwtAccGuard)
+    updateSubCategory(
+        @Param('id', ParseIntPipe) id: number,
+        @Body() body: any,
+        @Request() req
+    ) {
+        const updatedBy = req.user.username || '';
+        return this.messingService.updateSubCategory(id, body, updatedBy);
+    }
+
+    @Delete('subcategory/:id')
+    @UseGuards(JwtAccGuard)
+    deleteSubCategory(@Param('id', ParseIntPipe) id: number) {
+        return this.messingService.deleteSubCategory(id);
+    }
+
     // --- Items ---
 
     @Post('item')
     @UseGuards(JwtAccGuard)
     createItem(@Body() body: any, @Request() req) {
         const createdBy = req.user.username || '';
-        // Convert messingCategoryId to int if it comes as string (multipart can sometimes do this, though here it's likely JSON)
-        if (body.messingCategoryId) body.messingCategoryId = Number(body.messingCategoryId);
+        if (body.messingSubCategoryId) body.messingSubCategoryId = Number(body.messingSubCategoryId);
         if (body.price) body.price = Number(body.price);
 
         return this.messingService.createItem(body, createdBy);
     }
 
-    @Get('item/category/:categoryId')
-    getItemsByCategory(@Param('categoryId', ParseIntPipe) categoryId: number) {
-        return this.messingService.getItemsByCategory(categoryId);
+    @Get('item/subcategory/:subCategoryId')
+    @UseGuards(JwtAccGuard)
+    getItemsBySubCategory(@Param('subCategoryId', ParseIntPipe) subCategoryId: number) {
+        return this.messingService.getItemsBySubCategory(subCategoryId);
     }
 
     @Get('item/:id')
+    @UseGuards(JwtAccGuard)
     getItem(@Param('id', ParseIntPipe) id: number) {
         return this.messingService.getItemById(id);
     }

@@ -13,5 +13,6 @@ export class NotificationDto {
     sendToAll?: boolean;
     @IsOptional()
     targetStatuses?: string[];
-
+    @IsOptional()
+    isAnnouncement?: boolean;
 }

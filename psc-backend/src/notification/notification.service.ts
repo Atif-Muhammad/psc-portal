@@ -243,11 +243,19 @@ export class NotificationService {
             }
         });
     }
-    async getEmailsByStatus(status: MemberStatus = 'CLEAR') {
+    async getEmailsByStatus(status: string = 'active') {
+        const upperStatus = status.toUpperCase();
+        const derivedStatuses = ['ACTIVE', 'DEACTIVATED', 'BLOCKED'];
+
+        const where: any = {};
+        if (derivedStatuses.includes(upperStatus)) {
+            where.Status = status.toLowerCase();
+        } else {
+            where.Actual_Status = upperStatus as MemberStatus;
+        }
+
         return await this.prisma.member.findMany({
-            where: {
-                Status: status
-            },
+            where,
             select: {
                 Email: true
             }

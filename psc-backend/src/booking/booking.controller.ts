@@ -18,10 +18,11 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesEnum } from 'src/common/constants/roles.enum';
 import { BookingDto } from './dtos/booking.dto';
 import { PaymentMode } from '@prisma/client';
+import { ContentService } from 'src/content/content.service';
 
 @Controller('booking')
 export class BookingController {
-  constructor(private readonly bookingService: BookingService) { }
+  constructor(private readonly bookingService: BookingService, private readonly contentService: ContentService) { }
 
   @Get('lock')
   async lockBookings() {
@@ -389,5 +390,29 @@ export class BookingController {
     const memberId = membership_no ? membership_no : req.user?.id;
     return await this.bookingService.memberBookings(memberId, type)
 
+  }
+
+
+
+  // rules
+  @UseGuards(JwtAccGuard)
+  @Get('hall/rule')
+  async hallRule(){
+    return await this.contentService.getClubRules("HALL")
+  }
+  @UseGuards(JwtAccGuard)
+  @Get('room/rule')
+  async RoomRule(){
+    return await this.contentService.getClubRules("ROOM")
+  }
+  @UseGuards(JwtAccGuard)
+  @Get('lawn/rule')
+  async LawnRule(){
+    return await this.contentService.getClubRules("LAWN")
+  }
+  @UseGuards(JwtAccGuard)
+  @Get('photo/rule')
+  async PhotoRule(){
+    return await this.contentService.getClubRules("PHOTOSHOOT")
   }
 }

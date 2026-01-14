@@ -1914,6 +1914,44 @@ export const deleteMessingCategory = async (id: number) => {
   }
 };
 
+// Sub-Categories
+export const createMessingSubCategory = async (data: any) => {
+  try {
+    const response = await axios.post(`${base_url}/messing/subcategory`, data, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error creating sub-category", status: error.response?.status || 500 };
+  }
+};
+
+export const getMessingSubCategoriesByCategory = async (categoryId: number) => {
+  try {
+    const response = await axios.get(`${base_url}/messing/subcategory/category/${categoryId}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching sub-categories", status: error.response?.status || 500 };
+  }
+};
+
+export const updateMessingSubCategory = async ({ id, updates }: any) => {
+  try {
+    const response = await axios.patch(`${base_url}/messing/subcategory/${id}`, updates, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error updating sub-category", status: error.response?.status || 500 };
+  }
+};
+
+export const deleteMessingSubCategory = async (id: number) => {
+  try {
+    const response = await axios.delete(`${base_url}/messing/subcategory/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error deleting sub-category", status: error.response?.status || 500 };
+  }
+};
+
+// Items
 export const createMessingItem = async (data: any) => {
   try {
     const response = await axios.post(`${base_url}/messing/item`, data, { withCredentials: true });
@@ -1923,9 +1961,9 @@ export const createMessingItem = async (data: any) => {
   }
 };
 
-export const getMessingItemsByCategory = async (categoryId: number) => {
+export const getMessingItemsBySubCategory = async (subCategoryId: number) => {
   try {
-    const response = await axios.get(`${base_url}/messing/item/category/${categoryId}`, { withCredentials: true });
+    const response = await axios.get(`${base_url}/messing/item/subcategory/${subCategoryId}`, { withCredentials: true });
     return response.data;
   } catch (error: any) {
     throw { message: error.response?.data?.message || "Error fetching items", status: error.response?.status || 500 };

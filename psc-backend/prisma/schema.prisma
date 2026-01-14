@@ -818,7 +818,7 @@ model MessingCategory {
   category  String   @db.VarChar(200)
   images    Json     @default("[]") // Array of image URLs, max 5
   
-  items     MessingItem[]
+  subCategories MessingSubCategory[]
 
   createdBy String @default("")
   updatedBy String @default("")
@@ -827,10 +827,28 @@ model MessingCategory {
   updatedAt DateTime @updatedAt
 }
 
-model MessingItem {
+model MessingSubCategory {
   id                Int             @id @unique @default(autoincrement())
   messingCategoryId Int
   messingCategory   MessingCategory @relation(fields: [messingCategoryId], references: [id], onDelete: Cascade)
+  
+  name        String  @db.VarChar(200)
+  
+  items       MessingItem[]
+
+  createdBy String @default("")
+  updatedBy String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([messingCategoryId])
+}
+
+model MessingItem {
+  id                   Int                @id @unique @default(autoincrement())
+  messingSubCategoryId Int
+  messingSubCategory   MessingSubCategory @relation(fields: [messingSubCategoryId], references: [id], onDelete: Cascade)
   
   name        String  @db.VarChar(200)
   description String? @db.Text
@@ -842,7 +860,7 @@ model MessingItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([messingCategoryId])
+  @@index([messingSubCategoryId])
 }
 
 model Announcement {

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Edit, FileDown, Plus, Trash2, Loader2, Calendar as CalendarIcon, Eye, Sun, Moon, Sunset, DollarSign } from "lucide-react";
+import { Edit, FileDown, Plus, Trash2, Loader2, Calendar as CalendarIcon, Eye, Sun, Moon, Sunset, DollarSign, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -653,7 +653,7 @@ export default function Photoshoot() {
             <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-slate-100 rounded-md">
-                  <DollarSign className="h-4 w-4 text-slate-600" />
+                  <User className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
@@ -668,7 +668,7 @@ export default function Photoshoot() {
             <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-slate-100 rounded-md">
-                  <DollarSign className="h-4 w-4 text-slate-600" />
+                  <User className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">

@@ -206,7 +206,7 @@ export class AuthController {
     async sendOTP(@Body() payload: { memberID: string }) {
 
         const member = await this.authService.getMember(payload?.memberID);
-        if (member.Status !== "active") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
+        if (member.Status == "blocked") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
         // generate an OTP and combine with OTP_MSG
         const otp = generateRandomNumber(4) || 1234;
         // store in member table
