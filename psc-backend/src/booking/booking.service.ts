@@ -24,6 +24,7 @@ import {
   getPakistanDate,
   parsePakistanDate,
 } from 'src/utils/time';
+import { generateNumericVoucherNo } from 'src/utils/id';
 
 @Injectable()
 export class BookingService {
@@ -305,6 +306,7 @@ export class BookingService {
 
       await this.prismaService.paymentVoucher.create({
         data: {
+          voucher_no: generateNumericVoucherNo(),
           booking_type: 'ROOM',
           booking_id: booking.id,
           membership_no: membershipNo,
@@ -802,6 +804,7 @@ export class BookingService {
       if (newPaid > 0) {
         await this.prismaService.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             ...commonData,
             amount: newPaid,
             voucher_type: newStatus === PaymentStatus.PAID ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
@@ -816,6 +819,7 @@ export class BookingService {
         refundAmount = oldTotal - newPaid;
         await this.prismaService.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             ...commonData,
             amount: refundAmount,
             payment_mode: PaymentMode.CASH,
@@ -829,6 +833,7 @@ export class BookingService {
       // Scenario: Payment increased (greater will gen new for the new amount)
       await this.prismaService.paymentVoucher.create({
         data: {
+          voucher_no: generateNumericVoucherNo(),
           ...commonData,
           amount: paidDiff,
           voucher_type: newStatus === PaymentStatus.PAID ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
@@ -1119,6 +1124,7 @@ export class BookingService {
         const voucherType = paymentStatus === 'PAID' ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT;
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'ROOM',
             booking_id: booking.id,
             membership_no: membershipNo,
@@ -1794,6 +1800,7 @@ export class BookingService {
             : VoucherType.HALF_PAYMENT;
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'HALL',
             booking_id: booked.id,
             membership_no: membershipNo,
@@ -2465,6 +2472,7 @@ export class BookingService {
             : VoucherType.HALF_PAYMENT;
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'HALL',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
@@ -3067,6 +3075,7 @@ export class BookingService {
 
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'LAWN', booking_id: booked.id, membership_no: membershipNo,
             amount: paid, payment_mode: paymentMode as any,
             voucher_type: (paymentStatus as unknown as PaymentStatus) === 'PAID' ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
@@ -3337,6 +3346,7 @@ export class BookingService {
 
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'LAWN', booking_id: booked.id, membership_no: membershipNo.toString(),
             amount: paid, payment_mode: paymentMode as unknown as PaymentMode,
             voucher_type: paymentStatus === 'PAID' ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
@@ -3653,6 +3663,7 @@ export class BookingService {
 
       await this.prismaService.paymentVoucher.create({
         data: {
+          voucher_no: generateNumericVoucherNo(),
           booking_type: 'PHOTOSHOOT',
           booking_id: booking.id,
           membership_no: membershipNo,
@@ -4148,6 +4159,7 @@ export class BookingService {
 
         await prisma.paymentVoucher.create({
           data: {
+            voucher_no: generateNumericVoucherNo(),
             booking_type: 'PHOTOSHOOT',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
@@ -4533,7 +4545,10 @@ export class BookingService {
   }
   // ── VOUCHER MANAGEMENT ─────────────────────────────────────
   async getVouchersByBooking(bookingType: string, bookingId: number) {
-    return await this.prismaService.paymentVoucher.findMany({
+    if (!bookingId || isNaN(bookingId)) {
+      return [];
+    }
+    const vouchers = await this.prismaService.paymentVoucher.findMany({
       where: {
         booking_type: bookingType as BookingType,
         booking_id: bookingId,
@@ -4542,6 +4557,12 @@ export class BookingService {
         issued_at: 'desc',
       },
     });
+
+    const prefix = process.env.KUICKPAY_PREFIX || '01520';
+    return vouchers.map((v) => ({
+      ...v,
+      consumer_number: `${prefix}${v.id.toString().padStart(13, '0')}`,
+    }));
   }
 
   async updateVoucherStatus(
@@ -4629,7 +4650,78 @@ export class BookingService {
     }
   }
 
+  async cancelUnpaidBooking(voucherId: number) {
+    const voucher = await this.prismaService.paymentVoucher.findUnique({
+      where: { id: voucherId },
+    });
 
+    if (!voucher) {
+      throw new NotFoundException('Voucher not found');
+    }
+
+    if (voucher.status !== VoucherStatus.PENDING) {
+      throw new BadRequestException('Only pending vouchers can be cancelled/deleted');
+    }
+
+    const { booking_type, booking_id, membership_no } = voucher;
+
+    return await this.prismaService.$transaction(async (prisma) => {
+      // 1. Delete Voucher
+      await prisma.paymentVoucher.delete({ where: { id: voucherId } });
+
+      // 2. Delete Booking and associated Holdings
+      if (booking_type === 'ROOM') {
+        const booking = await prisma.roomBooking.findUnique({
+          where: { id: booking_id },
+          include: { rooms: true }
+        });
+        if (booking) {
+          if (booking.paymentStatus !== 'UNPAID') {
+            throw new BadRequestException('Cannot delete a paid or half-paid booking');
+          }
+          const roomIds = booking.rooms.map(r => r.roomId);
+          // Delete holdings
+          await prisma.roomHoldings.deleteMany({
+            where: { roomId: { in: roomIds }, holdBy: membership_no }
+          });
+          // Delete booking
+          await prisma.roomBooking.delete({ where: { id: booking_id } });
+        }
+      } else if (booking_type === 'HALL') {
+        const booking = await prisma.hallBooking.findUnique({ where: { id: booking_id } });
+        if (booking) {
+          if (booking.paymentStatus !== 'UNPAID') {
+            throw new BadRequestException('Cannot delete a paid or half-paid booking');
+          }
+          await prisma.hallHoldings.deleteMany({
+            where: { hallId: booking.hallId, holdBy: membership_no }
+          });
+          await prisma.hallBooking.delete({ where: { id: booking_id } });
+        }
+      } else if (booking_type === 'LAWN') {
+        const booking = await prisma.lawnBooking.findUnique({ where: { id: booking_id } });
+        if (booking) {
+          if (booking.paymentStatus !== 'UNPAID') {
+            throw new BadRequestException('Cannot delete a paid or half-paid booking');
+          }
+          await prisma.lawnHoldings.deleteMany({
+            where: { lawnId: booking.lawnId, holdBy: membership_no }
+          });
+          await prisma.lawnBooking.delete({ where: { id: booking_id } });
+        }
+      } else if (booking_type === 'PHOTOSHOOT') {
+        const booking = await prisma.photoshootBooking.findUnique({ where: { id: booking_id } });
+        if (booking) {
+          if (booking.paymentStatus !== 'UNPAID') {
+            throw new BadRequestException('Cannot delete a paid or half-paid booking');
+          }
+          await prisma.photoshootBooking.delete({ where: { id: booking_id } });
+        }
+      }
+
+      return { success: true, message: 'Unpaid booking and voucher deleted successfully' };
+    });
+  }
 }
 
 

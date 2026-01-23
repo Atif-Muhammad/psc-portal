@@ -7,21 +7,260 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { BookingType, PaidBy, PaymentMode, VoucherStatus, VoucherType } from '@prisma/client';
+import { BookingType, PaidBy, PaymentMode, VoucherStatus, VoucherType, Channel } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   formatPakistanDate,
   getPakistanDate,
   parsePakistanDate,
 } from 'src/utils/time';
+import { generateNumericVoucherNo } from 'src/utils/id';
 import { BookingService } from 'src/booking/booking.service';
+import { BillInquiryResponse, BillPaymentRequestDto, BillPaymentResponse } from './dtos/kuickpay.dto';
+import { RealtimeGateway } from 'src/realtime/realtime.gateway';
+import { NotificationService } from 'src/notification/notification.service';
+import { MailerService } from 'src/mailer/mailer.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PaymentService {
   constructor(
     private prismaService: PrismaService,
     private bookingService: BookingService,
+    private realtimeGateway: RealtimeGateway,
+    private notificationService: NotificationService,
+    private mailerService: MailerService,
   ) { }
+
+  // Kuickpay Integration Logic
+
+  async getBillInquiry(voucherId: number): Promise<BillInquiryResponse> {
+    const voucher = await this.prismaService.paymentVoucher.findUnique({
+      where: { id: voucherId },
+      include: {
+        member: true,
+      },
+    });
+
+    if (!voucher) {
+      return {
+        response_Code: '01',
+        consumer_Detail: ''.padEnd(30, ' '),
+        bill_status: 'B',
+        due_date: ' ',
+        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        email_address: ' ',
+        contact_number: ' ',
+        billing_month: ' ',
+        date_paid: ' ',
+        amount_paid: ' ',
+        tran_auth_Id: ' ',
+        reserved: ' ',
+      } as any;
+    }
+
+    const bookingDate = voucher.issued_at;
+    const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
+
+    let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
+    if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
+    else if (voucher.status === VoucherStatus.CANCELLED) billStatus = 'B';
+
+    const amountStr = this.formatAmountForKuickpay(Number(voucher.amount), 13, true);
+
+    return {
+      response_Code: '00',
+      consumer_Detail: (voucher.member?.Name || 'N/A').toUpperCase().slice(0, 30).padEnd(30, ' '),
+      bill_status: billStatus,
+      due_date: this.formatDateToYYYYMMDD(voucher.expiresAt || voucher.issued_at),
+      amount_within_dueDate: amountStr,
+      amount_after_dueDate: amountStr,
+      email_address: (voucher.member?.Email || 'N/A').slice(0, 30),
+      contact_number: (voucher.member?.Contact_No || 'N/A').slice(0, 15),
+      billing_month: billingMonth,
+      date_paid: voucher.status === VoucherStatus.CONFIRMED ? this.formatDateToYYYYMMDD(voucher.issued_at) : '',
+      amount_paid: voucher.status === VoucherStatus.CONFIRMED ? this.formatAmountForKuickpay(Number(voucher.amount), 12, false) : '',
+      tran_auth_Id: voucher.status === VoucherStatus.CONFIRMED ? (voucher.transaction_id || '000000').slice(0, 6) : '',
+      reserved: '',
+    };
+  }
+
+  async processBillPayment(paymentData: BillPaymentRequestDto): Promise<BillPaymentResponse> {
+    const voucherId = parseInt(paymentData.consumer_number.slice(process.env.KUICKPAY_PREFIX?.length || 5));
+
+    return await this.prismaService.$transaction(async (prisma) => {
+      const voucher = await prisma.paymentVoucher.findUnique({
+        where: { id: voucherId },
+        include: { member: true },
+      });
+
+      if (!voucher) {
+        return { response_Code: '01', Identification_parameter: '', reserved: '' };
+      }
+
+      if (voucher.status === VoucherStatus.CONFIRMED) {
+        // Check if it's the same transaction (idempotency)
+        if (voucher.transaction_id === paymentData.tran_auth_id) {
+          return { response_Code: '00', Identification_parameter: voucher.member?.Email || voucher.voucher_no, reserved: 'Duplicate success' };
+        }
+        return { response_Code: '03', Identification_parameter: '', reserved: 'Already paid' };
+      }
+
+      if (voucher.status === VoucherStatus.CANCELLED) {
+        return { response_Code: '02', Identification_parameter: '', reserved: 'Voucher cancelled' };
+      }
+
+      // Update voucher
+      await prisma.paymentVoucher.update({
+        where: { id: voucherId },
+        data: {
+          status: VoucherStatus.CONFIRMED,
+          transaction_id: paymentData.tran_auth_id,
+          payment_mode: PaymentMode.ONLINE,
+          channel: Channel.KUICKPAY,
+          gateway_meta: paymentData as any,
+          invoice_no: paymentData.tran_auth_id, // Using auth id as invoice no for now
+        },
+      });
+
+      // Update Booking
+      const bType = voucher.booking_type;
+      const bId = voucher.booking_id;
+
+      if (bType === 'ROOM') {
+        const booking = await prisma.roomBooking.update({
+          where: { id: bId },
+          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+          include: { rooms: true }
+        });
+        const roomIds = booking.rooms.map(r => r.roomId);
+        await prisma.roomHoldings.deleteMany({
+          where: { roomId: { in: roomIds }, holdBy: voucher.membership_no }
+        });
+      } else if (bType === 'HALL') {
+        const booking = await prisma.hallBooking.update({
+          where: { id: bId },
+          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+        });
+        await prisma.hallHoldings.deleteMany({
+          where: { hallId: booking.hallId, holdBy: voucher.membership_no }
+        });
+      } else if (bType === 'LAWN') {
+        const booking = await prisma.lawnBooking.update({
+          where: { id: bId },
+          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+        });
+        await prisma.lawnHoldings.deleteMany({
+          where: { lawnId: booking.lawnId, holdBy: voucher.membership_no }
+        });
+      } else if (bType === 'PHOTOSHOOT') {
+        await prisma.photoshootBooking.update({
+          where: { id: bId },
+          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+        });
+      }
+
+      // Update Member Ledger
+      const paidAmount = Number(voucher.amount);
+      await prisma.member.update({
+        where: { Membership_No: voucher.membership_no },
+        data: {
+          bookingAmountPaid: { increment: Math.round(paidAmount) },
+          bookingAmountDue: { decrement: Math.round(paidAmount) },
+          bookingBalance: { increment: Math.round(paidAmount) },
+          lastBookingDate: getPakistanDate(),
+        },
+      });
+
+      const response = { response_Code: '00', Identification_parameter: voucher.member?.Email || voucher.voucher_no, reserved: '' };
+
+      // Trigger asynchronous notifications after transaction success
+      this.triggerNotifications(voucher, paymentData).catch(err => console.error('Failed to trigger notifications:', err));
+
+      return response;
+    });
+  }
+
+  private async triggerNotifications(voucher: any, paymentData: BillPaymentRequestDto) {
+    const voucherId = voucher.id;
+    const email = voucher.member?.Email;
+    const name = voucher.member?.Name || 'Member';
+    const amount = Number(voucher.amount);
+
+    // 1. Real-time update
+    this.realtimeGateway.emitPaymentUpdate(voucherId, 'PAID', {
+      amount,
+      transactionId: paymentData.tran_auth_id
+    });
+
+    // 2. Mobile Notification
+    try {
+      const noti = await this.notificationService.createNoti({
+        title: 'Payment Successful',
+        description: `Your payment of Rs. ${amount} for ${voucher.booking_type} booking has been received.`,
+      }, 'SYSTEM');
+
+      if (email) {
+        this.notificationService.enqueue({
+          id: uuidv4(),
+          status: 'PENDING',
+          noti_created: noti.id,
+          recipient: email
+        });
+      }
+    } catch (err) {
+      console.error('Mobile notification failed:', err);
+    }
+
+    // 3. Email Notification
+    if (email) {
+      try {
+        const subject = `Payment Confirmation - PSC`;
+        const body = `
+          <h3>Dear ${name},</h3>
+          <p>This is to confirm that your payment for <b>${voucher.booking_type}</b> booking has been successfully processed.</p>
+          <ul>
+            <li><b>Voucher No:</b> ${voucher.voucher_no}</li>
+            <li><b>Amount:</b> Rs. ${amount}</li>
+            <li><b>Transaction ID:</b> ${paymentData.tran_auth_id}</li>
+            <li><b>Date:</b> ${new Date().toLocaleDateString()}</li>
+          </ul>
+          <p>Thank you for using our services.</p>
+          <br/>
+          <p>Best Regards,<br/>PSC Team</p>
+        `;
+        await this.mailerService.sendMail(email, [], subject, body);
+      } catch (err) {
+        console.error('Email notification failed:', err);
+      }
+    }
+  }
+
+  formatAmountForKuickpay(amount: number, length: number, includeSign: boolean): string {
+    const sign = amount >= 0 ? '+' : '-';
+    const absoluteAmount = Math.abs(amount);
+    // Use whole units as requested by user, padded to length
+    const padded = Math.round(absoluteAmount).toString().padStart(length, '0');
+    return includeSign ? sign + padded : padded;
+  }
+
+
+  formatDateToYYYYMMDD(date: Date): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  parseKuickpayDate(dateString: string): Date {
+    // YYYYMMDD
+    const year = parseInt(dateString.substring(0, 4));
+    const month = parseInt(dateString.substring(4, 6)) - 1;
+    const day = parseInt(dateString.substring(6, 8));
+    return new Date(year, month, day);
+  }
 
   // kuick pay
   // Mock payment gateway call - replace with actual integration
@@ -213,8 +452,10 @@ export class PaymentService {
     remarks: string;
     expiresAt?: Date;
   }) {
+    const voucher_no = generateNumericVoucherNo();
     return await this.prismaService.paymentVoucher.create({
       data: {
+        voucher_no,
         booking_type: data.booking_type,
         booking_id: data.booking_id,
         membership_no: data.membership_no,
@@ -412,25 +653,23 @@ export class PaymentService {
       expiresAt: holdExpiry
     });
 
-    // dummy api call to confirm (mimicking webhook/payment callback)
-    // we'll simulate this by calling a method in booking.service (to be implemented)
-    // For now, let'll keep the return as voucher and the user can decide how they'll call confirmation.
-    // However, the user asked for the dummy call to be part of the flow.
+    // return voucher details
     if (voucher) {
-      // Mimicking dummy call to confirm internal logic
-      // In a real scenario, this would be triggered by a payment successful webhook
-      // async confirm call
-      setTimeout(async () => {
-        try {
-          await fetch(`http://localhost:3000/api/payment/confirm/ROOM/${booking.id}`, {
-            method: 'POST'
-          });
-        } catch (e) {
-          // Dummy confirmation call failed
+      const prefix = process.env.KUICKPAY_PREFIX || '01520';
+      return {
+        issue_date: voucher.issued_at,
+        due_date: voucher.expiresAt,
+        membership: {
+          no: member?.Membership_No,
+          name: member?.Name,
+          email: member?.Email,
+          contact: member?.Contact_No
+        },
+        voucher: {
+          ...voucher,
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
         }
-      }, 5000); // 5 seconds later
-
-      return { voucher, booking, member };
+      };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
@@ -684,19 +923,23 @@ export class PaymentService {
       expiresAt: holdExpiry
     });
 
-    // dummy api call to confirm
+    // return voucher details
     if (voucher) {
-      setTimeout(async () => {
-        try {
-          await fetch(`http://localhost:3000/api/payment/confirm/HALL/${bookingCreated.id}`, {
-            method: 'POST'
-          });
-        } catch (e) {
-          // Dummy confirmation call failed
+      const prefix = process.env.KUICKPAY_PREFIX || '01520';
+      return {
+        issue_date: voucher.issued_at,
+        due_date: voucher.expiresAt,
+        membership: {
+          no: member?.Membership_No,
+          name: member?.Name,
+          email: member?.Email,
+          contact: member?.Contact_No
+        },
+        voucher: {
+          ...voucher,
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
         }
-      }, 5000);
-
-      return { voucher, booking: bookingCreated, member };
+      };
     }
     throw new HttpException('Failed to create voucher', 500);
 
@@ -901,19 +1144,23 @@ export class PaymentService {
       expiresAt: holdExpiry
     });
 
-    // dummy api call to confirm
+    // return voucher details
     if (voucher) {
-      setTimeout(async () => {
-        try {
-          await fetch(`http://localhost:3000/api/payment/confirm/LAWN/${bookingCreated.id}`, {
-            method: 'POST'
-          });
-        } catch (e) {
-          // Dummy confirmation call failed
+      const prefix = process.env.KUICKPAY_PREFIX || '01520';
+      return {
+        issue_date: voucher.issued_at,
+        due_date: voucher.expiresAt,
+        membership: {
+          no: member?.Membership_No,
+          name: member?.Name,
+          email: member?.Email,
+          contact: member?.Contact_No
+        },
+        voucher: {
+          ...voucher,
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
         }
-      }, 5000);
-
-      return { voucher, booking: bookingCreated, member };
+      };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
@@ -1077,19 +1324,23 @@ export class PaymentService {
       expiresAt: holdExpiry
     });
 
-    // dummy api call to confirm
+    // return voucher details
     if (voucher) {
-      setTimeout(async () => {
-        try {
-          await fetch(`http://localhost:3000/api/payment/confirm/PHOTOSHOOT/${booking.id}`, {
-            method: 'POST'
-          });
-        } catch (e) {
-          // Dummy confirmation call failed
+      const prefix = process.env.KUICKPAY_PREFIX || '01520';
+      return {
+        issue_date: voucher.issued_at,
+        due_date: voucher.expiresAt,
+        membership: {
+          no: member?.Membership_No,
+          name: member?.Name,
+          email: member?.Email,
+          contact: member?.Contact_No
+        },
+        voucher: {
+          ...voucher,
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
         }
-      }, 5000);
-
-      return { voucher, booking, member };
+      };
     }
     throw new HttpException('Failed to create voucher', 500);
   }

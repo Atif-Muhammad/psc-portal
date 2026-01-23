@@ -283,7 +283,7 @@ model SportSubscription {
 
 model PaymentVoucher {
   id         Int    @id @default(autoincrement())
-  voucher_no String @unique @default(cuid())
+  voucher_no String @unique
 
   booking_type BookingType
   booking_id   Int

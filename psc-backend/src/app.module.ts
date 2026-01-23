@@ -21,11 +21,12 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AffiliationModule } from './affiliation/affiliation.module';
 import { ContentModule } from './content/content.module';
 import { MessingModule } from './messing/messing.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [AuthModule, AdminModule, MemberModule, BookingModule, NotificationModule, PrismaModule, ConfigModule.forRoot({
     isGlobal: true
-  }), MailerModule, SchedularModule, ScheduleModule.forRoot(), CloudinaryModule, RoomModule, HallModule, LawnModule, PhotoshootModule, SportModule, PaymentModule, DashboardModule, AffiliationModule, ContentModule, MessingModule],
+  }), MailerModule, SchedularModule, ScheduleModule.forRoot(), CloudinaryModule, RoomModule, HallModule, LawnModule, PhotoshootModule, SportModule, PaymentModule, DashboardModule, AffiliationModule, ContentModule, MessingModule, RealtimeModule],
   controllers: [],
   providers: [MailerService],
 })

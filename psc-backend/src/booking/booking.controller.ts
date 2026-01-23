@@ -5,6 +5,8 @@ import {
   Delete,
   Get,
   NotFoundException,
+  Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -32,11 +34,14 @@ export class BookingController {
   @Get('voucher')
   async getVouchers(
     @Query('bookingType') bookingType: string,
-    @Query('bookingId') bookingId: string,
+    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
   ) {
+    if (!bookingId) {
+      throw new BadRequestException('bookingId is required and must be an integer');
+    }
     return await this.bookingService.getVouchersByBooking(
       bookingType,
-      Number(bookingId),
+      bookingId,
     );
   }
 
@@ -397,22 +402,28 @@ export class BookingController {
   // rules
   @UseGuards(JwtAccGuard)
   @Get('hall/rule')
-  async hallRule(){
+  async hallRule() {
     return await this.contentService.getClubRules("HALL")
   }
   @UseGuards(JwtAccGuard)
   @Get('room/rule')
-  async RoomRule(){
+  async RoomRule() {
     return await this.contentService.getClubRules("ROOM")
   }
   @UseGuards(JwtAccGuard)
   @Get('lawn/rule')
-  async LawnRule(){
+  async LawnRule() {
     return await this.contentService.getClubRules("LAWN")
   }
   @UseGuards(JwtAccGuard)
   @Get('photo/rule')
-  async PhotoRule(){
+  async PhotoRule() {
     return await this.contentService.getClubRules("PHOTOSHOOT")
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Delete('cancel-unpaid/:voucherId')
+  async cancelUnpaidBooking(@Param('voucherId', ParseIntPipe) voucherId: number) {
+    return await this.bookingService.cancelUnpaidBooking(voucherId);
   }
 }
