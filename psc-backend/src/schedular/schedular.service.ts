@@ -34,13 +34,13 @@ export class SchedularService {
             .filter((room) => room.isActive)
             .map((room) => room.id);
 
-          if (roomsToMarkInactive.length > 0) {
-            await tx.room.updateMany({
-              where: { id: { in: roomsToMarkInactive } },
-              data: { isActive: false },
-            });
-            this.logger.log(`Marked ${roomsToMarkInactive.length} rooms as inactive.`);
-          }
+          // if (roomsToMarkInactive.length > 0) {
+          //   await tx.room.updateMany({
+          //     where: { id: { in: roomsToMarkInactive } },
+          //     data: { isActive: false },
+          //   });
+          //   this.logger.log(`Marked ${roomsToMarkInactive.length} rooms as inactive.`);
+          // }
 
           const roomsToReactivate = await tx.room.findMany({
             where: {
