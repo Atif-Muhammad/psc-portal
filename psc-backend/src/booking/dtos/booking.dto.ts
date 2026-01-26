@@ -56,7 +56,8 @@ export class BookingDto {
     guestName?: string
     @IsOptional()
     guestContact?: string
-
+    @IsOptional()
+    guestCNIC?: string
 
 
     @IsNotEmpty({ message: "Total Price must be specified" })

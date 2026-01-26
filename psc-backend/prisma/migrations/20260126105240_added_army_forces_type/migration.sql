@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `member` ADD COLUMN `memberType` VARCHAR(191) NOT NULL DEFAULT 'CIVILIAN';

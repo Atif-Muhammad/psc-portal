@@ -12,7 +12,9 @@ async function bootstrap() {
         'http://localhost:5173',
         'https://193.203.169.122',
         'http://193.203.169.122',
-        'http://193.203.169.122:8080'
+        'http://193.203.169.122:8080',
+        'https://193.203.169.122:8080',
+        'https://peshawarservicesclub.com',
       ];
 
       if (!origin || allowed.includes(origin)) {

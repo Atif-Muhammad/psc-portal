@@ -12,6 +12,7 @@ export interface Member {
   updatedBy?: string;
   createdAt?: string;
   updatedAt?: string;
+  memberType?: "CIVILIAN" | "ARMED_FORCES";
 }
 
 export interface RoomType {
@@ -59,10 +60,11 @@ export interface Booking {
   checkOut: string;
   totalPrice: number;
   paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
-  pricingType: "member" | "guest";
+  pricingType: "member" | "guest" | "forces";
   paidBy: "MEMBER" | "GUEST",
   guestContact: "",
   guestName: "",
+  guestCNIC?: string;
   paidAmount: number;
   pendingAmount: number;
   member?: Member;
@@ -99,6 +101,7 @@ export interface BookingForm {
   paidBy: "MEMBER" | "GUEST" | "FORCES",
   guestName: "",
   guestContact: "",
+  guestCNIC?: string;
   checkIn: string;
   checkOut: string;
   totalPrice: number;

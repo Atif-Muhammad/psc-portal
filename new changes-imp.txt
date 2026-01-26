@@ -1,0 +1,9 @@
+1. last login for member + latest activity
+2. affiliated club -> orderby desc for max requests for the clubs + filters for dates + count for requests within the filtered dates/days.
+3. feedback for member + admin actions for it.
+4. password change option for admins + super admin.
+
+5. armed forces creation like did for members but with a role change to 'af'.
+	-> armd forces --> army + guest + self
+		----> army => PA number + contact + name
+		----> guest => name + contact + CNIC

@@ -71,6 +71,7 @@ export default function Members() {
   const [editMember, setEditMember] = useState<any>(null);
   const [deleteMemberDialog, setDeleteMemberDialog] = useState<any>(null);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [memberType, setMemberType] = useState<"CIVILIAN" | "ARMED_FORCES">("CIVILIAN");
 
   // ─── Fetch Members ────────────────────────────────────────────────
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -306,8 +307,38 @@ export default function Members() {
                 }}
               >
                 <div>
-                  <Label>Membership Number</Label>
-                  <Input name="Membership_No" placeholder="PSC001" required />
+                  <Label>Member Type</Label>
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="civilian"
+                        name="memberType"
+                        value="CIVILIAN"
+                        checked={memberType === "CIVILIAN"}
+                        onChange={() => setMemberType("CIVILIAN")}
+                        className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <Label htmlFor="civilian">Civilian</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id="armed_forces"
+                        name="memberType"
+                        value="ARMED_FORCES"
+                        checked={memberType === "ARMED_FORCES"}
+                        onChange={() => setMemberType("ARMED_FORCES")}
+                        className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <Label htmlFor="armed_forces">Armed Forces</Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>{memberType === "ARMED_FORCES" ? "Membership Number/PA Number" : "Membership Number"}</Label>
+                  <Input name="Membership_No" placeholder={memberType === "ARMED_FORCES" ? "PA-123456" : "PSC001"} required />
                 </div>
 
                 <div>
@@ -389,8 +420,38 @@ export default function Members() {
                   }}
                 >
                   {/* Left / Right columns */}
+                  <div className="col-span-2">
+                    <Label>Member Type</Label>
+                    <div className="flex items-center gap-4 mt-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="edit_civilian"
+                          name="memberType"
+                          value="CIVILIAN"
+                          checked={editMember.memberType === "CIVILIAN" || !editMember.memberType}
+                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                          onChange={() => setEditMember({ ...editMember, memberType: "CIVILIAN" })}
+                        />
+                        <Label htmlFor="edit_civilian">Civilian</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="edit_armed_forces"
+                          name="memberType"
+                          value="ARMED_FORCES"
+                          checked={editMember.memberType === "ARMED_FORCES"}
+                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                          onChange={() => setEditMember({ ...editMember, memberType: "ARMED_FORCES" })}
+                        />
+                        <Label htmlFor="edit_armed_forces">Armed Forces</Label>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
-                    <Label>Membership Number</Label>
+                    <Label>Membership Number {editMember.memberType === "ARMED_FORCES" || memberType === "ARMED_FORCES" ? "/ PA Number" : ""}</Label>
                     <Input
                       name="Membership_No"
                       defaultValue={editMember.Membership_No}

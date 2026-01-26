@@ -38,7 +38,7 @@ export const EditBookingDialog = React.memo(({
 }: EditBookingDialogProps) => {
   return (
     <Dialog open={!!editBooking} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[80vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Room Booking</DialogTitle>
         </DialogHeader>
@@ -94,7 +94,7 @@ export const EditBookingDialog = React.memo(({
           showMemberResults={false}
           searchResults={[]}
           isSearching={false}
-          selectedMember={null}
+          selectedMember={editBooking?.member || null}
           onSelectMember={() => { }}
           onClearMember={() => { }}
           onSearchFocus={() => { }}

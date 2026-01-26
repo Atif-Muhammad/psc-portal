@@ -297,6 +297,7 @@ export default function RoomBookings() {
       membershipNo: member.Membership_No || member.membershipNumber || "",
       memberName: member.Name,
       memberId: member.id?.toString(),
+      pricingType: member.memberType === "ARMED_FORCES" ? "forces" : "member",
     }));
     setMemberSearch("");
     setShowMemberResults(false);
@@ -416,6 +417,7 @@ export default function RoomBookings() {
         paidBy: editBooking.paidBy || "MEMBER",
         guestName: editBooking.guestName || "",
         guestContact: editBooking.guestContact || "",
+        guestCNIC: editBooking.guestCNIC || "",
         checkIn: editBooking.checkIn
           ? convertToDateTimeLocal(editBooking.checkIn)
           : "",
@@ -737,6 +739,7 @@ export default function RoomBookings() {
       paidBy: form.paidBy,
       guestName: form.guestName,
       guestContact: form.guestContact,
+      guestCNIC: form.guestCNIC,
       remarks: form.remarks,
     };
 
@@ -787,6 +790,7 @@ export default function RoomBookings() {
       paidBy: editForm.paidBy,
       guestContact: editForm.guestContact,
       guestName: editForm.guestName,
+      guestCNIC: editForm.guestCNIC,
       numberOfAdults: editForm.numberOfAdults,
       numberOfChildren: editForm.numberOfChildren,
       specialRequests: editForm.specialRequests,
@@ -880,7 +884,7 @@ export default function RoomBookings() {
                 New Booking
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-[80vw] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Room Booking</DialogTitle>
               </DialogHeader>

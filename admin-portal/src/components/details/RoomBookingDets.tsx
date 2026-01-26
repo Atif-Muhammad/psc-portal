@@ -113,6 +113,12 @@ const getPricingTypeBadge = (type: string) => {
           Guest Rate
         </Badge>
       );
+    case "forces":
+      return (
+        <Badge variant="outline" className="border-green-300 text-green-700">
+          Forces Rate
+        </Badge>
+      );
     default:
       return <Badge variant="outline">{type}</Badge>;
   }
@@ -302,20 +308,35 @@ export function BookingDetailsCard({
               </div>
             </div>
 
-            {/* Guest Information (if applicable) */}
-            {hasGuestInfo && (
+            {/* Guest / Forces Information (if applicable) */}
+            {(booking.pricingType === "guest" || booking.pricingType === "forces") && (
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                   <Users className="h-4 w-4" />
-                  Guest Information
+                  {booking.pricingType === "forces" ? "PA Reference Details" : "Guest Information"}
                 </h3>
                 <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
                   <div className="space-y-1">
-                    <div className="font-medium">{booking.guestName}</div>
+                    <div>
+                      <Label>{booking.pricingType === "forces" ? "PA Ref Name" : "Guest Name"}</Label>
+                      <div className="font-medium">{booking.guestName || "N/A"}</div>
+                    </div>
                     {booking.guestContact && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone className="h-3 w-3" />
-                        {booking.guestContact}
+                      <div className="mt-2">
+                        <Label>{booking.pricingType === "forces" ? "PA Ref Contact" : "Guest Contact"}</Label>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Phone className="h-3 w-3" />
+                          {booking.guestContact}
+                        </div>
+                      </div>
+                    )}
+                    {booking.guestCNIC && (
+                      <div className="mt-2">
+                        <Label>{booking.pricingType === "forces" ? "PA Ref CNIC" : "Guest CNIC"}</Label>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <CreditCard className="h-3 w-3" />
+                          {booking.guestCNIC}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -16,6 +16,8 @@ interface MemberSearchComponentProps {
   onSelectMember: (member: Member) => void;
   onClearMember: () => void;
   onFocus: () => void;
+  label?: string;
+  className?: string;
 }
 
 export const MemberSearchComponent = React.memo(({
@@ -28,6 +30,8 @@ export const MemberSearchComponent = React.memo(({
   onSelectMember,
   onClearMember,
   onFocus,
+  label = "Select Member *",
+  className,
 }: MemberSearchComponentProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -43,8 +47,8 @@ export const MemberSearchComponent = React.memo(({
   }, [onFocus]);
 
   return (
-    <div className="md:col-span-2 relative">
-      <Label>Select Member *</Label>
+    <div className={`relative ${className || "md:col-span-2"}`}>
+      <Label>{label}</Label>
       <div className="relative mt-2">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
         <Input
@@ -82,9 +86,8 @@ export const MemberSearchComponent = React.memo(({
             searchResults.map((member: Member) => (
               <div
                 key={member.id}
-                className={`flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b ${
-                  selectedMember?.id === member.id ? "bg-blue-50" : ""
-                }`}
+                className={`flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b ${selectedMember?.id === member.id ? "bg-blue-50" : ""
+                  }`}
                 onClick={() => onSelectMember(member)}
               >
                 <User className="h-4 w-4 text-muted-foreground mr-3" />

@@ -30,7 +30,7 @@ export class MemberService {
 
 
   async createMember(payload: CreateMemberDto, createdBy: string) {
-    const { Name, Email, Membership_No, Contact_No, Balance, Other_Details, Actual_Status } =
+    const { Name, Email, Membership_No, Contact_No, Balance, Other_Details, Actual_Status, memberType } =
       payload;
 
     const existingMember = await this.prismaService.member.findFirst({
@@ -49,6 +49,7 @@ export class MemberService {
         Actual_Status: Actual_Status || 'CLEAR',
         Status: this.getDerivedStatus(Actual_Status || 'CLEAR'),
         Other_Details,
+        memberType: memberType || 'CIVILIAN',
         createdBy,
       },
     });
@@ -68,6 +69,7 @@ export class MemberService {
           Status: this.getDerivedStatus(actualStatus),
           Balance: Number(row.Balance!),
           Other_Details: row.Other_Details!,
+          memberType: row.memberType || 'CIVILIAN',
         },
         create: {
           Membership_No: row.Membership_No!.toString(),
@@ -79,6 +81,7 @@ export class MemberService {
           Status: this.getDerivedStatus(actualStatus),
           Balance: Number(row.Balance!),
           Other_Details: row.Other_Details!,
+          memberType: row.memberType || 'CIVILIAN',
           createdBy,
         },
       });
@@ -104,6 +107,7 @@ export class MemberService {
       Email: payload.Email,
       Contact_No: payload.Contact_No,
       Other_Details: payload.Other_Details,
+      memberType: payload.memberType,
       updatedBy,
     };
 
@@ -232,10 +236,10 @@ export class MemberService {
     });
   }
 
-  async checkMemberStatus(memberID: string){
+  async checkMemberStatus(memberID: string) {
     return await this.prismaService.member.findFirst({
       where: { Membership_No: memberID },
-      select:{Status: true, Actual_Status: true}
+      select: { Status: true, Actual_Status: true }
     });
   }
 }

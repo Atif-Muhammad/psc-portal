@@ -56,6 +56,8 @@ model Member {
   Status        String       @default("active")
   Balance       Decimal?     @default(0.00) @db.Decimal(20, 2)
   Other_Details String?
+  
+  memberType String @default("CIVILIAN")
 
   FCMToken String?
 
@@ -126,6 +128,7 @@ model RoomBooking {
 
   guestName    String? @db.Text
   guestContact String? @db.Text
+  guestCNIC    String? @db.Text
   paidBy       PaidBy  @default(MEMBER)
 
   specialRequests String? @db.Text

@@ -105,6 +105,7 @@ export class BookingService {
       paidBy = 'MEMBER',
       guestContact,
       guestName,
+      guestCNIC,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -269,6 +270,7 @@ export class BookingService {
         paidBy,
         guestName,
         guestContact: guestContact?.toString(),
+        guestCNIC,
         createdBy,
         updatedBy: '-',
       },
@@ -348,6 +350,7 @@ export class BookingService {
       paidBy = 'MEMBER',
       guestContact,
       guestName,
+      guestCNIC,
     } = payload;
 
     if (!id) throw new BadRequestException('Booking ID required');
@@ -582,6 +585,7 @@ export class BookingService {
         paidBy,
         guestName,
         guestContact: guestContact?.toString(),
+        guestCNIC,
         refundAmount,
         refundReturned: false,
         updatedBy,

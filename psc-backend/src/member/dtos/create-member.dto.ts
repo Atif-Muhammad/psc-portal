@@ -23,6 +23,8 @@ export class CreateMemberDto {
     @IsOptional()
     Balance?: string;
     @IsOptional()
+    memberType?: string;
+    @IsOptional()
     Other_Details?: string;
 
     @IsOptional()
