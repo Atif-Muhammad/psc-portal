@@ -14,7 +14,7 @@ async function bootstrap() {
         'http://193.203.169.122',
         'http://193.203.169.122:8080',
         'https://193.203.169.122:8080',
-        'https://peshawarservicesclub.com',
+        'https://admin.peshawarservicesclub.com',
       ];
 
       if (!origin || allowed.includes(origin)) {
