@@ -14,6 +14,8 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
+    historyApiFallback: true,
+    host: true,
     port: 5173,
   },
   build: {
