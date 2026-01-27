@@ -46,6 +46,7 @@ export const userWho = async (): Promise<any> => {
       withCredentials: true,
       headers: {
         "Client-Type": "web",
+        "Content-Type": "application/json",
       },
     });
     return response.data;
