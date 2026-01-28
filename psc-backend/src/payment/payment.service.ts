@@ -328,8 +328,9 @@ export class PaymentService {
   ): string {
     const sign = amount >= 0 ? '+' : '-';
     const absoluteAmount = Math.abs(amount);
-    // Use whole units as requested by user, padded to length
-    const padded = Math.round(absoluteAmount).toString().padStart(length, '0');
+    // Convert rupees to paisa (multiply by 100) and pad to length
+    const amountInPaisa = Math.round(absoluteAmount * 100);
+    const padded = amountInPaisa.toString().padStart(length, '0');
     return includeSign ? sign + padded : padded;
   }
 
