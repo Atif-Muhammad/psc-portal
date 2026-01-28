@@ -1,16 +1,26 @@
-
-export const sendMailMemberAff = (status: "APPROVED" | "REJECTED", member: any, club: any, purpose: string, requestId: number, reqDate: string) => {
+export const sendMailMemberAff = (
+  status: 'APPROVED' | 'REJECTED',
+  member: any,
+  club: any,
+  purpose: string,
+  requestId: number,
+  reqDate: string,
+) => {
   return `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
       <h2 style="color: #2b3a55;">${club?.name} Visit Request – ${status} (Request ID: ${requestId})</h2>
 
-      <p>Dear ${member?.name || "Member"},</p>
+      <p>Dear ${member?.name || 'Member'},</p>
 
-      ${status === "APPROVED" ? `<p>
+      ${
+        status === 'APPROVED'
+          ? `<p>
         Your request to visit <strong>${club?.name}</strong> has been successfully received and Accepted.
-      </p>`: `<p>
+      </p>`
+          : `<p>
         Your request to visit <strong>${club?.name}</strong> has been Rejected.
-      </p>`}
+      </p>`
+      }
 
       <h3 style="margin-top: 20px;">Request Details</h3>
       <ul>
@@ -37,7 +47,7 @@ export const sendMailClubAff = (
   club: any,
   purpose: string,
   requestId: number,
-  visitDate: string
+  visitDate: string,
 ) => {
   return `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -53,7 +63,7 @@ export const sendMailClubAff = (
       <ul>
         <li><strong>Name:</strong> ${member?.Name}</li>
         <li><strong>Membership No:</strong> ${member?.Membership_No}</li>
-        <li><strong>Contact:</strong> ${member?.Email || ""} ${member?.Contact_No ? " / " + member.Contact_No : ""}</li>
+        <li><strong>Contact:</strong> ${member?.Email || ''} ${member?.Contact_No ? ' / ' + member.Contact_No : ''}</li>
       </ul>
 
       <h3 style="margin-top: 20px;">Visit Request Details</h3>
@@ -74,4 +84,3 @@ export const sendMailClubAff = (
     </div>
   `;
 };
-

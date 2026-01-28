@@ -1,11 +1,10 @@
-import { IsNotEmpty, IsOptional } from "class-validator";
+import { IsNotEmpty, IsOptional } from 'class-validator';
 
-
-export class LawnCategory{
-    @IsOptional()
-    id?: string;
-    @IsNotEmpty()
-    category: string;
-    @IsOptional()
-    existingimgs?: string[]
+export class LawnCategory {
+  @IsOptional()
+  id?: string;
+  @IsNotEmpty()
+  category: string;
+  @IsOptional()
+  existingimgs?: string[];
 }

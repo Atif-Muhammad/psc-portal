@@ -211,7 +211,7 @@ export const calculatePrice = (
   const pricePerDay =
     pricingType === "member"
       ? parseInt(roomType.priceMember)
-      : pricingType === "forces"
+      : (pricingType === "forces" || pricingType === "forces-self" || pricingType === "forces-guest")
         ? parseInt(roomType.priceForces || "0")
         : parseInt(roomType.priceGuest);
 
@@ -238,6 +238,7 @@ export const calculateAccountingValues = (
 };
 
 export const initialFormState: BookingForm = {
+  reservationId: "",
   membershipNo: "",
   memberName: "",
   memberId: "",

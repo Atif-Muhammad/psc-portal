@@ -114,9 +114,11 @@ const getPricingTypeBadge = (type: string) => {
         </Badge>
       );
     case "forces":
+    case "forces-self":
+    case "forces-guest":
       return (
         <Badge variant="outline" className="border-green-300 text-green-700">
-          Forces Rate
+          Forces Rate {type === "forces-self" ? "(Self)" : type === "forces-guest" ? "(Guest)" : ""}
         </Badge>
       );
     default:
@@ -309,21 +311,21 @@ export function BookingDetailsCard({
             </div>
 
             {/* Guest / Forces Information (if applicable) */}
-            {(booking.pricingType === "guest" || booking.pricingType === "forces") && (
+            {(booking.pricingType === "guest" || booking.pricingType === "forces" || booking.pricingType === "forces-guest") && (
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                   <Users className="h-4 w-4" />
-                  {booking.pricingType === "forces" ? "PA Reference Details" : "Guest Information"}
+                  {(booking.pricingType === "forces" || booking.pricingType === "forces-guest") ? "PA Reference Details" : "Guest Information"}
                 </h3>
                 <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
                   <div className="space-y-1">
                     <div>
-                      <Label>{booking.pricingType === "forces" ? "PA Ref Name" : "Guest Name"}</Label>
+                      <Label>{(booking.pricingType === "forces" || booking.pricingType === "forces-guest") ? "PA Ref Name" : "Guest Name"}</Label>
                       <div className="font-medium">{booking.guestName || "N/A"}</div>
                     </div>
                     {booking.guestContact && (
                       <div className="mt-2">
-                        <Label>{booking.pricingType === "forces" ? "PA Ref Contact" : "Guest Contact"}</Label>
+                        <Label>{(booking.pricingType === "forces" || booking.pricingType === "forces-guest") ? "PA Ref Contact" : "Guest Contact"}</Label>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Phone className="h-3 w-3" />
                           {booking.guestContact}
@@ -332,7 +334,7 @@ export function BookingDetailsCard({
                     )}
                     {booking.guestCNIC && (
                       <div className="mt-2">
-                        <Label>{booking.pricingType === "forces" ? "PA Ref CNIC" : "Guest CNIC"}</Label>
+                        <Label>{(booking.pricingType === "forces" || booking.pricingType === "forces-guest") ? "PA Ref CNIC" : "Guest CNIC"}</Label>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <CreditCard className="h-3 w-3" />
                           {booking.guestCNIC}

@@ -9,8 +9,15 @@ import { NotificationModule } from 'src/notification/notification.module';
 import { MailerModule } from 'src/mailer/mailer.module';
 
 @Module({
-  imports: [PrismaModule, BookingModule, MemberModule, RealtimeModule, NotificationModule, MailerModule],
+  imports: [
+    PrismaModule,
+    BookingModule,
+    MemberModule,
+    RealtimeModule,
+    NotificationModule,
+    MailerModule,
+  ],
   controllers: [PaymentController],
-  providers: [PaymentService]
+  providers: [PaymentService],
 })
-export class PaymentModule { }
+export class PaymentModule {}

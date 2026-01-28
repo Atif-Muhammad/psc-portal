@@ -9,6 +9,6 @@ import { ContentModule } from 'src/content/content.module';
   imports: [PrismaModule, ContentModule],
   controllers: [NotificationController],
   providers: [NotificationService, FirebaseProvider],
-  exports: [NotificationService]
+  exports: [NotificationService],
 })
-export class NotificationModule { }
+export class NotificationModule {}

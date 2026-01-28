@@ -5,7 +5,7 @@ export interface QueueMessage {
   status: QueueStatus;
   tries?: number;
   noti_created: number;
-  recipient: string
+  recipient: string;
 }
 
 export interface QueueMeta {

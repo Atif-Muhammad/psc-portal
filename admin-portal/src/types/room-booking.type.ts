@@ -60,7 +60,7 @@ export interface Booking {
   checkOut: string;
   totalPrice: number;
   paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
-  pricingType: "member" | "guest" | "forces";
+  pricingType: "member" | "guest" | "forces" | "forces-self" | "forces-guest";
   paidBy: "MEMBER" | "GUEST",
   guestContact: "",
   guestName: "",
@@ -91,13 +91,14 @@ export interface Booking {
 }
 
 export interface BookingForm {
+  reservationId?: number | string;
   membershipNo: string;
   memberName: string;
   memberId: string;
   category: string;
   roomTypeId: string;
   roomId: string;
-  pricingType: "member" | "guest" | "forces";
+  pricingType: "member" | "guest" | "forces" | "forces-self" | "forces-guest";
   paidBy: "MEMBER" | "GUEST" | "FORCES",
   guestName: "",
   guestContact: "",

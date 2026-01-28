@@ -23,7 +23,7 @@ import type { Response } from 'express';
 
 @Controller('hall')
 export class HallController {
-  constructor(private hall: HallService) { }
+  constructor(private hall: HallService) {}
 
   // @UseGuards(JwtAccGuard, RolesGuard)
   // @Roles(RolesEnum.SUPER_ADMIN)
@@ -50,7 +50,16 @@ export class HallController {
     @Req() req: any,
   ) {
     const adminName = req.user?.name || 'system';
-    return this.hall.createHall({ ...payload, isActive: payload.isActive === 'true' || payload.isActive === true, isExclusive: payload.isExclusive === 'true' || payload.isExclusive === true }, files, adminName);
+    return this.hall.createHall(
+      {
+        ...payload,
+        isActive: payload.isActive === 'true' || payload.isActive === true,
+        isExclusive:
+          payload.isExclusive === 'true' || payload.isExclusive === true,
+      },
+      files,
+      adminName,
+    );
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -63,8 +72,17 @@ export class HallController {
     @Req() req: any,
   ) {
     const adminName = req.user?.name || 'system';
-    console.log(payload.isActive)
-    return this.hall.updateHall({ ...payload, isActive: payload.isActive === 'true' || payload.isActive === true, isExclusive: payload.isExclusive === 'true' || payload.isExclusive === true }, adminName, files);
+    console.log(payload.isActive);
+    return this.hall.updateHall(
+      {
+        ...payload,
+        isActive: payload.isActive === 'true' || payload.isActive === true,
+        isExclusive:
+          payload.isExclusive === 'true' || payload.isExclusive === true,
+      },
+      adminName,
+      files,
+    );
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -73,7 +91,6 @@ export class HallController {
   async deleteHall(@Query('hallId') hallId: string) {
     return this.hall.deleteHall(Number(hallId));
   }
-
 
   // reserve halls
   @UseGuards(JwtAccGuard, RolesGuard)

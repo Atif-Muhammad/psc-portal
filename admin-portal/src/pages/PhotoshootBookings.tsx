@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +25,7 @@ import { VouchersDialog } from "@/components/VouchersDialog";
 
 export interface PhotoshootBooking {
   id: number;
+  reservationId?: number | string;
   memberId: number;
   photoshootId: number;
   bookingDate: string;
@@ -42,7 +44,7 @@ export interface PhotoshootBooking {
   updatedAt?: string;
   createdBy?: string;
   updatedBy?: string;
-  bookingDetails?: { date: string; timeSlot: string }[];
+  bookingDetails?: { date: string; timeSlot: string; reservationId?: number | string }[];
   photoshoot: {
     id: number;
     description: string;
@@ -213,7 +215,7 @@ export default function PhotoshootBookings() {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [selectedPhotoshootId, setSelectedPhotoshootId] = useState<string>("");
   // const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
-  const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string }[]>([]);
+  const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string; reservationId?: number | string }[]>([]);
   const [pricingType, setPricingType] = useState("member");
   const [paymentStatus, setPaymentStatus] = useState("UNPAID");
   const [paidAmount, setPaidAmount] = useState(0);
@@ -226,12 +228,34 @@ export default function PhotoshootBookings() {
   const [guestSec, setGuestSec] = useState({
     paidBy: "MEMBER",
     guestName: "",
-    guestContact: ""
+    guestContact: "",
+    guestCNIC: ""
   })
 
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
+
+  // Handle conversion from Reservation
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.fromReservation) {
+      const { reservationId, resourceId, startTime, endTime, timeSlot, remarks } = state;
+
+      setSelectedPhotoshootId(resourceId?.toString() || "");
+      setBookingDetails([{
+        date: format(new Date(startTime), "yyyy-MM-dd"),
+        timeSlot: timeSlot || format(new Date(startTime), "yyyy-MM-dd'T'10:00:00"), // Use timeSlot if available
+        reservationId: reservationId
+      }]);
+
+      setIsAddOpen(true);
+
+      // Clear location state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Queries
   // Infinite Query for Bookings
@@ -399,7 +423,8 @@ export default function PhotoshootBookings() {
     setGuestSec({
       paidBy: "",
       guestName: "",
-      guestContact: ""
+      guestContact: "",
+      guestCNIC: ""
     });
   };
 
@@ -437,7 +462,8 @@ export default function PhotoshootBookings() {
       paymentMode: "CASH",
       paidBy: guestSec.paidBy,
       guestName: guestSec.guestName,
-      guestContact: guestSec.guestContact?.toString()
+      guestCNIC: guestSec.guestCNIC,
+      reservationId: firstSlot.reservationId
     };
 
     createMutation.mutate(payload);

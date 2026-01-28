@@ -32,9 +32,9 @@ services:
       JWT_ACCESS_SECRET: "asdaskdpanqweqejlsadnasnd"
       JWT_REFRESH_SECRET: "09190199219jjkdjasjdnasnd"
       NODEMAILER_HOST: "smtp.hostinger.com"
-      NODEMAILER_PORT: 465
-      NODEMAILER_USER: "info@codeclub.tech"
-      NODEMAILER_PASS: "Affan@1234!"
+      NODEMAILER_PORT: 25
+      NODEMAILER_USER: "infodesk@peshawarservicesclub.com"
+      NODEMAILER_PASS: "Info_dksPsc35"
       CLOUDINARY_URL: "cloudinary://369676299629912:q7KnhQPgAOSx1kwhdMh1iYw0wrA@dtqdpntlc"
       CLOUD_NAME: "dtqdpntlc"
       CLOUDINARY_API_KEY: "369676299629912"

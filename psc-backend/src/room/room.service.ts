@@ -22,11 +22,15 @@ export class RoomService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   // ─────────────────────────── ROOM TYPES ───────────────────────────
 
-  async createRoomType(payload: RoomTypeDto, files: Express.Multer.File[], createdBy: string) {
+  async createRoomType(
+    payload: RoomTypeDto,
+    files: Express.Multer.File[],
+    createdBy: string,
+  ) {
     const uploadedImages: { url: string; publicId: string }[] = [];
 
     try {
@@ -68,7 +72,12 @@ export class RoomService {
       }
 
       // Validate required fields
-      if (!payload.type || !payload.priceMember || !payload.priceGuest || !payload.priceForces) {
+      if (
+        !payload.type ||
+        !payload.priceMember ||
+        !payload.priceGuest ||
+        !payload.priceForces
+      ) {
         throw new HttpException(
           'Type, priceMember, priceGuest, and priceForces are required fields',
           HttpStatus.BAD_REQUEST,
@@ -295,7 +304,7 @@ export class RoomService {
             booking: {
               checkOut: { gte: new Date() },
               isCancelled: false,
-            }
+            },
           },
           include: {
             booking: true,
@@ -337,7 +346,7 @@ export class RoomService {
           orderBy: {
             booking: {
               checkIn: 'asc',
-            }
+            },
           },
         },
       },
@@ -443,10 +452,10 @@ export class RoomService {
               rooms: {
                 include: {
                   room: {
-                    select: { roomNumber: true }
-                  }
-                }
-              }
+                    select: { roomNumber: true },
+                  },
+                },
+              },
             },
           });
 
@@ -517,7 +526,7 @@ export class RoomService {
               `Bookings: ${actualConflictingBookings
                 .map(
                   (b) =>
-                    `${b.rooms.map(r => r.room.roomNumber).join(', ')} (${formatPakistanDate(b.checkIn)} to ${formatPakistanDate(b.checkOut)})`,
+                    `${b.rooms.map((r) => r.room.roomNumber).join(', ')} (${formatPakistanDate(b.checkIn)} to ${formatPakistanDate(b.checkOut)})`,
                 )
                 .join(', ')}`,
             );
@@ -775,23 +784,23 @@ export class RoomService {
                 checkOut: { gt: fromDate }, // checkOut after reservation start
               },
             ],
-            isCancelled: false
+            isCancelled: false,
           },
           include: {
             rooms: {
               include: {
                 room: {
-                  select: { roomNumber: true }
-                }
-              }
-            }
+                  select: { roomNumber: true },
+                },
+              },
+            },
           },
         });
 
         if (conflictingBookings.length > 0) {
           const conflicts = conflictingBookings.map(
             (conflict) =>
-              `Room ${conflict.rooms.map(r => r.room.roomNumber).join(', ')} (${formatPakistanDate(conflict.checkIn)} - ${formatPakistanDate(conflict.checkOut)})`,
+              `Room ${conflict.rooms.map((r) => r.room.roomNumber).join(', ')} (${formatPakistanDate(conflict.checkIn)} - ${formatPakistanDate(conflict.checkOut)})`,
           );
           throw new HttpException(
             `Booking conflicts: ${conflicts.join(', ')}`,
@@ -946,7 +955,7 @@ export class RoomService {
     const allConflictingRoomIds = [
       ...conflictingOutOfOrderRooms.map((oo) => oo.roomId),
       ...conflictingReservationRooms.map((r) => r.roomId),
-      ...conflictingBookingRooms.flatMap((b) => b.roomId ? [b.roomId] : []), // Flatten and filter nulls
+      ...conflictingBookingRooms.flatMap((b) => (b.roomId ? [b.roomId] : [])), // Flatten and filter nulls
       ...heldRooms.map((h) => h.roomId), // Add held rooms to conflicts
     ];
 
@@ -1023,8 +1032,9 @@ export class RoomService {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
-    const roomIdsNum = roomIds?.map(id => Number(id)) || [];
-    const roomFilter = roomIdsNum.length > 0 ? { roomId: { in: roomIdsNum } } : {};
+    const roomIdsNum = roomIds?.map((id) => Number(id)) || [];
+    const roomFilter =
+      roomIdsNum.length > 0 ? { roomId: { in: roomIdsNum } } : {};
 
     const [roomOnBookings, reservations, outOfOrders] = await Promise.all([
       this.prismaService.roomOnBooking.findMany({
@@ -1115,10 +1125,10 @@ export class RoomService {
           rooms: {
             include: {
               room: {
-                select: { roomNumber: true }
-              }
-            }
-          }
+                select: { roomNumber: true },
+              },
+            },
+          },
         },
         orderBy: { checkIn: 'asc' },
       }),

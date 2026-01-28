@@ -6,7 +6,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class SchedularService {
   private readonly logger = new Logger(SchedularService.name);
 
-  constructor(private prismaService: PrismaService) { }
+  constructor(private prismaService: PrismaService) {}
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async checkScheduledOutOfOrder() {
@@ -17,14 +17,21 @@ export class SchedularService {
       try {
         await this.prismaService.$transaction(async (tx) => {
           const now = new Date();
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const today = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
 
           // ─────────────────────────── ROOMS ───────────────────────────
           const roomsWithActiveOutOfOrder = await tx.room.findMany({
             where: {
               outOfOrders: {
                 some: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -47,7 +54,10 @@ export class SchedularService {
               isActive: false,
               outOfOrders: {
                 none: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -67,7 +77,10 @@ export class SchedularService {
             where: {
               outOfOrders: {
                 some: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -82,7 +95,9 @@ export class SchedularService {
               where: { id: { in: hallsToMarkOutOfService } },
               data: { isOutOfService: true },
             });
-            this.logger.log(`Marked ${hallsToMarkOutOfService.length} halls as out of service.`);
+            this.logger.log(
+              `Marked ${hallsToMarkOutOfService.length} halls as out of service.`,
+            );
           }
 
           const hallsToRestoreService = await tx.hall.findMany({
@@ -90,7 +105,10 @@ export class SchedularService {
               isOutOfService: true,
               outOfOrders: {
                 none: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -102,7 +120,9 @@ export class SchedularService {
               where: { id: { in: hallsToRestoreService.map((h) => h.id) } },
               data: { isOutOfService: false },
             });
-            this.logger.log(`Restored service for ${hallsToRestoreService.length} halls.`);
+            this.logger.log(
+              `Restored service for ${hallsToRestoreService.length} halls.`,
+            );
           }
 
           // ─────────────────────────── LAWNS ───────────────────────────
@@ -110,7 +130,10 @@ export class SchedularService {
             where: {
               outOfOrders: {
                 some: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -125,7 +148,9 @@ export class SchedularService {
               where: { id: { in: lawnsToMarkOutOfService } },
               data: { isOutOfService: true },
             });
-            this.logger.log(`Marked ${lawnsToMarkOutOfService.length} lawns as out of service.`);
+            this.logger.log(
+              `Marked ${lawnsToMarkOutOfService.length} lawns as out of service.`,
+            );
           }
 
           const lawnsToRestoreService = await tx.lawn.findMany({
@@ -133,7 +158,10 @@ export class SchedularService {
               isOutOfService: true,
               outOfOrders: {
                 none: {
-                  AND: [{ startDate: { lte: today } }, { endDate: { gt: today } }],
+                  AND: [
+                    { startDate: { lte: today } },
+                    { endDate: { gt: today } },
+                  ],
                 },
               },
             },
@@ -145,23 +173,33 @@ export class SchedularService {
               where: { id: { in: lawnsToRestoreService.map((l) => l.id) } },
               data: { isOutOfService: false },
             });
-            this.logger.log(`Restored service for ${lawnsToRestoreService.length} lawns.`);
+            this.logger.log(
+              `Restored service for ${lawnsToRestoreService.length} lawns.`,
+            );
           }
 
           // ─────────────────────────── CLEANUP ───────────────────────────
           const thirtyDaysAgo = new Date(today);
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-          await tx.roomOutOfOrder.deleteMany({ where: { endDate: { lt: thirtyDaysAgo } } });
-          await tx.hallOutOfOrder.deleteMany({ where: { endDate: { lt: thirtyDaysAgo } } });
-          await tx.lawnOutOfOrder.deleteMany({ where: { endDate: { lt: thirtyDaysAgo } } });
+          await tx.roomOutOfOrder.deleteMany({
+            where: { endDate: { lt: thirtyDaysAgo } },
+          });
+          await tx.hallOutOfOrder.deleteMany({
+            where: { endDate: { lt: thirtyDaysAgo } },
+          });
+          await tx.lawnOutOfOrder.deleteMany({
+            where: { endDate: { lt: thirtyDaysAgo } },
+          });
         });
 
         return;
       } catch (err) {
         if (err.code === 'P2034') {
           retries++;
-          this.logger.warn(`Deadlock detected. Retry ${retries}/${MAX_RETRIES}...`);
+          this.logger.warn(
+            `Deadlock detected. Retry ${retries}/${MAX_RETRIES}...`,
+          );
           await new Promise((res) => setTimeout(res, 200));
         } else {
           throw err;

@@ -24,7 +24,7 @@ import type { Response } from 'express';
 
 @Controller('room')
 export class RoomController {
-  constructor(private room: RoomService) { }
+  constructor(private room: RoomService) {}
 
   // room types //
 
@@ -47,7 +47,11 @@ export class RoomController {
       existingimgs: payload.existingimgs || [], // For create, this should usually be empty
     };
 
-    return await this.room.createRoomType(roomTypePayload, files?.files || [], adminName);
+    return await this.room.createRoomType(
+      roomTypePayload,
+      files?.files || [],
+      adminName,
+    );
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -166,8 +170,6 @@ export class RoomController {
     return await this.room.deleteRoom(Number(id));
   }
 
-
-
   // reserve room(s)
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN)
@@ -183,7 +185,7 @@ export class RoomController {
       remarks?: string;
     },
   ) {
-    console.log(payload)
+    console.log(payload);
     return await this.room.reserveRooms(
       payload.roomIds.map((id) => Number(id)),
       payload.reserve,
@@ -197,10 +199,16 @@ export class RoomController {
   // member rooms //
   @UseGuards(JwtAccGuard)
   @Post('member/check/rooms/available')
-  async getMemberRoomsAvailable(@Query("roomType") roomType: string, @Body() dates: { to: string, from: string }) {
-    return await this.room.getMemberRoomsForDate(dates.from, dates.to, Number(roomType));
+  async getMemberRoomsAvailable(
+    @Query('roomType') roomType: string,
+    @Body() dates: { to: string; from: string },
+  ) {
+    return await this.room.getMemberRoomsForDate(
+      dates.from,
+      dates.to,
+      Number(roomType),
+    );
   }
-
 
   // room logs
   @UseGuards(JwtAccGuard)
@@ -233,5 +241,4 @@ export class RoomController {
   async roomCalendar() {
     return await this.room.roomCalendar();
   }
-
 }

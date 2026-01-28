@@ -8,6 +8,6 @@ import { NotificationModule } from 'src/notification/notification.module';
   imports: [PrismaModule, NotificationModule],
   controllers: [MemberController],
   providers: [MemberService],
-  exports: [MemberService]
+  exports: [MemberService],
 })
-export class MemberModule { }
+export class MemberModule {}

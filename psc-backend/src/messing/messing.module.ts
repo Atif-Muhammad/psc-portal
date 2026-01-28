@@ -7,6 +7,6 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 @Module({
   imports: [PrismaModule, CloudinaryModule],
   controllers: [MessingController],
-  providers: [MessingService]
+  providers: [MessingService],
 })
-export class MessingModule { }
+export class MessingModule {}

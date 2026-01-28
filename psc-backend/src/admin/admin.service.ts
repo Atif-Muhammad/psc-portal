@@ -17,9 +17,8 @@ export class AdminService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
- 
   async getAdmins() {
     const admins = await this.prismaService.admin.findMany({
       orderBy: { createdAt: 'desc' },

@@ -24,7 +24,10 @@ import { ContentService } from 'src/content/content.service';
 
 @Controller('booking')
 export class BookingController {
-  constructor(private readonly bookingService: BookingService, private readonly contentService: ContentService) { }
+  constructor(
+    private readonly bookingService: BookingService,
+    private readonly contentService: ContentService,
+  ) {}
 
   @Get('lock')
   async lockBookings() {
@@ -34,10 +37,13 @@ export class BookingController {
   @Get('voucher')
   async getVouchers(
     @Query('bookingType') bookingType: string,
-    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('bookingId', new ParseIntPipe({ optional: true }))
+    bookingId?: number,
   ) {
     if (!bookingId) {
-      throw new BadRequestException('bookingId is required and must be an integer');
+      throw new BadRequestException(
+        'bookingId is required and must be an integer',
+      );
     }
     return await this.bookingService.getVouchersByBooking(
       bookingType,
@@ -52,7 +58,7 @@ export class BookingController {
     @Body() payload: { voucherId: number; status: string },
     @Req() req: any,
   ) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     return await this.bookingService.updateVoucherStatus(
       payload.voucherId,
       payload.status as 'PENDING' | 'CONFIRMED' | 'CANCELLED',
@@ -66,55 +72,79 @@ export class BookingController {
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
   @Post('create/booking')
   async createBooking(@Body() payload: BookingDto, @Req() req: any) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     // console.log(payload)
     if (payload.category === 'Room')
-      return await this.bookingService.cBookingRoom({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.cBookingRoom(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Hall')
-      return await this.bookingService.cBookingHall({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.cBookingHall(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Lawn')
-      return await this.bookingService.cBookingLawn({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.cBookingLawn(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Photoshoot')
-      return await this.bookingService.cBookingPhotoshoot({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.cBookingPhotoshoot(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
   @Patch('update/booking')
   async updateBooking(@Body() payload: Partial<BookingDto>, @Req() req: any) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     if (payload.category === 'Room')
-      return await this.bookingService.uBookingRoom({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.uBookingRoom(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Hall')
-      return await this.bookingService.uBookingHall({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.uBookingHall(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Lawn')
-      return await this.bookingService.uBookingLawn({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.uBookingLawn(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
     else if (payload.category === 'Photoshoot')
-      return await this.bookingService.uBookingPhotoshoot({
-        ...payload,
-        paymentMode: PaymentMode.CASH,
-      }, adminName);
+      return await this.bookingService.uBookingPhotoshoot(
+        {
+          ...payload,
+          paymentMode: PaymentMode.CASH,
+        },
+        adminName,
+      );
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -125,9 +155,12 @@ export class BookingController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    if (bookingFor === 'rooms') return this.bookingService.gBookingsRoom(page, limit);
-    if (bookingFor === 'halls') return this.bookingService.gBookingsHall(page, limit);
-    if (bookingFor === 'lawns') return this.bookingService.gBookingsLawn(page, limit);
+    if (bookingFor === 'rooms')
+      return this.bookingService.gBookingsRoom(page, limit);
+    if (bookingFor === 'halls')
+      return this.bookingService.gBookingsHall(page, limit);
+    if (bookingFor === 'lawns')
+      return this.bookingService.gBookingsLawn(page, limit);
     if (bookingFor === 'photoshoots')
       return this.bookingService.gBookingPhotoshoot(page, limit);
   }
@@ -271,7 +304,7 @@ export class BookingController {
 
   @Post('member/booking/lawn')
   async memberBookingLawn(@Body() payload: any) {
-    console.log("test:", payload)
+    console.log('test:', payload);
     const { membership_no } = payload.consumerInfo;
     const {
       lawnId,
@@ -379,7 +412,10 @@ export class BookingController {
     };
     console.log('data:', data);
 
-    const done = await this.bookingService.cBookingPhotoshootMember(data, 'member');
+    const done = await this.bookingService.cBookingPhotoshootMember(
+      data,
+      'member',
+    );
     // console.log(done)
     return done;
   }
@@ -389,41 +425,39 @@ export class BookingController {
   async memberBookings(
     @Req() req: { user: { id: string } },
     @Query('type') type: 'Room' | 'Hall' | 'Lawn' | 'Photoshoot',
-    @Query('membership_no') membership_no?: string
+    @Query('membership_no') membership_no?: string,
   ) {
-
     const memberId = membership_no ? membership_no : req.user?.id;
-    return await this.bookingService.memberBookings(memberId, type)
-
+    return await this.bookingService.memberBookings(memberId, type);
   }
-
-
 
   // rules
   @UseGuards(JwtAccGuard)
   @Get('hall/rule')
   async hallRule() {
-    return await this.contentService.getClubRules("HALL")
+    return await this.contentService.getClubRules('HALL');
   }
   @UseGuards(JwtAccGuard)
   @Get('room/rule')
   async RoomRule() {
-    return await this.contentService.getClubRules("ROOM")
+    return await this.contentService.getClubRules('ROOM');
   }
   @UseGuards(JwtAccGuard)
   @Get('lawn/rule')
   async LawnRule() {
-    return await this.contentService.getClubRules("LAWN")
+    return await this.contentService.getClubRules('LAWN');
   }
   @UseGuards(JwtAccGuard)
   @Get('photo/rule')
   async PhotoRule() {
-    return await this.contentService.getClubRules("PHOTOSHOOT")
+    return await this.contentService.getClubRules('PHOTOSHOOT');
   }
 
   @UseGuards(JwtAccGuard)
   @Delete('cancel-unpaid/:voucherId')
-  async cancelUnpaidBooking(@Param('voucherId', ParseIntPipe) voucherId: number) {
+  async cancelUnpaidBooking(
+    @Param('voucherId', ParseIntPipe) voucherId: number,
+  ) {
     return await this.bookingService.cancelUnpaidBooking(voucherId);
   }
 }

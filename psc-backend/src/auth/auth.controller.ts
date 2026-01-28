@@ -1,17 +1,17 @@
 import {
-    Body,
-    Controller,
-    Patch,
-    Post,
-    Get,
-    Query,
-    Req,
-    Res,
-    UseGuards,
-    Delete,
-    HttpException,
-    HttpStatus,
-    UnauthorizedException,
+  Body,
+  Controller,
+  Patch,
+  Post,
+  Get,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  Delete,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CreateAdminDto } from './dtos/create-admin.dto';
@@ -27,190 +27,221 @@ import { generateRandomNumber } from './utils/genOTP';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
-    @Post('create/super-admin')
-    async createSuperAdmin(@Body() payload: CreateAdminDto) {
-        return await this.authService.createSuperAdmin(payload);
+  @Post('create/super-admin')
+  async createSuperAdmin(@Body() payload: CreateAdminDto) {
+    return await this.authService.createSuperAdmin(payload);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Patch('update/admin')
+  async updateAdmin(
+    @Query() adminID: { adminID: string },
+    @Body() payload: Partial<CreateAdminDto>,
+    @Req() req: any,
+  ) {
+    const updatedBy = req.user?.name || 'system';
+    return await this.authService.updateAdmin(
+      Number(adminID?.adminID),
+      payload,
+      updatedBy,
+    );
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Post('create/admin')
+  async createAdmin(@Body() payload: CreateAdminDto, @Req() req: any) {
+    const createdBy = req.user?.name || 'system';
+    return await this.authService.createAdmin(payload, createdBy);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Delete('remove/admin')
+  async removeAdmin(@Query() adminID: { adminID: string }) {
+    return await this.authService.removeAdmin(Number(adminID?.adminID));
+  }
+
+  @Post('login/admin')
+  async loginAdmin(
+    @Body() payload: LoginAdminDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const clientType = req.headers['client-type'] || 'web';
+    const admin = await this.authService.loginAdmin(payload);
+    // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
+    const { access_token, refresh_token } =
+      await this.authService.generateTokens({
+        ...admin,
+        permissions: Array.isArray(admin.permissions) ? admin.permissions : [],
+      });
+    if (clientType === 'web') {
+      res.cookie('access_token', access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+      });
+      res.cookie('refresh_token', refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+      return res.status(200).json({ message: 'Login successful' });
     }
+    return res.status(200).json({
+      access_token,
+      refresh_token,
+    });
+  }
 
-    @UseGuards(JwtAccGuard, RolesGuard)
-    @Roles(RolesEnum.SUPER_ADMIN)
-    @Patch('update/admin')
-    async updateAdmin(
-        @Query() adminID: { adminID: string },
-        @Body() payload: Partial<CreateAdminDto>,
-        @Req() req: any,
+  @Post('logout')
+  async logoutAdmin(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const clientType = req.headers['client-type'] || 'web';
+    if (clientType === 'web') {
+      res.clearCookie('access_token');
+      res.clearCookie('refresh_token');
+      return { message: 'Logout successful' };
+    }
+    return { message: 'Logout successful' };
+  }
+
+  @UseGuards(JwtRefGuard)
+  @Post('refresh-tokens')
+  async refreshTokens(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const clientType = req.headers['client-type'] || 'web';
+    const { id, name, email, role, permissions } = req.user as {
+      id: string | number;
+      name: string;
+      email: string;
+      role: string;
+      permissions?: any[];
+    };
+    const { access_token, refresh_token } =
+      await this.authService.refreshTokens({
+        id,
+        name,
+        email,
+        role,
+        permissions: Array.isArray(permissions) ? permissions : [],
+      });
+    // for web
+    if (clientType === 'web') {
+      res.cookie('access_token', access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+      res.cookie('refresh_token', refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      return { message: 'Login successful' };
+    }
+    // for mobile
+    return { refresh_token: refresh_token, access_token: access_token };
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Get('user-who')
+  async userWho(
+    @Req()
+    req: {
+      user: {
+        id: string | undefined;
+        name: string | undefined;
+        FCMToken: string | null;
+        role: string | undefined;
+        permissions: any[];
+      };
+    },
+  ) {
+    if (
+      req?.user?.role === RolesEnum.ADMIN ||
+      req?.user?.role === RolesEnum.SUPER_ADMIN
     ) {
-        const updatedBy = req.user?.name || "system";
-        return await this.authService.updateAdmin(
-            Number(adminID?.adminID),
-            payload,
-            updatedBy
-        );
+      const admin = await this.authService.checkAdmin(Number(req.user?.id!));
+      if (!admin) {
+        throw new HttpException('no admin found.', HttpStatus.FORBIDDEN);
+      }
+      return {
+        id: req.user?.id,
+        name: req.user?.name,
+        role: req.user?.role,
+        permissions: req.user?.permissions,
+      };
     }
-
-    @UseGuards(JwtAccGuard, RolesGuard)
-    @Roles(RolesEnum.SUPER_ADMIN)
-    @Post('create/admin')
-    async createAdmin(@Body() payload: CreateAdminDto, @Req() req: any) {
-        const createdBy = req.user?.name || "system";
-        return await this.authService.createAdmin(payload, createdBy);
+    const activeUser = await this.authService.checkActive(
+      String(req.user?.id!),
+    );
+    if (!activeUser) {
+      throw new HttpException(
+        'User is not active. Please contact support.',
+        HttpStatus.FORBIDDEN,
+      );
     }
+    return {
+      id: req.user?.id,
+      name: req.user?.name,
+      FCMToken: activeUser?.FCMToken,
+      role: req.user?.role,
+      permissions: req.user?.permissions,
+    };
+  }
 
-    @UseGuards(JwtAccGuard, RolesGuard)
-    @Roles(RolesEnum.SUPER_ADMIN)
-    @Delete('remove/admin')
-    async removeAdmin(@Query() adminID: { adminID: string }) {
-        return await this.authService.removeAdmin(Number(adminID?.adminID));
-    }
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Get('admins')
+  async getAdmins() {
+    return await this.authService.getAdmins();
+  }
 
-    @Post('login/admin')
-    async loginAdmin(
-        @Body() payload: LoginAdminDto,
-        @Req() req: Request,
-        @Res() res: Response,
-    ) {
-        const clientType = req.headers['client-type'] || 'web';
-        const admin = await this.authService.loginAdmin(payload);
-        // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
-        const { access_token, refresh_token } =
-            await this.authService.generateTokens({ ...admin, permissions: Array.isArray(admin.permissions) ? admin.permissions : [] });
-        if (clientType === 'web') {
-            res.cookie('access_token', access_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: "strict",
-                maxAge: 24 * 60 * 60 * 1000, // 1 day
-            });
-            res.cookie('refresh_token', refresh_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: "strict",
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
-            return res.status(200).json({ message: 'Login successful' });
-        }
-        return res.status(200).json({
-            access_token,
-            refresh_token,
-        });
-    }
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @Get('reservations')
+  async getAdminReservations(
+    @Query('adminId') adminId: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return await this.authService.getAdminReservations(
+      Number(adminId),
+      fromDate,
+      toDate,
+    );
+  }
 
-    @Post('logout')
-    async logoutAdmin(
-        @Req() req: Request,
-        @Res({ passthrough: true }) res: Response,
-    ) {
-        const clientType = req.headers['client-type'] || 'web';
-        if (clientType === 'web') {
-            res.clearCookie('access_token');
-            res.clearCookie('refresh_token');
-            return { message: 'Logout successful' };
-        }
-        return { message: 'Logout successful' };
-    }
+  // members
 
-    @UseGuards(JwtRefGuard)
-    @Post('refresh-tokens')
-    async refreshTokens(
-        @Req() req: Request,
-        @Res({ passthrough: true }) res: Response,
-    ) {
-        const clientType = req.headers['client-type'] || 'web';
-        const { id, name, email, role, permissions } = req.user as {
-            id: string | number;
-            name: string;
-            email: string;
-            role: string;
-            permissions?: any[];
-        };
-        const { access_token, refresh_token } =
-            await this.authService.refreshTokens({ id, name, email, role, permissions: Array.isArray(permissions) ? permissions : [] });
-        // for web
-        if (clientType === 'web') {
-            res.cookie('access_token', access_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: "strict",
-                maxAge: 24 * 60 * 60 * 1000,
-            });
-            res.cookie('refresh_token', refresh_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: "strict",
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-            });
-            return { message: 'Login successful' };
-        }
-        // for mobile
-        return { refresh_token: refresh_token, access_token: access_token };
-    }
-
-    @UseGuards(JwtAccGuard)
-    @Get('user-who')
-    async userWho(
-        @Req() req: { user: { id: string | undefined; name: string | undefined; FCMToken: string | null; role: string | undefined, permissions: any[] } },
-    ) {
-        if (req?.user?.role === RolesEnum.ADMIN || req?.user?.role === RolesEnum.SUPER_ADMIN) {
-            const admin = await this.authService.checkAdmin(Number(req.user?.id!));
-            if (!admin) {
-                throw new HttpException(
-                    'no admin found.',
-                    HttpStatus.FORBIDDEN,
-                );
-            }
-            return {
-                id: req.user?.id,
-                name: req.user?.name,
-                role: req.user?.role,
-                permissions: req.user?.permissions
-            }
-        }
-        const activeUser = await this.authService.checkActive(String(req.user?.id!));
-        if (!activeUser) {
-            throw new HttpException(
-                'User is not active. Please contact support.',
-                HttpStatus.FORBIDDEN,
-            );
-        }
-        return { id: req.user?.id, name: req.user?.name, FCMToken: activeUser?.FCMToken, role: req.user?.role, permissions: req.user?.permissions };
-    }
-
-
-    @UseGuards(JwtAccGuard, RolesGuard)
-    @Roles(RolesEnum.SUPER_ADMIN)
-    @Get('admins')
-    async getAdmins() {
-        return await this.authService.getAdmins();
-    }
-
-    @UseGuards(JwtAccGuard, RolesGuard)
-    @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
-    @Get('reservations')
-    async getAdminReservations(
-        @Query('adminId') adminId: string,
-        @Query('fromDate') fromDate?: string,
-        @Query('toDate') toDate?: string,
-    ) {
-        return await this.authService.getAdminReservations(Number(adminId), fromDate, toDate);
-    }
-
-    // members
-
-    @Post('sendOTP/member')
-    async sendOTP(@Body() payload: { memberID: string }) {
-
-        const member = await this.authService.getMember(payload?.memberID);
-        if (member.Status == "blocked") throw new UnauthorizedException(`Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`)
-        // generate an OTP and combine with OTP_MSG
-        const otp = generateRandomNumber(4) || 1234;
-        // store in member table
-        await this.authService.storeOTP(member?.Membership_No, otp);
-        return await this.authService.sendOTP(
-            member?.Email!,
-            'Login Request',
-            `${OTP_MSG} <br/>
+  @Post('sendOTP/member')
+  async sendOTP(@Body() payload: { memberID: string }) {
+    const member = await this.authService.getMember(payload?.memberID);
+    if (member.Status == 'blocked')
+      throw new UnauthorizedException(
+        `Your Account Status is ${member.Actual_Status} -- Please contact PSC for queries`,
+      );
+    // generate an OTP and combine with OTP_MSG
+    const otp = generateRandomNumber(4) || 1234;
+    // store in member table
+    await this.authService.storeOTP(member?.Membership_No, otp);
+    return await this.authService.sendOTP(
+      member?.Email!,
+      'Login Request',
+      `${OTP_MSG} <br/>
                 <p style="
                 background-color:#FE9A00;
                 color:#ffffff;
@@ -227,40 +258,53 @@ export class AuthController {
                 ">
                 ${otp}
                 </p>`,
-        );
+    );
+  }
+
+  @Post('login/member')
+  async loginMember(
+    @Body() payload: { memberID: string; otp: string },
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const clientType = req.headers['client-type'] || 'web';
+    const authenticated = await this.authService.loginMember(
+      payload?.memberID,
+      Number(payload?.otp),
+    );
+    if (!authenticated) {
+      return res.status(500).json({ message: 'Login un-successful' });
     }
 
-    @Post('login/member')
-    async loginMember(@Body() payload: { memberID: string, otp: string }, @Req() req: Request, @Res() res: Response,) {
-        const clientType = req.headers['client-type'] || 'web';
-        const authenticated = await this.authService.loginMember(payload?.memberID, Number(payload?.otp))
-        if (!authenticated) {
-            return res.status(500).json({ message: 'Login un-successful' });
-        }
+    const { Name, Email, Status, Membership_No, FCMToken } = authenticated;
 
-        const { Name, Email, Status, Membership_No, FCMToken } = authenticated;
-
-        // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
-        const { access_token, refresh_token } =
-            await this.authService.generateTokens({ name: Name, email: Email!, status: Status, id: Membership_No, FCMToken: FCMToken ?? undefined });
-        if (clientType === 'web') {
-            res.cookie('access_token', access_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: true,
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-            });
-            res.cookie('refresh_token', refresh_token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: true,
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-            });
-            return res.status(200).json({ message: 'Login successful' });
-        }
-        return res.status(200).json({
-            access_token,
-            refresh_token,
-        });
+    // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
+    const { access_token, refresh_token } =
+      await this.authService.generateTokens({
+        name: Name,
+        email: Email!,
+        status: Status,
+        id: Membership_No,
+        FCMToken: FCMToken ?? undefined,
+      });
+    if (clientType === 'web') {
+      res.cookie('access_token', access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.cookie('refresh_token', refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      return res.status(200).json({ message: 'Login successful' });
     }
+    return res.status(200).json({
+      access_token,
+      refresh_token,
+    });
+  }
 }

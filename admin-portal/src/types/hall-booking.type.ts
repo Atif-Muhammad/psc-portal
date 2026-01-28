@@ -82,6 +82,7 @@ export interface Hall {
 }
 
 export interface HallBookingForm {
+  reservationId?: number | string;
   membershipNo: string;
   memberName: string;
   memberId: string;
@@ -102,7 +103,7 @@ export interface HallBookingForm {
   guestContact?: ""
   endDate: string;
   numberOfDays: number;
-  bookingDetails: { date: string; timeSlot: string; eventType?: string }[];
+  bookingDetails: { date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[];
   remarks?: string;
 }
 

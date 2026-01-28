@@ -5,7 +5,7 @@ import type { Transporter } from 'nodemailer';
 export class MailerService {
   constructor(@Inject('MAIL_TRANSPORT') private transporter: Transporter) {}
 
-  async sendMail(to: string, cc: any[]= [], subject: string, body: string) {
+  async sendMail(to: string, cc: any[] = [], subject: string, body: string) {
     return await this.transporter.sendMail({
       from: process.env.NODEMAILER_USER,
       to,

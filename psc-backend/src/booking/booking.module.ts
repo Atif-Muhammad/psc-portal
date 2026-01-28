@@ -8,6 +8,6 @@ import { ContentModule } from 'src/content/content.module';
   imports: [PrismaModule, ContentModule],
   controllers: [BookingController],
   providers: [BookingService],
-  exports: [BookingService]
+  exports: [BookingService],
 })
 export class BookingModule {}

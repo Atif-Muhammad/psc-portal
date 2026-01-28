@@ -7,6 +7,6 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 @Module({
   imports: [PrismaModule, CloudinaryModule],
   controllers: [LawnController],
-  providers: [LawnService]
+  providers: [LawnService],
 })
 export class LawnModule {}

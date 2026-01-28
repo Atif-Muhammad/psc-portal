@@ -10,4 +10,4 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
   controllers: [AffiliationController],
   providers: [AffiliationService],
 })
-export class AffiliationModule { }
+export class AffiliationModule {}

@@ -10,7 +10,7 @@ const refreshTokenExtractor = (req: Request): string | null => {
     return req.headers.authorization.split(' ')[1];
   }
 
-  // Web: 
+  // Web:
   if (req.cookies?.refresh_token) {
     return req.cookies.refresh_token;
   }
@@ -18,7 +18,10 @@ const refreshTokenExtractor = (req: Request): string | null => {
   return null;
 };
 
-export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
+export class JwtRefreshStrategy extends PassportStrategy(
+  Strategy,
+  'jwt-refresh',
+) {
   constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([refreshTokenExtractor]),
@@ -28,9 +31,8 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   async validate(req: Request, payload: any) {
-      const refreshToken =
-      req.cookies?.refresh_token ||
-      req.headers.authorization?.split(' ')[1];
+    const refreshToken =
+      req.cookies?.refresh_token || req.headers.authorization?.split(' ')[1];
 
     if (!refreshToken) throw new UnauthorizedException();
 

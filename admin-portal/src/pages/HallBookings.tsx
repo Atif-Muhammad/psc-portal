@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -388,6 +389,8 @@ export default function HallBookings() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
+
 
   // API Queries
   // Infinite Query for Bookings
@@ -471,6 +474,30 @@ export default function HallBookings() {
     },
     enabled: !!form.hallId,
   });
+
+
+  // Handle conversion from Reservation
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.fromReservation) {
+      const { reservationId, resourceId, startTime, endTime, timeSlot, remarks } = state;
+
+      setForm(prev => ({
+        ...prev,
+        reservationId: reservationId,
+        hallId: resourceId?.toString() || "",
+        bookingDate: format(new Date(startTime), "yyyy-MM-dd"),
+        endDate: format(new Date(endTime), "yyyy-MM-dd"),
+        bookingTime: (timeSlot as any) || "NIGHT",
+        remarks: `Converted from Reservation #${reservationId}${remarks ? ` | ${remarks}` : ""}`
+      }));
+
+      setIsAddOpen(true);
+
+      // Clear location state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, halls]);
 
   const calendarModifiers = useMemo(() => {
     if (!fetchedStatuses) return { booked: [], reserved: [], outOfOrder: [] };
@@ -873,6 +900,7 @@ export default function HallBookings() {
       guestContact: form.guestContact,
       remarks: form.remarks,
       bookingDetails: form.bookingDetails,
+      reservationId: form.reservationId,
     };
 
     createMutation.mutate(payload);

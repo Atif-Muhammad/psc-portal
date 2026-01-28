@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 import {
     Table,
     TableBody,
@@ -53,6 +54,7 @@ const AdminReservations = () => {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchAdmins();
@@ -89,15 +91,37 @@ const AdminReservations = () => {
         }
     };
 
-    const getBadgeColor = (type: string) => {
+    const getBadgeStyles = (type: string) => {
         switch (type) {
-            case "ROOM": return "bg-blue-500 hover:bg-blue-600";
-            case "HALL": return "bg-purple-500 hover:bg-purple-600";
-            case "LAWN": return "bg-green-500 hover:bg-green-600";
-            case "PHOTOSHOOT": return "bg-pink-500 hover:bg-pink-600";
-            default: return "bg-gray-500";
+            case "ROOM": return "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200";
+            case "HALL": return "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200";
+            case "LAWN": return "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
+            case "PHOTOSHOOT": return "bg-pink-100 text-pink-700 border-pink-200 hover:bg-pink-200";
+            default: return "bg-gray-100 text-gray-700 border-gray-200";
         }
     };
+
+    const handleConvertToBooking = useCallback((res: any) => {
+        const paths: Record<string, string> = {
+            "ROOM": "/bookings/rooms",
+            "HALL": "/bookings/halls",
+            "LAWN": "/bookings/lawns",
+            "PHOTOSHOOT": "/bookings/photoshoot"
+        };
+
+        navigate(paths[res.type], {
+            state: {
+                fromReservation: true,
+                reservationId: res.id,
+                resourceId: res.resourceId,
+                roomTypeId: res.roomTypeId,
+                startTime: res.startTime,
+                endTime: res.endTime,
+                timeSlot: res.timeSlot,
+                remarks: res.remarks
+            }
+        });
+    }, [navigate]);
 
     return (
         <div className="space-y-6">
@@ -190,26 +214,37 @@ const AdminReservations = () => {
                                     <TableHead>Reserved To</TableHead>
                                     <TableHead>Remarks</TableHead>
                                     <TableHead>Created At</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {reservations.map((res) => (
-                                    <TableRow key={`${res.type}-${res.id}`}>
+                                {reservations.map((res: any) => (
+                                    <TableRow key={`${res.type}-${res.id}`} className="hover:bg-muted/30 transition-colors">
                                         <TableCell>
-                                            <Badge className={getBadgeColor(res.type)}>
+                                            <Badge variant="outline" className={cn("px-2 py-0.5 font-bold uppercase text-[10px]", getBadgeStyles(res.type))}>
                                                 {res.type}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="font-medium">{res.resourceName}</TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-sm font-medium">
                                             {format(new Date(res.startTime), "PPP p")}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="text-sm">
                                             {format(new Date(res.endTime), "PPP p")}
                                         </TableCell>
-                                        <TableCell>{res.remarks || "-"}</TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
+                                        <TableCell className="max-w-[150px] truncate text-muted-foreground text-xs">{res.remarks || "-"}</TableCell>
+                                        <TableCell className="text-muted-foreground text-xs">
                                             {format(new Date(res.createdAt), "PPP")}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 gap-2 border border-primary/20 hover:border-primary hover:bg-primary/5 text-primary font-bold text-xs"
+                                                onClick={() => handleConvertToBooking(res)}
+                                            >
+                                                Shift to Booking
+                                            </Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}

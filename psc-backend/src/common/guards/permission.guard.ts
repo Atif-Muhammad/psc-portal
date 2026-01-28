@@ -23,9 +23,9 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user || !user.permissions.modules) {
       return false;
-    }    
+    }
     // Check if user has *any* of the required permissions
-    return requiredPermissions.some(permission =>
+    return requiredPermissions.some((permission) =>
       user.permissions.modules.includes(permission),
     );
   }

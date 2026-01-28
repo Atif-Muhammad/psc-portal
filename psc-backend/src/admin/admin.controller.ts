@@ -34,9 +34,7 @@ import {
 
 @Controller('admin')
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-  ) {}
+  constructor(private readonly adminService: AdminService) {}
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN)
@@ -44,5 +42,4 @@ export class AdminController {
   async getAdmins() {
     return this.adminService.getAdmins();
   }
-
 }

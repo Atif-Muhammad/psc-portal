@@ -7,6 +7,6 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 @Module({
   imports: [PrismaModule, CloudinaryModule],
   controllers: [SportController],
-  providers: [SportService]
+  providers: [SportService],
 })
-export class SportModule { }
+export class SportModule {}

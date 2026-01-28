@@ -14,7 +14,7 @@ export class HallService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   // ─────────────────────────── HALLS ───────────────────────────
   async getHalls() {
@@ -75,7 +75,11 @@ export class HallService {
     });
   }
 
-  async createHall(payload: HallDto, files: Express.Multer.File[], createdBy: string) {
+  async createHall(
+    payload: HallDto,
+    files: Express.Multer.File[],
+    createdBy: string,
+  ) {
     const uploadedImages: { url: string; publicId: string }[] = [];
 
     for (const file of files ?? []) {
@@ -89,9 +93,10 @@ export class HallService {
     // Parse out of order periods if provided
     let outOfOrderPeriodsData: any[] = [];
     if (payload.outOfOrders) {
-      const parsed = typeof payload.outOfOrders === 'string'
-        ? JSON.parse(payload.outOfOrders)
-        : payload.outOfOrders;
+      const parsed =
+        typeof payload.outOfOrders === 'string'
+          ? JSON.parse(payload.outOfOrders)
+          : payload.outOfOrders;
 
       if (Array.isArray(parsed)) {
         outOfOrderPeriodsData = parsed.map((period) => ({
@@ -110,8 +115,18 @@ export class HallService {
         capacity: Number(payload.capacity),
         chargesGuests: Number(payload.chargesGuests),
         chargesMembers: Number(payload.chargesMembers),
-        isActive: payload.isActive !== undefined ? (typeof payload.isActive === 'string' ? payload.isActive === 'true' : payload.isActive) : true,
-        isExclusive: payload.isExclusive !== undefined ? (typeof payload.isExclusive === 'string' ? payload.isExclusive === 'true' : payload.isExclusive) : false,
+        isActive:
+          payload.isActive !== undefined
+            ? typeof payload.isActive === 'string'
+              ? payload.isActive === 'true'
+              : payload.isActive
+            : true,
+        isExclusive:
+          payload.isExclusive !== undefined
+            ? typeof payload.isExclusive === 'string'
+              ? payload.isExclusive === 'true'
+              : payload.isExclusive
+            : false,
         images: uploadedImages,
         createdBy,
         outOfOrders: {
@@ -124,7 +139,11 @@ export class HallService {
     });
   }
 
-  async updateHall(payload: HallDto, updatedBy: string, files: Express.Multer.File[] = []) {
+  async updateHall(
+    payload: HallDto,
+    updatedBy: string,
+    files: Express.Multer.File[] = [],
+  ) {
     if (!payload.id) {
       throw new HttpException('Hall ID is required', HttpStatus.BAD_REQUEST);
     }
@@ -153,8 +172,8 @@ export class HallService {
 
     const filteredExistingImages = Array.isArray(hall.images)
       ? hall.images?.filter((img: any) =>
-        keepImagePublicIds.includes(img.publicId),
-      )
+          keepImagePublicIds.includes(img.publicId),
+        )
       : [];
 
     const newUploadedImages: any[] = [];
@@ -226,8 +245,18 @@ export class HallService {
           capacity: Number(payload.capacity) || 0,
           chargesMembers: Number(payload.chargesMembers) || 0,
           chargesGuests: Number(payload.chargesGuests) || 0,
-          isActive: payload.isActive !== undefined ? (typeof payload.isActive === 'string' ? payload.isActive === 'true' : payload.isActive) : undefined,
-          isExclusive: payload.isExclusive !== undefined ? (typeof payload.isExclusive === 'string' ? payload.isExclusive === 'true' : payload.isExclusive) : undefined,
+          isActive:
+            payload.isActive !== undefined
+              ? typeof payload.isActive === 'string'
+                ? payload.isActive === 'true'
+                : payload.isActive
+              : undefined,
+          isExclusive:
+            payload.isExclusive !== undefined
+              ? typeof payload.isExclusive === 'string'
+                ? payload.isExclusive === 'true'
+                : payload.isExclusive
+              : undefined,
           images: finalImages,
           updatedBy,
         },
@@ -286,8 +315,9 @@ export class HallService {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
-    const hallIdsNum = hallIds?.map(id => Number(id)) || [];
-    const hallFilter = hallIdsNum.length > 0 ? { hallId: { in: hallIdsNum } } : {};
+    const hallIdsNum = hallIds?.map((id) => Number(id)) || [];
+    const hallFilter =
+      hallIdsNum.length > 0 ? { hallId: { in: hallIdsNum } } : {};
 
     const [bookings, reservations, outOfOrders] = await Promise.all([
       this.prismaService.hallBooking.findMany({
@@ -611,8 +641,8 @@ export class HallService {
               },
               {
                 fromDate: null, // Legacy holds
-              }
-            ]
+              },
+            ],
           },
           include: { hall: { select: { name: true } } },
         });

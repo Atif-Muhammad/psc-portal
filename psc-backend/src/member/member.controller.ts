@@ -23,13 +23,16 @@ import { NotificationService } from 'src/notification/notification.service';
 
 @Controller('member')
 export class MemberController {
-  constructor(private member: MemberService, private notifications: NotificationService) { }
+  constructor(
+    private member: MemberService,
+    private notifications: NotificationService,
+  ) {}
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
   @Post('create/member')
   async createMember(@Body() payload: CreateMemberDto, @Req() req: any) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     return this.member.createMember(payload, adminName);
   }
 
@@ -37,7 +40,7 @@ export class MemberController {
   @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
   @Post('create/bulk/members')
   async createBulkMembers(@Body() payload: CreateMemberDto[], @Req() req: any) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     return this.member.createBulk(payload, adminName);
   }
 
@@ -49,12 +52,15 @@ export class MemberController {
     @Body() payload: Partial<CreateMemberDto>,
     @Req() req: any,
   ) {
-    const adminName = req.user?.name || "system";
+    const adminName = req.user?.name || 'system';
     return this.member.updateMember(memberID, payload, adminName);
   }
 
   @Patch('/fcm-token')
-  async updateFCMToken(@Query('memberID') memberID: string, @Body() payload: { fcmToken: string }) {
+  async updateFCMToken(
+    @Query('memberID') memberID: string,
+    @Body() payload: { fcmToken: string },
+  ) {
     return this.member.updateFCMToken(memberID, payload.fcmToken);
   }
 
@@ -85,11 +91,9 @@ export class MemberController {
     });
   }
 
-
   @UseGuards(JwtAccGuard)
   @Get('notifications')
-  async getNotifications(@Req() req: {user: {id: string}}) {
+  async getNotifications(@Req() req: { user: { id: string } }) {
     return await this.notifications.getMemberNotifications(req.user?.id);
   }
-
 }

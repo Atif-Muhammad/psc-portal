@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +59,7 @@ interface Lawn {
 
 export interface LawnBooking {
   id: number;
+  reservationId?: number | string;
   memberName: string;
   lawn: {
     id: string,
@@ -490,7 +492,7 @@ export default function LawnBookings() {
   const [guestCount, setGuestCount] = useState(0);
 
   // Multi-date booking with individual time slots per date
-  const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string; eventType?: string }[]>([]);
+  const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[]>([]);
 
 
   const [detailBooking, setDetailBooking] = useState<LawnBooking | null>(null);
@@ -499,7 +501,8 @@ export default function LawnBookings() {
   const [guestSec, setGuestSec] = useState({
     paidBy: "MEMBER",
     guestName: "",
-    guestContact: ""
+    guestContact: "",
+    guestCNIC: ""
   })
 
   // Member search states
@@ -510,6 +513,32 @@ export default function LawnBookings() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
+
+  // Handle conversion from Reservation
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.fromReservation) {
+      const { reservationId, resourceId, startTime, endTime, timeSlot, remarks } = state;
+
+      setSelectedLawn(resourceId?.toString() || "");
+      setBookingDetails([{
+        date: format(new Date(startTime), "yyyy-MM-dd"),
+        timeSlot: (timeSlot as any) || "NIGHT",
+        reservationId: reservationId // Special case for Lawns: reservationId might need to be passed per detail or globally
+      }]);
+      // If multiple days reservation, handle that
+      if (startTime && endTime && new Date(startTime).toDateString() !== new Date(endTime).toDateString()) {
+        // for simplicity just use first date, or could loop. 
+        // Most reservations are per slot.
+      }
+
+      setIsAddOpen(true);
+
+      // Clear location state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Fetch lawn categories
   const {
@@ -847,7 +876,8 @@ export default function LawnBookings() {
     setGuestSec({
       paidBy: "MEMBER",
       guestName: "",
-      guestContact: ""
+      guestContact: "",
+      guestCNIC: ""
     });
   };
 
@@ -911,7 +941,8 @@ export default function LawnBookings() {
       bookingDetails: bookingDetails,
       paidBy: guestSec.paidBy,
       guestName: guestSec.guestName,
-      guestContact: guestSec.guestContact
+      guestContact: guestSec.guestContact,
+      reservationId: bookingDetails[0]?.reservationId
     };
     createMutation.mutate(payload);
   };

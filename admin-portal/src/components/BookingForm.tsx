@@ -63,8 +63,10 @@ export const BookingFormComponent = React.memo(({
   onRoomSelection,
 }: BookingFormProps) => {
 
-  const isArmedForces = selectedMember?.memberType === "ARMED_FORCES" || (isEdit && form.pricingType === "forces");
-  const isPricingForces = form.pricingType === "forces";
+  const isArmedForces =
+    selectedMember?.memberType === "ARMED_FORCES" ||
+    ["forces", "forces-self", "forces-guest"].includes(form.pricingType);
+  const isPricingForces = ["forces", "forces-self", "forces-guest"].includes(form.pricingType);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -124,7 +126,14 @@ export const BookingFormComponent = React.memo(({
           <SelectContent>
             <SelectItem value="member" disabled={isArmedForces}>Member</SelectItem>
             <SelectItem value="guest">Guest</SelectItem>
-            <SelectItem value="forces">Forces</SelectItem>
+            {isArmedForces ? (
+              <>
+                <SelectItem value="forces-self">Forces -- Self</SelectItem>
+                <SelectItem value="forces-guest">Forces -- Guest</SelectItem>
+              </>
+            ) : (
+              <SelectItem value="forces">Forces</SelectItem>
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -189,17 +198,17 @@ export const BookingFormComponent = React.memo(({
       </div>
 
       {/* Row 3: Guest / Forces Info (Conditional) */}
-      {(form.pricingType === "guest" || form.pricingType === "forces") && (
+      {(form.pricingType === "guest" || form.pricingType === "forces" || form.pricingType === "forces-guest") && (
         <div className="col-span-12 grid grid-cols-1 md:grid-cols-3 gap-4 border p-4 rounded-lg bg-gray-50/50">
           <div className="col-span-3">
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-2">
               <Info className="h-4 w-4" />
-              {isPricingForces ? "PA Reference Details" : "Guest Information"}
+              {(isPricingForces || form.pricingType === "forces-guest") ? "PA Reference Details" : "Guest Information"}
             </h4>
           </div>
           <div>
             <FormInput
-              label={isPricingForces ? "PA Ref Name *" : "Guest Name *"}
+              label={(isPricingForces || form.pricingType === "forces-guest") ? "PA Ref Name *" : "Guest Name *"}
               type="text"
               value={form.guestName}
               onChange={(val) => onChange("guestName", val)}
@@ -207,7 +216,7 @@ export const BookingFormComponent = React.memo(({
           </div>
           <div>
             <FormInput
-              label={isPricingForces ? "PA Ref Contact" : "Guest Contact"}
+              label={(isPricingForces || form.pricingType === "forces-guest") ? "PA Ref Contact" : "Guest Contact"}
               type="number"
               value={form.guestContact}
               onChange={(val) => onChange("guestContact", val)}
@@ -216,7 +225,7 @@ export const BookingFormComponent = React.memo(({
           </div>
           <div>
             <FormInput
-              label={isPricingForces ? "PA Ref CNIC" : "Guest CNIC"}
+              label={(isPricingForces || form.pricingType === "forces-guest") ? "PA Ref CNIC" : "Guest CNIC"}
               type="text"
               value={form.guestCNIC || ""}
               onChange={(val) => onChange("guestCNIC", val)}

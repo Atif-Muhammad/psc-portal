@@ -1,31 +1,31 @@
 import { IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RoomDto {
-    @IsOptional()
-    id?: string | number
-    @IsNotEmpty({message: "Room Number must be provied"})
-    roomNumber: string;
-    @IsNotEmpty({message: "Room type must be provided"})
-    roomTypeId: string;
-    @IsNotEmpty({message: "Description must be provided"})
-    description: string;
-    
-    @IsNotEmpty({message: "Activity must be provided"})
-    isActive: boolean | string;
-    @IsNotEmpty({message: "OutofOrder must be provided"})
-    isOutOfOrder: boolean | string;
+  @IsOptional()
+  id?: string | number;
+  @IsNotEmpty({ message: 'Room Number must be provied' })
+  roomNumber: string;
+  @IsNotEmpty({ message: 'Room type must be provided' })
+  roomTypeId: string;
+  @IsNotEmpty({ message: 'Description must be provided' })
+  description: string;
 
-    @IsOptional()
-    existingimgs?: string[]; 
-    @IsOptional()
-    files?: Express.Multer.File[];
+  @IsNotEmpty({ message: 'Activity must be provided' })
+  isActive: boolean | string;
+  @IsNotEmpty({ message: 'OutofOrder must be provided' })
+  isOutOfOrder: boolean | string;
 
-    @IsOptional()
-    outOfOrderFrom?: string
+  @IsOptional()
+  existingimgs?: string[];
+  @IsOptional()
+  files?: Express.Multer.File[];
 
-    @IsOptional()
-    outOfOrderUntil?: string;
+  @IsOptional()
+  outOfOrderFrom?: string;
 
-    @IsOptional()
-    outOfOrderReason?: string;
+  @IsOptional()
+  outOfOrderUntil?: string;
+
+  @IsOptional()
+  outOfOrderReason?: string;
 }

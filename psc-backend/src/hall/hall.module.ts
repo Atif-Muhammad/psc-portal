@@ -7,6 +7,6 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 @Module({
   imports: [PrismaModule, CloudinaryModule],
   controllers: [HallController],
-  providers: [HallService]
+  providers: [HallService],
 })
 export class HallModule {}

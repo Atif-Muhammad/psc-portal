@@ -5,6 +5,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -97,6 +98,34 @@ export default function RoomBookings() {
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
+
+  // Handle conversion from Reservation
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.fromReservation) {
+      const { reservationId, resourceId, roomTypeId, startTime, endTime, remarks } = state;
+
+      setForm(prev => ({
+        ...prev,
+        reservationId: reservationId,
+        roomTypeId: roomTypeId?.toString() || "",
+        roomId: resourceId?.toString() || "",
+        checkIn: format(new Date(startTime), "yyyy-MM-dd'T'12:00"),
+        checkOut: format(new Date(endTime), "yyyy-MM-dd'T'11:00"),
+        remarks: `Converted from Reservation #${reservationId}${remarks ? ` | ${remarks}` : ""}`
+      }));
+
+      if (resourceId) {
+        setSelectedRoomIds([resourceId.toString()]);
+      }
+
+      setIsAddOpen(true);
+
+      // Clear location state to prevent dialog reopening on refocus/refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // API Queries
   // Infinite Query for Bookings
@@ -297,7 +326,7 @@ export default function RoomBookings() {
       membershipNo: member.Membership_No || member.membershipNumber || "",
       memberName: member.Name,
       memberId: member.id?.toString(),
-      pricingType: member.memberType === "ARMED_FORCES" ? "forces" : "member",
+      pricingType: member.memberType === "ARMED_FORCES" ? "forces-self" : "member",
     }));
     setMemberSearch("");
     setShowMemberResults(false);
@@ -310,6 +339,7 @@ export default function RoomBookings() {
       membershipNo: "",
       memberName: "",
       memberId: "",
+      pricingType: "member",
     }));
     setMemberSearch("");
     setShowMemberResults(false);
@@ -504,7 +534,14 @@ export default function RoomBookings() {
   // Updated Price Calculation
   const calculateTotal = (roomTypeId: string, pricingType: string, checkIn: string, checkOut: string, roomCount: number) => {
     if (!roomTypeId || !checkIn || !checkOut || roomCount === 0) return 0;
-    const basePrice = calculatePrice(roomTypeId, pricingType, checkIn, checkOut, roomTypes);
+
+    // If pricing type is "member" and selected member is Armed Forces, use "forces" pricing instead
+    let effectivePricingType = pricingType;
+    if (pricingType === "member" && selectedMember?.memberType === "ARMED_FORCES") {
+      effectivePricingType = "forces";
+    }
+
+    const basePrice = calculatePrice(roomTypeId, effectivePricingType, checkIn, checkOut, roomTypes);
     return basePrice * roomCount;
   };
 
@@ -741,6 +778,7 @@ export default function RoomBookings() {
       guestContact: form.guestContact,
       guestCNIC: form.guestCNIC,
       remarks: form.remarks,
+      reservationId: form.reservationId,
     };
 
     createMutation.mutate(payload);

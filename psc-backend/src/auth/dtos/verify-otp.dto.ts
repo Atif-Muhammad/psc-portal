@@ -5,5 +5,5 @@ export class VerifyOtpDto {
   email: string;
 
   @IsString()
-  code: string;
+  code: string;
 }

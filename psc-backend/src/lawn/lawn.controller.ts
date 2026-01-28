@@ -25,7 +25,7 @@ import { LawnDto } from './dtos/lawn.dto';
 
 @Controller('lawn')
 export class LawnController {
-  constructor(private lawn: LawnService) { }
+  constructor(private lawn: LawnService) {}
 
   // lawn cateogry
   @UseGuards(JwtAccGuard)

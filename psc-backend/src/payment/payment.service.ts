@@ -7,7 +7,14 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { BookingType, PaidBy, PaymentMode, VoucherStatus, VoucherType, Channel } from '@prisma/client';
+import {
+  BookingType,
+  PaidBy,
+  PaymentMode,
+  VoucherStatus,
+  VoucherType,
+  Channel,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   formatPakistanDate,
@@ -16,7 +23,11 @@ import {
 } from 'src/utils/time';
 import { generateNumericVoucherNo } from 'src/utils/id';
 import { BookingService } from 'src/booking/booking.service';
-import { BillInquiryResponse, BillPaymentRequestDto, BillPaymentResponse } from './dtos/kuickpay.dto';
+import {
+  BillInquiryResponse,
+  BillPaymentRequestDto,
+  BillPaymentResponse,
+} from './dtos/kuickpay.dto';
 import { RealtimeGateway } from 'src/realtime/realtime.gateway';
 import { NotificationService } from 'src/notification/notification.service';
 import { MailerService } from 'src/mailer/mailer.service';
@@ -30,7 +41,7 @@ export class PaymentService {
     private realtimeGateway: RealtimeGateway,
     private notificationService: NotificationService,
     private mailerService: MailerService,
-  ) { }
+  ) {}
 
   // Kuickpay Integration Logic
 
@@ -67,27 +78,51 @@ export class PaymentService {
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
     else if (voucher.status === VoucherStatus.CANCELLED) billStatus = 'B';
 
-    const amountStr = this.formatAmountForKuickpay(Number(voucher.amount), 13, true);
+    const amountStr = this.formatAmountForKuickpay(
+      Number(voucher.amount),
+      13,
+      true,
+    );
 
     return {
       response_Code: '00',
-      consumer_Detail: (voucher.member?.Name || 'N/A').toUpperCase().slice(0, 30).padEnd(30, ' '),
+      consumer_Detail: (voucher.member?.Name || 'N/A')
+        .toUpperCase()
+        .slice(0, 30)
+        .padEnd(30, ' '),
       bill_status: billStatus,
-      due_date: this.formatDateToYYYYMMDD(voucher.expiresAt || voucher.issued_at),
+      due_date: this.formatDateToYYYYMMDD(
+        voucher.expiresAt || voucher.issued_at,
+      ),
       amount_within_dueDate: amountStr,
       amount_after_dueDate: amountStr,
       email_address: (voucher.member?.Email || 'N/A').slice(0, 30),
       contact_number: (voucher.member?.Contact_No || 'N/A').slice(0, 15),
       billing_month: billingMonth,
-      date_paid: voucher.status === VoucherStatus.CONFIRMED ? this.formatDateToYYYYMMDD(voucher.issued_at) : '',
-      amount_paid: voucher.status === VoucherStatus.CONFIRMED ? this.formatAmountForKuickpay(Number(voucher.amount), 12, false) : '',
-      tran_auth_Id: voucher.status === VoucherStatus.CONFIRMED ? (voucher.transaction_id || '000000').slice(0, 6) : '',
+      date_paid:
+        voucher.status === VoucherStatus.CONFIRMED
+          ? this.formatDateToYYYYMMDD(voucher.issued_at)
+          : '',
+      amount_paid:
+        voucher.status === VoucherStatus.CONFIRMED
+          ? this.formatAmountForKuickpay(Number(voucher.amount), 12, false)
+          : '',
+      tran_auth_Id:
+        voucher.status === VoucherStatus.CONFIRMED
+          ? (voucher.transaction_id || '000000').slice(0, 6)
+          : '',
       reserved: '',
     };
   }
 
-  async processBillPayment(paymentData: BillPaymentRequestDto): Promise<BillPaymentResponse> {
-    const voucherId = parseInt(paymentData.consumer_number.slice(process.env.KUICKPAY_PREFIX?.length || 5));
+  async processBillPayment(
+    paymentData: BillPaymentRequestDto,
+  ): Promise<BillPaymentResponse> {
+    const voucherId = parseInt(
+      paymentData.consumer_number.slice(
+        process.env.KUICKPAY_PREFIX?.length || 5,
+      ),
+    );
 
     return await this.prismaService.$transaction(async (prisma) => {
       const voucher = await prisma.paymentVoucher.findUnique({
@@ -96,19 +131,36 @@ export class PaymentService {
       });
 
       if (!voucher) {
-        return { response_Code: '01', Identification_parameter: '', reserved: '' };
+        return {
+          response_Code: '01',
+          Identification_parameter: '',
+          reserved: '',
+        };
       }
 
       if (voucher.status === VoucherStatus.CONFIRMED) {
         // Check if it's the same transaction (idempotency)
         if (voucher.transaction_id === paymentData.tran_auth_id) {
-          return { response_Code: '00', Identification_parameter: voucher.member?.Email || voucher.voucher_no, reserved: 'Duplicate success' };
+          return {
+            response_Code: '00',
+            Identification_parameter:
+              voucher.member?.Email || voucher.voucher_no,
+            reserved: 'Duplicate success',
+          };
         }
-        return { response_Code: '03', Identification_parameter: '', reserved: 'Already paid' };
+        return {
+          response_Code: '03',
+          Identification_parameter: '',
+          reserved: 'Already paid',
+        };
       }
 
       if (voucher.status === VoucherStatus.CANCELLED) {
-        return { response_Code: '02', Identification_parameter: '', reserved: 'Voucher cancelled' };
+        return {
+          response_Code: '02',
+          Identification_parameter: '',
+          reserved: 'Voucher cancelled',
+        };
       }
 
       // Update voucher
@@ -131,33 +183,53 @@ export class PaymentService {
       if (bType === 'ROOM') {
         const booking = await prisma.roomBooking.update({
           where: { id: bId },
-          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
-          include: { rooms: true }
+          data: {
+            paymentStatus: 'PAID',
+            paidAmount: voucher.amount,
+            pendingAmount: 0,
+            isConfirmed: true,
+          },
+          include: { rooms: true },
         });
-        const roomIds = booking.rooms.map(r => r.roomId);
+        const roomIds = booking.rooms.map((r) => r.roomId);
         await prisma.roomHoldings.deleteMany({
-          where: { roomId: { in: roomIds }, holdBy: voucher.membership_no }
+          where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
         });
       } else if (bType === 'HALL') {
         const booking = await prisma.hallBooking.update({
           where: { id: bId },
-          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+          data: {
+            paymentStatus: 'PAID',
+            paidAmount: voucher.amount,
+            pendingAmount: 0,
+            isConfirmed: true,
+          },
         });
         await prisma.hallHoldings.deleteMany({
-          where: { hallId: booking.hallId, holdBy: voucher.membership_no }
+          where: { hallId: booking.hallId, holdBy: voucher.membership_no },
         });
       } else if (bType === 'LAWN') {
         const booking = await prisma.lawnBooking.update({
           where: { id: bId },
-          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+          data: {
+            paymentStatus: 'PAID',
+            paidAmount: voucher.amount,
+            pendingAmount: 0,
+            isConfirmed: true,
+          },
         });
         await prisma.lawnHoldings.deleteMany({
-          where: { lawnId: booking.lawnId, holdBy: voucher.membership_no }
+          where: { lawnId: booking.lawnId, holdBy: voucher.membership_no },
         });
       } else if (bType === 'PHOTOSHOOT') {
         await prisma.photoshootBooking.update({
           where: { id: bId },
-          data: { paymentStatus: 'PAID', paidAmount: voucher.amount, pendingAmount: 0, isConfirmed: true },
+          data: {
+            paymentStatus: 'PAID',
+            paidAmount: voucher.amount,
+            pendingAmount: 0,
+            isConfirmed: true,
+          },
         });
       }
 
@@ -173,16 +245,25 @@ export class PaymentService {
         },
       });
 
-      const response = { response_Code: '00', Identification_parameter: voucher.member?.Email || voucher.voucher_no, reserved: '' };
+      const response = {
+        response_Code: '00',
+        Identification_parameter: voucher.member?.Email || voucher.voucher_no,
+        reserved: '',
+      };
 
       // Trigger asynchronous notifications after transaction success
-      this.triggerNotifications(voucher, paymentData).catch(err => console.error('Failed to trigger notifications:', err));
+      this.triggerNotifications(voucher, paymentData).catch((err) =>
+        console.error('Failed to trigger notifications:', err),
+      );
 
       return response;
     });
   }
 
-  private async triggerNotifications(voucher: any, paymentData: BillPaymentRequestDto) {
+  private async triggerNotifications(
+    voucher: any,
+    paymentData: BillPaymentRequestDto,
+  ) {
     const voucherId = voucher.id;
     const email = voucher.member?.Email;
     const name = voucher.member?.Name || 'Member';
@@ -191,22 +272,25 @@ export class PaymentService {
     // 1. Real-time update
     this.realtimeGateway.emitPaymentUpdate(voucherId, 'PAID', {
       amount,
-      transactionId: paymentData.tran_auth_id
+      transactionId: paymentData.tran_auth_id,
     });
 
     // 2. Mobile Notification
     try {
-      const noti = await this.notificationService.createNoti({
-        title: 'Payment Successful',
-        description: `Your payment of Rs. ${amount} for ${voucher.booking_type} booking has been received.`,
-      }, 'SYSTEM');
+      const noti = await this.notificationService.createNoti(
+        {
+          title: 'Payment Successful',
+          description: `Your payment of Rs. ${amount} for ${voucher.booking_type} booking has been received.`,
+        },
+        'SYSTEM',
+      );
 
       if (email) {
         this.notificationService.enqueue({
           id: uuidv4(),
           status: 'PENDING',
           noti_created: noti.id,
-          recipient: email
+          recipient: email,
         });
       }
     } catch (err) {
@@ -237,14 +321,17 @@ export class PaymentService {
     }
   }
 
-  formatAmountForKuickpay(amount: number, length: number, includeSign: boolean): string {
+  formatAmountForKuickpay(
+    amount: number,
+    length: number,
+    includeSign: boolean,
+  ): string {
     const sign = amount >= 0 ? '+' : '-';
     const absoluteAmount = Math.abs(amount);
     // Use whole units as requested by user, padded to length
     const padded = Math.round(absoluteAmount).toString().padStart(length, '0');
     return includeSign ? sign + padded : padded;
   }
-
 
   formatDateToYYYYMMDD(date: Date): string {
     const d = new Date(date);
@@ -346,7 +433,6 @@ export class PaymentService {
     };
   }
 
-
   async confirmBooking(type: string, id: number) {
     const bookingType = type.toUpperCase() as BookingType;
 
@@ -360,7 +446,7 @@ export class PaymentService {
         booking = await prisma.roomBooking.update({
           where: { id },
           data: { isConfirmed: true, paymentStatus: 'PAID' },
-          include: { rooms: true }
+          include: { rooms: true },
         });
         membershipNo = booking.Membership_No;
         totalAmount = Number(booking.totalPrice);
@@ -368,7 +454,7 @@ export class PaymentService {
         booking = await prisma.hallBooking.update({
           where: { id },
           data: { isConfirmed: true, paymentStatus: 'PAID' },
-          include: { member: true }
+          include: { member: true },
         });
         membershipNo = booking.member.Membership_No;
         totalAmount = Number(booking.totalPrice);
@@ -376,7 +462,7 @@ export class PaymentService {
         booking = await prisma.lawnBooking.update({
           where: { id },
           data: { isConfirmed: true, paymentStatus: 'PAID' },
-          include: { member: true }
+          include: { member: true },
         });
         membershipNo = booking.member.Membership_No;
         totalAmount = Number(booking.totalPrice);
@@ -384,7 +470,7 @@ export class PaymentService {
         booking = await prisma.photoshootBooking.update({
           where: { id },
           data: { isConfirmed: true, paymentStatus: 'PAID' },
-          include: { member: true }
+          include: { member: true },
         });
         membershipNo = booking.member.Membership_No;
         totalAmount = Number(booking.totalPrice);
@@ -393,30 +479,34 @@ export class PaymentService {
 
       // 2. Update Voucher
       await prisma.paymentVoucher.updateMany({
-        where: { booking_id: id, booking_type: bookingType, status: VoucherStatus.PENDING },
-        data: { status: VoucherStatus.CONFIRMED }
+        where: {
+          booking_id: id,
+          booking_type: bookingType,
+          status: VoucherStatus.PENDING,
+        },
+        data: { status: VoucherStatus.CONFIRMED },
       });
 
       // 3. Clear Holdings
       if (bookingType === 'ROOM') {
-        const roomIds = booking.rooms.map(r => r.roomId);
+        const roomIds = booking.rooms.map((r) => r.roomId);
         await prisma.roomHoldings.deleteMany({
-          where: { roomId: { in: roomIds }, holdBy: membershipNo }
+          where: { roomId: { in: roomIds }, holdBy: membershipNo },
         });
       } else if (bookingType === 'HALL') {
         await prisma.hallHoldings.deleteMany({
-          where: { hallId: booking.hallId, holdBy: membershipNo }
+          where: { hallId: booking.hallId, holdBy: membershipNo },
         });
       } else if (bookingType === 'LAWN') {
         await prisma.lawnHoldings.deleteMany({
-          where: { lawnId: booking.lawnId, holdBy: membershipNo }
+          where: { lawnId: booking.lawnId, holdBy: membershipNo },
         });
       }
 
       // 4. Update Member Ledger (Mimicking ledger updates in BookingService)
       // Note: This logic should ideally be shared or called from BookingService
       const member = await prisma.member.findUnique({
-        where: { Membership_No: membershipNo }
+        where: { Membership_No: membershipNo },
       });
 
       if (member) {
@@ -433,7 +523,9 @@ export class PaymentService {
       }
 
       if (!membershipNo || totalAmount === 0) {
-        throw new BadRequestException(`Unsupported or invalid booking type: ${type}`);
+        throw new BadRequestException(
+          `Unsupported or invalid booking type: ${type}`,
+        );
       }
 
       return { success: true, booking };
@@ -473,12 +565,12 @@ export class PaymentService {
   ///////////////////////////////////////////////////////////////////////
 
   async genInvoiceRoom(roomType: number, bookingData: any) {
-
     // check if member is active
     const member = await this.prismaService.member.findFirst({
-      where: { Membership_No: bookingData.membership_no }
-    })
-    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+      where: { Membership_No: bookingData.membership_no },
+    });
+    if (member?.Status !== 'active')
+      throw new UnprocessableEntityException(`Cannot book for inactive member`);
     // Validate room type exists
     const typeExists = await this.prismaService.roomType.findFirst({
       where: { id: roomType },
@@ -486,9 +578,9 @@ export class PaymentService {
     if (!typeExists) throw new NotFoundException(`Room type not found`);
     // Parse dates
     const checkIn = parsePakistanDate(bookingData.from);
-    checkIn.setHours(0, 0, 0, 0)
+    checkIn.setHours(0, 0, 0, 0);
     const checkOut = parsePakistanDate(bookingData.to);
-    checkOut.setHours(0, 0, 0, 0)
+    checkOut.setHours(0, 0, 0, 0);
 
     // Validate dates
     if (checkIn >= checkOut) {
@@ -540,7 +632,7 @@ export class PaymentService {
             booking: {
               checkIn: { lt: checkOut },
               checkOut: { gt: checkIn },
-            }
+            },
           },
         },
         // No out-of-order periods during requested period
@@ -557,9 +649,9 @@ export class PaymentService {
         roomType: {
           select: {
             priceMember: true,
-            priceGuest: true
-          }
-        }
+            priceGuest: true,
+          },
+        },
       },
       orderBy: {
         roomNumber: 'asc',
@@ -577,7 +669,7 @@ export class PaymentService {
 
       throw new ConflictException(
         `Only ${availableRooms.length} room(s) available. Requested: ${bookingData.numberOfRooms}. ` +
-        `${unavailableCount} room(s) are either reserved, booked, on maintenance, or on active hold.`,
+          `${unavailableCount} room(s) are either reserved, booked, on maintenance, or on active hold.`,
       );
     }
 
@@ -631,12 +723,15 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         rooms: {
-          create: selectedRooms.map(r => ({
+          create: selectedRooms.map((r) => ({
             roomId: r.id,
-            priceAtBooking: bookingData?.pricingType === 'member' ? r.roomType?.priceMember : r.roomType?.priceGuest
-          }))
-        }
-      }
+            priceAtBooking:
+              bookingData?.pricingType === 'member'
+                ? r.roomType?.priceMember
+                : r.roomType?.priceGuest,
+          })),
+        },
+      },
     });
 
     // create voucher as unpaid/pending
@@ -646,11 +741,11 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
-      voucher_type: "FULL_PAYMENT",
+      voucher_type: 'FULL_PAYMENT',
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: `Room booking: ${selectedRooms.map((room) => room.roomNumber).join(', ')} from ${bookingData.from} to ${bookingData.to}`,
-      expiresAt: holdExpiry
+      expiresAt: holdExpiry,
     });
 
     // return voucher details
@@ -663,12 +758,12 @@ export class PaymentService {
           no: member?.Membership_No,
           name: member?.Name,
           email: member?.Email,
-          contact: member?.Contact_No
+          contact: member?.Contact_No,
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
-        }
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+        },
       };
     }
     throw new HttpException('Failed to create voucher', 500);
@@ -677,9 +772,10 @@ export class PaymentService {
   async genInvoiceHall(hallId: number, bookingData: any) {
     // check if member is active
     const member = await this.prismaService.member.findFirst({
-      where: { Membership_No: bookingData.membership_no }
-    })
-    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+      where: { Membership_No: bookingData.membership_no },
+    });
+    if (member?.Status !== 'active')
+      throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE HALL EXISTS ─────────────────────────────
     const hallExists = await this.prismaService.hall.findFirst({
@@ -725,7 +821,9 @@ export class PaymentService {
     }
 
     // Resolve End Date
-    const endDate = bookingData.endDate ? parsePakistanDate(bookingData.endDate) : new Date(booking);
+    const endDate = bookingData.endDate
+      ? parsePakistanDate(bookingData.endDate)
+      : new Date(booking);
     endDate.setHours(0, 0, 0, 0);
     if (endDate < booking) {
       throw new BadRequestException('End Date cannot be before Start Date');
@@ -736,10 +834,9 @@ export class PaymentService {
     const numberOfDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
-    const normalizedEventTime = (bookingData.eventTime || 'EVENING').toUpperCase() as
-      | 'MORNING'
-      | 'EVENING'
-      | 'NIGHT';
+    const normalizedEventTime = (
+      bookingData.eventTime || 'EVENING'
+    ).toUpperCase() as 'MORNING' | 'EVENING' | 'NIGHT';
     const validEventTimes = ['MORNING', 'EVENING', 'NIGHT'];
 
     if (!validEventTimes.includes(normalizedEventTime)) {
@@ -750,7 +847,11 @@ export class PaymentService {
 
     // ── BOOKING DETAILS NORMALIZATION ──
     const bookingDetails = bookingData.bookingDetails || [];
-    const normalizedDetails: { date: Date; timeSlot: string; eventType?: string }[] = [];
+    const normalizedDetails: {
+      date: Date;
+      timeSlot: string;
+      eventType?: string;
+    }[] = [];
 
     if (bookingDetails && bookingDetails.length > 0) {
       for (const detail of bookingDetails) {
@@ -795,7 +896,10 @@ export class PaymentService {
       const outOfOrderConflict = hallExists.outOfOrders?.find((period) => {
         const pStart = new Date(period.startDate).setHours(0, 0, 0, 0);
         const pEnd = new Date(period.endDate).setHours(0, 0, 0, 0);
-        return currentCheckDate.getTime() >= pStart && currentCheckDate.getTime() <= pEnd;
+        return (
+          currentCheckDate.getTime() >= pStart &&
+          currentCheckDate.getTime() <= pEnd
+        );
       });
 
       if (outOfOrderConflict) {
@@ -822,7 +926,10 @@ export class PaymentService {
           const conflictDetail = details.find((d: any) => {
             const dDate = new Date(d.date);
             dDate.setHours(0, 0, 0, 0);
-            return dDate.getTime() === currentCheckDate.getTime() && d.timeSlot === currentSlot;
+            return (
+              dDate.getTime() === currentCheckDate.getTime() &&
+              d.timeSlot === currentSlot
+            );
           });
           if (conflictDetail) hasConflict = true;
         } else {
@@ -863,7 +970,9 @@ export class PaymentService {
       bookingData.pricingType === 'member'
         ? hallExists.chargesMembers
         : hallExists.chargesGuests;
-    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * normalizedDetails.length;
+    const totalPrice = bookingData.totalPrice
+      ? Number(bookingData.totalPrice)
+      : Number(basePrice) * normalizedDetails.length;
 
     // ── 8. CALCULATE HOLD EXPIRY ───────────────────────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour for refined flow
@@ -906,7 +1015,7 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         paidBy: 'MEMBER',
-      }
+      },
     });
 
     // create voucher as unpaid/pending
@@ -916,11 +1025,11 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
-      voucher_type: "FULL_PAYMENT",
+      voucher_type: 'FULL_PAYMENT',
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: `Hall booking: ${hallExists.name} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
-      expiresAt: holdExpiry
+      expiresAt: holdExpiry,
     });
 
     // return voucher details
@@ -933,25 +1042,24 @@ export class PaymentService {
           no: member?.Membership_No,
           name: member?.Name,
           email: member?.Email,
-          contact: member?.Contact_No
+          contact: member?.Contact_No,
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
-        }
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+        },
       };
     }
     throw new HttpException('Failed to create voucher', 500);
-
   }
 
   async genInvoiceLawn(lawnId: number, bookingData: any) {
-
     // check if member is active
     const member = await this.prismaService.member.findFirst({
-      where: { Membership_No: bookingData.membership_no }
-    })
-    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
+      where: { Membership_No: bookingData.membership_no },
+    });
+    if (member?.Status !== 'active')
+      throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE LAWN EXISTS ─────────────────────────────
     const lawnExists = await this.prismaService.lawn.findFirst({
@@ -1000,7 +1108,9 @@ export class PaymentService {
     }
 
     // Resolve End Date
-    const endDate = bookingData.endDate ? parsePakistanDate(bookingData.endDate) : new Date(booking);
+    const endDate = bookingData.endDate
+      ? parsePakistanDate(bookingData.endDate)
+      : new Date(booking);
     endDate.setHours(0, 0, 0, 0);
     if (endDate < booking) {
       throw new BadRequestException('End Date cannot be before Start Date');
@@ -1011,10 +1121,9 @@ export class PaymentService {
     const numberOfDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
-    const normalizedEventTime = (bookingData.eventTime || 'NIGHT').toUpperCase() as
-      | 'MORNING'
-      | 'EVENING'
-      | 'NIGHT';
+    const normalizedEventTime = (
+      bookingData.eventTime || 'NIGHT'
+    ).toUpperCase() as 'MORNING' | 'EVENING' | 'NIGHT';
     const validEventTimes = ['MORNING', 'EVENING', 'NIGHT'];
 
     if (!validEventTimes.includes(normalizedEventTime)) {
@@ -1050,9 +1159,15 @@ export class PaymentService {
       const outOfOrderConflict = lawnExists.outOfOrders?.find((period) => {
         const start = new Date(period.startDate).setHours(0, 0, 0, 0);
         const end = new Date(period.endDate).setHours(0, 0, 0, 0);
-        return currentCheckDate.getTime() >= start && currentCheckDate.getTime() <= end;
+        return (
+          currentCheckDate.getTime() >= start &&
+          currentCheckDate.getTime() <= end
+        );
       });
-      if (outOfOrderConflict) throw new ConflictException(`Lawn out of order on ${currentCheckDate.toLocaleDateString()}`);
+      if (outOfOrderConflict)
+        throw new ConflictException(
+          `Lawn out of order on ${currentCheckDate.toLocaleDateString()}`,
+        );
 
       // 2. Existing Bookings
       const confBooking = await this.prismaService.lawnBooking.findFirst({
@@ -1064,7 +1179,10 @@ export class PaymentService {
           isCancelled: false,
         },
       });
-      if (confBooking) throw new ConflictException(`Lawn already booked for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`);
+      if (confBooking)
+        throw new ConflictException(
+          `Lawn already booked for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`,
+        );
 
       // 3. Reservations
       const dayStart = new Date(currentCheckDate);
@@ -1079,7 +1197,10 @@ export class PaymentService {
           reservedTo: { gte: dayStart },
         },
       });
-      if (reservation) throw new ConflictException(`Lawn reserved for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`);
+      if (reservation)
+        throw new ConflictException(
+          `Lawn reserved for ${normalizedEventTime} on ${currentCheckDate.toLocaleDateString()}`,
+        );
     }
 
     // ── 8. CHECK GUEST COUNT AGAINST CAPACITY ───────────────
@@ -1100,8 +1221,11 @@ export class PaymentService {
       bookingData.pricingType === 'member'
         ? lawnExists.memberCharges
         : lawnExists.guestCharges;
-    const slotsCount = (bookingData.bookingDetails as any[])?.length || numberOfDays;
-    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * slotsCount;
+    const slotsCount =
+      (bookingData.bookingDetails as any[])?.length || numberOfDays;
+    const totalPrice = bookingData.totalPrice
+      ? Number(bookingData.totalPrice)
+      : Number(basePrice) * slotsCount;
 
     // ── 10. CALCULATE HOLD EXPIRY ───────────────────────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
@@ -1127,7 +1251,7 @@ export class PaymentService {
         paidBy: 'MEMBER',
         bookingTime: normalizedEventTime,
         bookingDetails: bookingData.bookingDetails || [],
-      }
+      },
     });
 
     // create voucher as unpaid/pending
@@ -1137,11 +1261,11 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
-      voucher_type: "FULL_PAYMENT",
+      voucher_type: 'FULL_PAYMENT',
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: `Lawn booking: ${lawnExists.description} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
-      expiresAt: holdExpiry
+      expiresAt: holdExpiry,
     });
 
     // return voucher details
@@ -1154,12 +1278,12 @@ export class PaymentService {
           no: member?.Membership_No,
           name: member?.Name,
           email: member?.Email,
-          contact: member?.Contact_No
+          contact: member?.Contact_No,
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
-        }
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+        },
       };
     }
     throw new HttpException('Failed to create voucher', 500);
@@ -1192,10 +1316,10 @@ export class PaymentService {
     console.log('Photoshoot booking data received:', bookingData);
     // check if member is active
     const member = await this.prismaService.member.findFirst({
-      where: { Membership_No: bookingData.membership_no }
-    })
-    if (member?.Status !== 'active') throw new UnprocessableEntityException(`Cannot book for inactive member`);
-
+      where: { Membership_No: bookingData.membership_no },
+    });
+    if (member?.Status !== 'active')
+      throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
     // ── 1. VALIDATE PHOTOSHOOT EXISTS ───────────────────────
     const photoshootExists = await this.prismaService.photoshoot.findFirst({
@@ -1284,7 +1408,9 @@ export class PaymentService {
       bookingData.pricingType === 'member'
         ? photoshootExists.memberCharges
         : photoshootExists.guestCharges;
-    const totalPrice = bookingData.totalPrice ? Number(bookingData.totalPrice) : Number(basePrice) * slotsCount;
+    const totalPrice = bookingData.totalPrice
+      ? Number(bookingData.totalPrice)
+      : Number(basePrice) * slotsCount;
 
     // ── 7. CREATE TEMPORARY BOOKING & VOUCHER ───────────
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
@@ -1306,8 +1432,8 @@ export class PaymentService {
         guestContact: bookingData.guestContact?.toString(),
         isConfirmed: false,
         paidBy: 'MEMBER',
-        bookingDetails: parsedDetails || []
-      }
+        bookingDetails: parsedDetails || [],
+      },
     });
 
     // create voucher as unpaid/pending
@@ -1317,11 +1443,11 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
       payment_mode: 'ONLINE',
-      voucher_type: "FULL_PAYMENT",
+      voucher_type: 'FULL_PAYMENT',
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: `Photoshoot booking: ${photoshootExists.description} on ${bookingDate.toLocaleDateString()}`,
-      expiresAt: holdExpiry
+      expiresAt: holdExpiry,
     });
 
     // return voucher details
@@ -1334,12 +1460,12 @@ export class PaymentService {
           no: member?.Membership_No,
           name: member?.Name,
           email: member?.Email,
-          contact: member?.Contact_No
+          contact: member?.Contact_No,
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`
-        }
+          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+        },
       };
     }
     throw new HttpException('Failed to create voucher', 500);
@@ -1357,9 +1483,6 @@ export class PaymentService {
     });
   }
 
-
-
   // check idempotency
-  async checkIdempo(idempotencyKey: string) {
-  }
+  async checkIdempo(idempotencyKey: string) {}
 }

@@ -1,18 +1,15 @@
-import { IsNotEmpty, IsOptional } from "class-validator";
-
-
+import { IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RoomTypeDto {
+  @IsNotEmpty({ message: 'Room type cannot be empty' })
+  type: string;
 
-    @IsNotEmpty({ message: "Room type cannot be empty" })
-    type: string;
-
-    @IsNotEmpty({ message: "Price for Member must be provided" })
-    priceMember: number
-    @IsNotEmpty({ message: "Price for Guest must be provided" })
-    priceGuest: number
-    @IsNotEmpty({ message: "Price for Forces must be provided" })
-    priceForces: number
-    @IsOptional()
-    existingimgs?: string[]
+  @IsNotEmpty({ message: 'Price for Member must be provided' })
+  priceMember: number;
+  @IsNotEmpty({ message: 'Price for Guest must be provided' })
+  priceGuest: number;
+  @IsNotEmpty({ message: 'Price for Forces must be provided' })
+  priceForces: number;
+  @IsOptional()
+  existingimgs?: string[];
 }

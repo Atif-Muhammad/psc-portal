@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from "@nestjs/config"
+import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { MemberModule } from './member/member.module';
@@ -24,10 +24,33 @@ import { MessingModule } from './messing/messing.module';
 import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
-  imports: [AuthModule, AdminModule, MemberModule, BookingModule, NotificationModule, PrismaModule, ConfigModule.forRoot({
-    isGlobal: true
-  }), MailerModule, SchedularModule, ScheduleModule.forRoot(), CloudinaryModule, RoomModule, HallModule, LawnModule, PhotoshootModule, SportModule, PaymentModule, DashboardModule, AffiliationModule, ContentModule, MessingModule, RealtimeModule],
+  imports: [
+    AuthModule,
+    AdminModule,
+    MemberModule,
+    BookingModule,
+    NotificationModule,
+    PrismaModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    MailerModule,
+    SchedularModule,
+    ScheduleModule.forRoot(),
+    CloudinaryModule,
+    RoomModule,
+    HallModule,
+    LawnModule,
+    PhotoshootModule,
+    SportModule,
+    PaymentModule,
+    DashboardModule,
+    AffiliationModule,
+    ContentModule,
+    MessingModule,
+    RealtimeModule,
+  ],
   controllers: [],
   providers: [MailerService],
 })
-export class AppModule { }
+export class AppModule {}

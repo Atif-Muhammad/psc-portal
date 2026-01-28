@@ -16,7 +16,7 @@ export class LawnService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) { }
+  ) {}
 
   // ─────────────────────────── LAWN CATEGORY ───────────────────────────
   async getLawnCategories() {
@@ -299,8 +299,9 @@ export class LawnService {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
-    const lawnIdsNum = lawnIds?.map(id => Number(id)) || [];
-    const lawnFilter = lawnIdsNum.length > 0 ? { lawnId: { in: lawnIdsNum } } : {};
+    const lawnIdsNum = lawnIds?.map((id) => Number(id)) || [];
+    const lawnFilter =
+      lawnIdsNum.length > 0 ? { lawnId: { in: lawnIdsNum } } : {};
 
     const [bookings, reservations, outOfOrders] = await Promise.all([
       this.prismaService.lawnBooking.findMany({
@@ -357,7 +358,7 @@ export class LawnService {
     if (!outOfOrders || outOfOrders.length === 0) return false;
 
     const now = new Date();
-    return outOfOrders.some(period => {
+    return outOfOrders.some((period) => {
       const start = new Date(period.startDate);
       const end = new Date(period.endDate);
       return start <= now && end >= now;
@@ -409,7 +410,12 @@ export class LawnService {
         maxGuests: Number(payload.maxGuests) || 0,
         memberCharges: new Prisma.Decimal(payload.memberCharges || 0),
         guestCharges: new Prisma.Decimal(payload.guestCharges || 0),
-        isActive: payload.isActive !== undefined ? (typeof payload.isActive === 'string' ? payload.isActive === 'true' : payload.isActive) : true,
+        isActive:
+          payload.isActive !== undefined
+            ? typeof payload.isActive === 'string'
+              ? payload.isActive === 'true'
+              : payload.isActive
+            : true,
         isOutOfService: hasActiveOutOfOrder,
         createdBy,
         outOfOrders: {
@@ -434,7 +440,7 @@ export class LawnService {
       include: {
         outOfOrders: true,
         reservations: true,
-        bookings: true
+        bookings: true,
       },
     });
 
@@ -453,11 +459,13 @@ export class LawnService {
       const endDate = new Date(period.endDate);
 
       // Check for conflicting reservations: Strict inequality allows "touching" dates
-      const conflictingReservations = lawn.reservations.filter((reservation) => {
-        const resStart = new Date(reservation.reservedFrom);
-        const resEnd = new Date(reservation.reservedTo);
-        return (startDate < resEnd && endDate > resStart);
-      });
+      const conflictingReservations = lawn.reservations.filter(
+        (reservation) => {
+          const resStart = new Date(reservation.reservedFrom);
+          const resEnd = new Date(reservation.reservedTo);
+          return startDate < resEnd && endDate > resStart;
+        },
+      );
 
       // Check for conflicting bookings: Booking on endDate is NOT allowed (inclusive)
       const conflictingBookings = lawn.bookings.filter((booking) => {
@@ -466,7 +474,10 @@ export class LawnService {
         return bookingDate >= startDate && bookingDate <= endDate;
       });
 
-      if (conflictingReservations.length > 0 || conflictingBookings.length > 0) {
+      if (
+        conflictingReservations.length > 0 ||
+        conflictingBookings.length > 0
+      ) {
         throw new HttpException(
           `Cannot set lawn as out of order from ${startDate.toDateString()} to ${endDate.toDateString()}. Lawn has ${conflictingReservations.length} reservation(s) and ${conflictingBookings.length} booking(s) during this period.`,
           HttpStatus.CONFLICT,
@@ -491,13 +502,24 @@ export class LawnService {
       const updatedLawn = await prisma.lawn.update({
         where: { id: lawnId },
         data: {
-          lawnCategoryId: payload.lawnCategoryId ? Number(payload.lawnCategoryId) : undefined,
+          lawnCategoryId: payload.lawnCategoryId
+            ? Number(payload.lawnCategoryId)
+            : undefined,
           description: payload.description?.trim(),
           minGuests: payload.minGuests ? Number(payload.minGuests) : undefined,
           maxGuests: payload.maxGuests ? Number(payload.maxGuests) : undefined,
-          memberCharges: payload.memberCharges ? new Prisma.Decimal(payload.memberCharges) : undefined,
-          guestCharges: payload.guestCharges ? new Prisma.Decimal(payload.guestCharges) : undefined,
-          isActive: payload.isActive !== undefined ? (typeof payload.isActive === 'string' ? payload.isActive === 'true' : payload.isActive) : undefined,
+          memberCharges: payload.memberCharges
+            ? new Prisma.Decimal(payload.memberCharges)
+            : undefined,
+          guestCharges: payload.guestCharges
+            ? new Prisma.Decimal(payload.guestCharges)
+            : undefined,
+          isActive:
+            payload.isActive !== undefined
+              ? typeof payload.isActive === 'string'
+                ? payload.isActive === 'true'
+                : payload.isActive
+              : undefined,
           isOutOfService: hasActiveOutOfOrder,
           updatedBy,
         },
@@ -524,20 +546,20 @@ export class LawnService {
   async getLawns() {
     return this.prismaService.lawn.findMany({
       include: {
-        outOfOrders: { orderBy: { startDate: "asc" } },
+        outOfOrders: { orderBy: { startDate: 'asc' } },
         lawnCategory: { select: { id: true, category: true } },
         holdings: true,
         reservations: {
           include: {
-            admin: { select: { id: true, name: true, email: true } }
-          }
+            admin: { select: { id: true, name: true, email: true } },
+          },
         },
         bookings: {
-          where: {isCancelled: false},
+          where: { isCancelled: false },
           include: {
-            member: { select: { Name: true, Membership_No: true } }
-          }
-        }
+            member: { select: { Name: true, Membership_No: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -576,48 +598,69 @@ export class LawnService {
     remarks?: string,
     auditorName: string = 'system',
   ) {
-    console.log('reserveLawns called with:', { lawnIds, reserve, timeSlot, reserveFrom, reserveTo, remarks });
+    console.log('reserveLawns called with:', {
+      lawnIds,
+      reserve,
+      timeSlot,
+      reserveFrom,
+      reserveTo,
+      remarks,
+    });
 
     // Parse dates early for validation and use
     const fromDate = reserveFrom ? parsePakistanDate(reserveFrom) : null;
     const toDate = reserveTo ? parsePakistanDate(reserveTo) : null;
 
-    if (reserve && (!fromDate || !toDate || isNaN(fromDate.getTime()) || isNaN(toDate.getTime()))) {
-      throw new HttpException('Valid reservation dates are required', HttpStatus.BAD_REQUEST);
+    if (
+      reserve &&
+      (!fromDate ||
+        !toDate ||
+        isNaN(fromDate.getTime()) ||
+        isNaN(toDate.getTime()))
+    ) {
+      throw new HttpException(
+        'Valid reservation dates are required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     // Check if any lawn is currently on hold (Granular check)
-    const heldLawns = (reserve && fromDate && toDate) ? await this.prismaService.lawnHoldings.findMany({
-      where: {
-        lawnId: { in: lawnIds },
-        onHold: true,
-        holdExpiry: { gt: new Date() },
-        OR: [
-          {
-            // Granular hold overlap
-            fromDate: { lte: toDate },
-            toDate: { gte: fromDate },
-            timeSlot: timeSlot,
-          },
-          {
-            // Legacy/Global hold fallback
-            fromDate: null,
-          }
-        ]
-      },
-      include: {
-        lawn: { include: { lawnCategory: true } },
-      },
-    }) : [];
+    const heldLawns =
+      reserve && fromDate && toDate
+        ? await this.prismaService.lawnHoldings.findMany({
+            where: {
+              lawnId: { in: lawnIds },
+              onHold: true,
+              holdExpiry: { gt: new Date() },
+              OR: [
+                {
+                  // Granular hold overlap
+                  fromDate: { lte: toDate },
+                  toDate: { gte: fromDate },
+                  timeSlot: timeSlot,
+                },
+                {
+                  // Legacy/Global hold fallback
+                  fromDate: null,
+                },
+              ],
+            },
+            include: {
+              lawn: { include: { lawnCategory: true } },
+            },
+          })
+        : [];
 
     if (heldLawns.length > 0) {
-      const conflicts = (heldLawns as any).map((h: any) => {
-        const lawnName = `${h.lawn.lawnCategory.category} - ${h.lawn.description}`;
-        if (h.fromDate && h.toDate) {
-          return `"${lawnName}" is on hold from ${new Date(h.fromDate).toLocaleDateString()} to ${new Date(h.toDate).toLocaleDateString()} for ${h.timeSlot}`;
-        }
-        return `"${lawnName}" is on global hold`;
-      }).join(', ');
+      const conflicts = (heldLawns as any)
+        .map((h: any) => {
+          const lawnName = `${h.lawn.lawnCategory.category} - ${h.lawn.description}`;
+          if (h.fromDate && h.toDate) {
+            return `"${lawnName}" is on hold from ${new Date(h.fromDate).toLocaleDateString()} to ${new Date(h.toDate).toLocaleDateString()} for ${h.timeSlot}`;
+          }
+          return `"${lawnName}" is on global hold`;
+        })
+        .join(', ');
 
       throw new HttpException(
         `Lawn hold conflicts: ${conflicts}`,
@@ -705,9 +748,12 @@ export class LawnService {
 
         if (outOfOrderLawns.length > 0) {
           const conflicts = outOfOrderLawns.map((lawn: any) => {
-            const conflictingPeriods = lawn.outOfOrders.map((p: any) =>
-              `${new Date(p.startDate).toLocaleDateString()} to ${new Date(p.endDate).toLocaleDateString()}: ${p.reason}`
-            ).join('; ');
+            const conflictingPeriods = lawn.outOfOrders
+              .map(
+                (p: any) =>
+                  `${new Date(p.startDate).toLocaleDateString()} to ${new Date(p.endDate).toLocaleDateString()}: ${p.reason}`,
+              )
+              .join('; ');
             return `Lawn "${lawn.lawnCategory.category} - ${lawn.description}" has maintenance: ${conflictingPeriods}`;
           });
           throw new HttpException(
@@ -789,7 +835,12 @@ export class LawnService {
     } else {
       // UNRESERVE LOGIC
       if (fromDate && toDate && timeSlot) {
-        console.log('Unreserve logic started for:', { lawnIds, fromDate, toDate, timeSlot });
+        console.log('Unreserve logic started for:', {
+          lawnIds,
+          fromDate,
+          toDate,
+          timeSlot,
+        });
 
         const result = await this.prismaService.lawnReservation.deleteMany({
           where: {
@@ -802,17 +853,17 @@ export class LawnService {
 
         console.log('Unreserve result:', result);
 
-
         const now = new Date();
         now.setUTCHours(0, 0, 0, 0);
 
         for (const lawnId of lawnIds) {
-          const hasUpcoming = await this.prismaService.lawnReservation.findFirst({
-            where: {
-              lawnId,
-              reservedTo: { gte: now },
-            },
-          });
+          const hasUpcoming =
+            await this.prismaService.lawnReservation.findFirst({
+              where: {
+                lawnId,
+                reservedTo: { gte: now },
+              },
+            });
 
           await this.prismaService.lawn.update({
             where: { id: lawnId },
@@ -826,7 +877,8 @@ export class LawnService {
         };
       } else {
         return {
-          message: 'No reservations removed - please specify dates and time slot',
+          message:
+            'No reservations removed - please specify dates and time slot',
           count: 0,
         };
       }

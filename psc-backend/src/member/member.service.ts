@@ -6,7 +6,7 @@ import { Prisma, MemberStatus as prismaMemberStatus } from '@prisma/client';
 
 @Injectable()
 export class MemberService {
-  constructor(private prismaService: PrismaService) { }
+  constructor(private prismaService: PrismaService) {}
 
   private getDerivedStatus(actualStatus: string): string {
     const status = actualStatus?.toUpperCase();
@@ -28,10 +28,17 @@ export class MemberService {
     }
   }
 
-
   async createMember(payload: CreateMemberDto, createdBy: string) {
-    const { Name, Email, Membership_No, Contact_No, Balance, Other_Details, Actual_Status, memberType } =
-      payload;
+    const {
+      Name,
+      Email,
+      Membership_No,
+      Contact_No,
+      Balance,
+      Other_Details,
+      Actual_Status,
+      memberType,
+    } = payload;
 
     const existingMember = await this.prismaService.member.findFirst({
       where: { OR: [{ Email }, { Contact_No }] },
@@ -59,11 +66,11 @@ export class MemberService {
     const operations = payload.map((row) => {
       const actualStatus = row.Actual_Status?.toString() || 'CLEAR';
       return this.prismaService.member.upsert({
-        where: { Membership_No: row.Membership_No!.toString() },
+        where: { Membership_No: row.Membership_No.toString() },
         update: {
-          Name: row.Name!,
-          Email: row.Email!,
-          Contact_No: row.Contact_No!.toString(),
+          Name: row.Name,
+          Email: row.Email,
+          Contact_No: row.Contact_No.toString(),
           Actual_Status:
             prismaMemberStatus[actualStatus as keyof typeof prismaMemberStatus],
           Status: this.getDerivedStatus(actualStatus),
@@ -72,10 +79,10 @@ export class MemberService {
           memberType: row.memberType || 'CIVILIAN',
         },
         create: {
-          Membership_No: row.Membership_No!.toString(),
-          Name: row.Name!,
-          Email: row.Email!,
-          Contact_No: row.Contact_No!.toString(),
+          Membership_No: row.Membership_No.toString(),
+          Name: row.Name,
+          Email: row.Email,
+          Contact_No: row.Contact_No.toString(),
           Actual_Status:
             prismaMemberStatus[actualStatus as keyof typeof prismaMemberStatus],
           Status: this.getDerivedStatus(actualStatus),
@@ -149,12 +156,12 @@ export class MemberService {
       if (error.code === 'P2003') {
         throw new HttpException(
           'Cannot delete member with existing bookings or dependencies. Please delete related records first.',
-          HttpStatus.BAD_REQUEST
+          HttpStatus.BAD_REQUEST,
         );
       }
       throw new HttpException(
         'Failed to delete member',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -228,6 +235,7 @@ export class MemberService {
         Actual_Status: true,
         Status: true,
         Sno: true,
+        memberType: true,
       },
       orderBy: {
         Membership_No: 'asc',
@@ -239,7 +247,7 @@ export class MemberService {
   async checkMemberStatus(memberID: string) {
     return await this.prismaService.member.findFirst({
       where: { Membership_No: memberID },
-      select: { Status: true, Actual_Status: true }
+      select: { Status: true, Actual_Status: true },
     });
   }
 }

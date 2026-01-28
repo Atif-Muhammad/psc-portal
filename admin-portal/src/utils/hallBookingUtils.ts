@@ -31,6 +31,7 @@ export const parseLocalDate = (dateStr: string): Date => {
 };
 
 export const hallInitialFormState: HallBookingForm = {
+  reservationId: "",
   membershipNo: "",
   memberName: "",
   memberId: "",

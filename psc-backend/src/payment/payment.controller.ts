@@ -15,14 +15,17 @@ import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { PaymentService } from './payment.service';
 import { BookingService } from 'src/booking/booking.service';
 import { StatusGuard } from 'src/common/guards/StatusGuard';
-import { BillInquiryRequestDto, BillPaymentRequestDto } from './dtos/kuickpay.dto';
+import {
+  BillInquiryRequestDto,
+  BillPaymentRequestDto,
+} from './dtos/kuickpay.dto';
 
 @Controller('payment')
 export class PaymentController {
   constructor(
     private payment: PaymentService,
-    private bookingService: BookingService
-  ) { }
+    private bookingService: BookingService,
+  ) {}
 
   // generate invoice:
 
@@ -85,7 +88,6 @@ export class PaymentController {
     });
   }
 
-
   ///////////////////////////////////////////////////////////////////////////////
 
   @Get('member/vouchers')
@@ -96,10 +98,14 @@ export class PaymentController {
   @Get('voucher/booking')
   async getVouchersByBooking(
     @Query('bookingType') bookingType: string,
-    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('bookingId', new ParseIntPipe({ optional: true }))
+    bookingId?: number,
   ) {
     if (!bookingId) {
-      throw new HttpException('bookingId query parameter is required and must be an integer', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'bookingId query parameter is required and must be an integer',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     return await this.bookingService.getVouchersByBooking(
       bookingType,
@@ -108,10 +114,7 @@ export class PaymentController {
   }
 
   @Post('confirm/:type/:id')
-  async confirmBooking(
-    @Param('type') type: string,
-    @Param('id') id: string,
-  ) {
+  async confirmBooking(@Param('type') type: string, @Param('id') id: string) {
     return await this.payment.confirmBooking(type, Number(id));
   }
 
@@ -121,25 +124,44 @@ export class PaymentController {
   async billInquiry(@Body() payload: BillInquiryRequestDto, @Req() req: any) {
     const { username, password } = req.headers;
 
-    if (username !== process.env.KUICKPAY_USERNAME || password !== process.env.KUICKPAY_PASSWORD) {
-      return { response_Code: '04', consumer_Detail: 'Invalid credentials'.padEnd(30, ' '), bill_status: 'B' };
+    if (
+      username !== process.env.KUICKPAY_USERNAME ||
+      password !== process.env.KUICKPAY_PASSWORD
+    ) {
+      return {
+        response_Code: '04',
+        consumer_Detail: 'Invalid credentials'.padEnd(30, ' '),
+        bill_status: 'B',
+      };
     }
 
     const prefix = process.env.KUICKPAY_PREFIX || '01520';
     if (!payload.consumer_number.startsWith(prefix)) {
-      return { response_Code: '01', consumer_Detail: 'Invalid prefix'.padEnd(30, ' '), bill_status: 'B' };
+      return {
+        response_Code: '01',
+        consumer_Detail: 'Invalid prefix'.padEnd(30, ' '),
+        bill_status: 'B',
+      };
     }
 
     const voucherId = parseInt(payload.consumer_number.slice(prefix.length));
     if (isNaN(voucherId)) {
-      return { response_Code: '01', consumer_Detail: 'Invalid voucher ID'.padEnd(30, ' '), bill_status: 'B' };
+      return {
+        response_Code: '01',
+        consumer_Detail: 'Invalid voucher ID'.padEnd(30, ' '),
+        bill_status: 'B',
+      };
     }
 
     try {
       return await this.payment.getBillInquiry(voucherId);
     } catch (error) {
       console.error('Kuickpay Inquiry Error:', error);
-      return { response_Code: '05', consumer_Detail: 'Processing failed'.padEnd(30, ' '), bill_status: 'B' };
+      return {
+        response_Code: '05',
+        consumer_Detail: 'Processing failed'.padEnd(30, ' '),
+        bill_status: 'B',
+      };
     }
   }
 
@@ -147,20 +169,35 @@ export class PaymentController {
   async billPayment(@Body() payload: BillPaymentRequestDto, @Req() req: any) {
     const { username, password } = req.headers;
 
-    if (username !== process.env.KUICKPAY_USERNAME || password !== process.env.KUICKPAY_PASSWORD) {
-      return { response_Code: '04', Identification_parameter: '', reserved: 'Auth failed' };
+    if (
+      username !== process.env.KUICKPAY_USERNAME ||
+      password !== process.env.KUICKPAY_PASSWORD
+    ) {
+      return {
+        response_Code: '04',
+        Identification_parameter: '',
+        reserved: 'Auth failed',
+      };
     }
 
     const prefix = process.env.KUICKPAY_PREFIX || '01520';
     if (!payload.consumer_number.startsWith(prefix)) {
-      return { response_Code: '04', Identification_parameter: '', reserved: 'Invalid prefix' };
+      return {
+        response_Code: '04',
+        Identification_parameter: '',
+        reserved: 'Invalid prefix',
+      };
     }
 
     try {
       return await this.payment.processBillPayment(payload);
     } catch (error) {
       console.error('Kuickpay Payment Error:', error);
-      return { response_Code: '05', Identification_parameter: '', reserved: 'Internal error' };
+      return {
+        response_Code: '05',
+        Identification_parameter: '',
+        reserved: 'Internal error',
+      };
     }
   }
 }

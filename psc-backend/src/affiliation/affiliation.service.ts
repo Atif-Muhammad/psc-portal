@@ -23,7 +23,7 @@ export class AffiliationService {
     private prismaService: PrismaService,
     private mailerService: MailerService,
     private cloudinary: CloudinaryService,
-  ) { }
+  ) {}
 
   // -------------------- AFFILIATED CLUBS --------------------
 
@@ -70,7 +70,11 @@ export class AffiliationService {
     return club;
   }
 
-  async createAffiliatedClub(payload: CreateAffiliatedClubDto, createdBy: string, file?: Express.Multer.File) {
+  async createAffiliatedClub(
+    payload: CreateAffiliatedClubDto,
+    createdBy: string,
+    file?: Express.Multer.File,
+  ) {
     let imageUrl = null;
     if (file) {
       const upload = await this.cloudinary.uploadFile(file);
@@ -92,7 +96,11 @@ export class AffiliationService {
     });
   }
 
-  async updateAffiliatedClub(payload: UpdateAffiliatedClubDto, updatedBy: string, file?: Express.Multer.File) {
+  async updateAffiliatedClub(
+    payload: UpdateAffiliatedClubDto,
+    updatedBy: string,
+    file?: Express.Multer.File,
+  ) {
     if (!payload.id) {
       throw new HttpException(
         'Affiliated club ID is required',
@@ -166,12 +174,15 @@ export class AffiliationService {
     return request;
   }
 
-  async createRequest(payload: CreateAffiliatedClubRequestDto, createdBy: string = 'member') {
+  async createRequest(
+    payload: CreateAffiliatedClubRequestDto,
+    createdBy: string = 'member',
+  ) {
     // Check if club exists
     const club = await this.prismaService.affiliatedClub.findFirst({
       where: { id: payload.affiliatedClubId },
-      select: { email: true, name: true }
-    })
+      select: { email: true, name: true },
+    });
     if (!club) {
       throw new HttpException('Club not found', HttpStatus.NOT_FOUND);
     }
@@ -179,15 +190,23 @@ export class AffiliationService {
     // Check if member exists
     const member = await this.prismaService.member.findFirst({
       where: { Membership_No: payload.membershipNo.toString() },
-      select: { Email: true, Name: true, Membership_No: true, Contact_No: true }
-    })
+      select: {
+        Email: true,
+        Name: true,
+        Membership_No: true,
+        Contact_No: true,
+      },
+    });
     if (!member) {
       throw new HttpException('Member not found', HttpStatus.NOT_FOUND);
     }
 
-    const mailSent = this.sendRequestEmail(member.Email!, club, payload)
+    const mailSent = this.sendRequestEmail(member.Email!, club, payload);
     if (!mailSent) {
-      throw new HttpException('Mail not sent', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Mail not sent',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
 
     return await this.prismaService.affiliatedClubRequest.create({
@@ -204,11 +223,7 @@ export class AffiliationService {
     });
   }
 
-  private async sendRequestEmail(
-    member: string,
-    club: any,
-    request: any,
-  ) {
+  private async sendRequestEmail(member: string, club: any, request: any) {
     const message = this.createRequestEmailContent(member, club, request);
     await this.mailerService.sendMail(
       club.email,
@@ -274,7 +289,4 @@ export class AffiliationService {
     </html>
   `;
   }
-
-
-
 }
