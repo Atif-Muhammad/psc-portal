@@ -39,6 +39,10 @@ services:
       CLOUD_NAME: "dtqdpntlc"
       CLOUDINARY_API_KEY: "369676299629912"
       CLOUDINARY_API_SECRET: "q7KnhQPgAOSx1kwhdMh1iYw0wrA"
+      KUICKPAY_USERNAME: "Test"
+      KUICKPAY_PASSWORD: "@bcd"
+      KUICKPAY_PREFIX: "01520"
+      KUICKPAY_BANK_MNEMONIC: "KPY"
 
   admin-portal:
     build:
