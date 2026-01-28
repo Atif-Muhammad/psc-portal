@@ -6,7 +6,7 @@ import { Prisma, MemberStatus as prismaMemberStatus } from '@prisma/client';
 
 @Injectable()
 export class MemberService {
-  constructor(private prismaService: PrismaService) {}
+  constructor(private prismaService: PrismaService) { }
 
   private getDerivedStatus(actualStatus: string): string {
     const status = actualStatus?.toUpperCase();

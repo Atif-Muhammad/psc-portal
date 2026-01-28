@@ -41,7 +41,7 @@ export class PaymentService {
     private realtimeGateway: RealtimeGateway,
     private notificationService: NotificationService,
     private mailerService: MailerService,
-  ) {}
+  ) { }
 
   // Kuickpay Integration Logic
 
@@ -347,6 +347,28 @@ export class PaymentService {
     const month = parseInt(dateString.substring(4, 6)) - 1;
     const day = parseInt(dateString.substring(6, 8));
     return new Date(year, month, day);
+  }
+
+  /**
+   * Generates a consumer number with exactly 18 digits.
+   * Format: prefix + zeros + voucherId
+   * The number of zeros adjusts to ensure total length is always 18.
+   */
+  private generateConsumerNumber(voucherId: number): string {
+    const prefix = process.env.KUICKPAY_PREFIX || '25430';
+    const voucherIdStr = voucherId.toString();
+    const totalLength = 18;
+    const paddingLength = totalLength - prefix.length - voucherIdStr.length;
+
+    // Ensure padding length is non-negative
+    if (paddingLength < 0) {
+      throw new Error(
+        `Consumer number would exceed 18 digits. Prefix: ${prefix.length}, VoucherId: ${voucherIdStr.length}`
+      );
+    }
+
+    const padding = '0'.repeat(paddingLength);
+    return `${prefix}${padding}${voucherIdStr}`;
   }
 
   // kuick pay
@@ -669,7 +691,7 @@ export class PaymentService {
 
       throw new ConflictException(
         `Only ${availableRooms.length} room(s) available. Requested: ${bookingData.numberOfRooms}. ` +
-          `${unavailableCount} room(s) are either reserved, booked, on maintenance, or on active hold.`,
+        `${unavailableCount} room(s) are either reserved, booked, on maintenance, or on active hold.`,
       );
     }
 
@@ -750,7 +772,6 @@ export class PaymentService {
 
     // return voucher details
     if (voucher) {
-      const prefix = process.env.KUICKPAY_PREFIX || '01520';
       return {
         issue_date: voucher.issued_at,
         due_date: voucher.expiresAt,
@@ -762,7 +783,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+          consumer_number: this.generateConsumerNumber(voucher.id),
         },
       };
     }
@@ -1034,7 +1055,6 @@ export class PaymentService {
 
     // return voucher details
     if (voucher) {
-      const prefix = process.env.KUICKPAY_PREFIX || '01520';
       return {
         issue_date: voucher.issued_at,
         due_date: voucher.expiresAt,
@@ -1046,7 +1066,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+          consumer_number: this.generateConsumerNumber(voucher.id),
         },
       };
     }
@@ -1270,7 +1290,6 @@ export class PaymentService {
 
     // return voucher details
     if (voucher) {
-      const prefix = process.env.KUICKPAY_PREFIX || '01520';
       return {
         issue_date: voucher.issued_at,
         due_date: voucher.expiresAt,
@@ -1282,7 +1301,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+          consumer_number: this.generateConsumerNumber(voucher.id),
         },
       };
     }
@@ -1452,7 +1471,6 @@ export class PaymentService {
 
     // return voucher details
     if (voucher) {
-      const prefix = process.env.KUICKPAY_PREFIX || '01520';
       return {
         issue_date: voucher.issued_at,
         due_date: voucher.expiresAt,
@@ -1464,7 +1482,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: `${prefix}${voucher.id.toString().padStart(13, '0')}`,
+          consumer_number: this.generateConsumerNumber(voucher.id),
         },
       };
     }
@@ -1484,5 +1502,5 @@ export class PaymentService {
   }
 
   // check idempotency
-  async checkIdempo(idempotencyKey: string) {}
+  async checkIdempo(idempotencyKey: string) { }
 }

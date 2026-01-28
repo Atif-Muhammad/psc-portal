@@ -135,7 +135,7 @@ export class PaymentController {
       };
     }
 
-    const prefix = process.env.KUICKPAY_PREFIX || '01520';
+    const prefix = process.env.KUICKPAY_PREFIX || '25430';
     if (!payload.consumer_number.startsWith(prefix)) {
       return {
         response_Code: '01',
@@ -180,7 +180,7 @@ export class PaymentController {
       };
     }
 
-    const prefix = process.env.KUICKPAY_PREFIX || '01520';
+    const prefix = process.env.KUICKPAY_PREFIX || '25430';
     if (!payload.consumer_number.startsWith(prefix)) {
       return {
         response_Code: '04',
