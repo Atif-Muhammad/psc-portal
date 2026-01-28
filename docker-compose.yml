@@ -26,23 +26,8 @@ services:
         condition: service_healthy
     volumes:
       - notification_data:/app/data
-    environment:
-      NODE_ENV: "development"
-      DATABASE_URL: "mysql://root:root@mysql:3306/psc_db"
-      JWT_ACCESS_SECRET: "asdaskdpanqweqejlsadnasnd"
-      JWT_REFRESH_SECRET: "09190199219jjkdjasjdnasnd"
-      NODEMAILER_HOST: "smtp.hostinger.com"
-      NODEMAILER_PORT: 25
-      NODEMAILER_USER: "infodesk@peshawarservicesclub.com"
-      NODEMAILER_PASS: "Info_dksPsc35"
-      CLOUDINARY_URL: "cloudinary://369676299629912:q7KnhQPgAOSx1kwhdMh1iYw0wrA@dtqdpntlc"
-      CLOUD_NAME: "dtqdpntlc"
-      CLOUDINARY_API_KEY: "369676299629912"
-      CLOUDINARY_API_SECRET: "q7KnhQPgAOSx1kwhdMh1iYw0wrA"
-      KUICKPAY_USERNAME: "Test"
-      KUICKPAY_PASSWORD: "@bcd"
-      KUICKPAY_PREFIX: "25430"
-      KUICKPAY_BANK_MNEMONIC: "KPY"
+    env_file:
+      - .env
 
   admin-portal:
     build:
