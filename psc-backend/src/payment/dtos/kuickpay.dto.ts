@@ -5,9 +5,8 @@ export class BillInquiryRequestDto {
   @IsString()
   consumer_number: string;
 
-  @IsNotEmpty()
-  @IsString()
-  bank_mnemonic: string;
+  @IsOptional()
+  bank_mnemonic?: string;
 
   @IsOptional()
   @IsString()
@@ -38,9 +37,8 @@ export class BillPaymentRequestDto {
   @MaxLength(6)
   tran_time: string; // HHMMSS
 
-  @IsNotEmpty()
-  @IsString()
-  bank_mnemonic: string;
+  @IsOptional()
+  bank_mnemonic?: string;
 
   @IsOptional()
   @IsString()
