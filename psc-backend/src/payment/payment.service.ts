@@ -142,10 +142,10 @@ export class PaymentService {
         // Check if it's the same transaction (idempotency)
         if (voucher.transaction_id === paymentData.tran_auth_id) {
           return {
-            response_Code: '00',
+            response_Code: '03',
             Identification_parameter:
               voucher.member?.Email || voucher.voucher_no,
-            reserved: 'Duplicate success',
+            reserved: 'Duplicate ignored',
           };
         }
         return {
