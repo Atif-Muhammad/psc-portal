@@ -10,8 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
-import { Plus, Edit, Trash2, Eye, Check, X } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, Check, X, Calendar as CalendarIcon, TrendingUp, BarChart3 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getAffiliatedClubs,
@@ -20,6 +25,7 @@ import {
   updateAffiliatedClub,
   deleteAffiliatedClub,
   updateAffiliatedClubRequestStatus,
+  getAffiliatedClubStats,
 } from "../../config/apis";
 import type { AffiliatedClub, CreateAffiliatedClubDto, AffiliatedClubRequest } from "@/types/affiliated-club.type";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +43,10 @@ export default function AffiliatedClubs() {
     isActive: true,
   });
   const [viewRequest, setViewRequest] = useState<AffiliatedClubRequest | null>(null);
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -51,6 +61,12 @@ export default function AffiliatedClubs() {
   const { data: requests = [], isLoading: isLoadingRequests } = useQuery<AffiliatedClubRequest[]>({
     queryKey: ["affiliatedClubRequests"],
     queryFn: () => getAffiliatedClubRequests(),
+    retry: 1
+  });
+
+  const { data: stats = [], isLoading: isLoadingStats } = useQuery({
+    queryKey: ["affiliatedClubStats", dateRange.from, dateRange.to],
+    queryFn: () => getAffiliatedClubStats(dateRange.from.toISOString(), dateRange.to.toISOString()),
     retry: 1
   });
 
@@ -272,9 +288,10 @@ export default function AffiliatedClubs() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="clubs">Affiliated Clubs</TabsTrigger>
           <TabsTrigger value="requests">Club Requests</TabsTrigger>
+          <TabsTrigger value="stats">Statistics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clubs" className="space-y-4">
@@ -347,67 +364,139 @@ export default function AffiliatedClubs() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="requests" className="space-y-4">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Club Name</TableHead>
-                    <TableHead>Membership No</TableHead>
-                    <TableHead>Requested Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {requests.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        No requests found
-                      </TableCell>
-                    </TableRow>
+        <TabsContent value="stats" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h3 className="text-xl font-semibold">Visit Statistics</h3>
+            <div className="flex items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[280px] justify-start text-left font-normal",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "LLL dd, y")} -{" "}
+                          {format(dateRange.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange.from}
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range: any) =>
+                      range?.from && range?.to && setDateRange(range)
+                    }
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="lg:col-span-2 shadow-sm border-none bg-secondary/10">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h4 className="font-semibold">Request Frequency by Club</h4>
+                </div>
+                <div className="h-[350px] w-full">
+                  {isLoadingStats ? (
+                    <div className="flex h-full items-center justify-center">
+                      <p className="text-muted-foreground">Loading stats...</p>
+                    </div>
+                  ) : stats.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
+                      <BarChart3 className="h-10 w-10 opacity-20" />
+                      <p>No request data for this period</p>
+                    </div>
                   ) : (
-                    requests.map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-medium">{request.affiliatedClub?.name}</TableCell>
-                        <TableCell>{request.membershipNo}</TableCell>
-                        <TableCell>{new Date(request.requestedDate).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setViewRequest(request)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {request.status === "PENDING" && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-success hover:text-success"
-                                  onClick={() => handleApproveRequest(request.id)}
-                                  disabled={updateRequestStatusMutation.isPending}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => handleRejectRequest(request.id)}
-                                  disabled={updateRequestStatusMutation.isPending}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={stats} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
+                        <XAxis
+                          dataKey="clubName"
+                          axisLine={false}
+                          tickLine={false}
+                          angle={-45}
+                          textAnchor="end"
+                          interval={0}
+                          height={80}
+                          fontSize={12}
+                        />
+                        <YAxis axisLine={false} tickLine={false} fontSize={12} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Bar
+                          dataKey="requestCount"
+                          fill="hsl(var(--primary))"
+                          radius={[4, 4, 0, 0]}
+                          barSize={40}
+                        >
+                          {stats.map((entry: any, index: number) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - index * 0.1)})`}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h4 className="font-semibold">Top Requested Clubs</h4>
+                </div>
+                <div className="space-y-4">
+                  {stats.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No data available
+                    </p>
+                  ) : (
+                    stats.slice(0, 5).map((item: any, index: number) => (
+                      <div key={item.clubName} className="flex items-center justify-between p-3 rounded-md bg-secondary/30">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                            {index + 1}
                           </div>
-                        </TableCell>
-                      </TableRow>
+                          <span className="text-sm font-medium">{item.clubName}</span>
+                        </div>
+                        <Badge variant="secondary" className="font-bold">
+                          {item.requestCount}
+                        </Badge>
+                      </div>
                     ))
                   )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 

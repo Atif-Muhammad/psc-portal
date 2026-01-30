@@ -85,6 +85,7 @@ model Member {
   lastBookingDate DateTime?
 
   vouchers PaymentVoucher[]
+  feedbacks Feedback[]
 
   otp       Int? //temp otp
   otpExpiry DateTime? //otp expiry time
@@ -935,3 +936,61 @@ model Notification {
   updatedAt   DateTime @updatedAt
 }
 
+
+enum FeedbackStatus {
+  PENDING
+  IN_PROCESS
+  COMPLETED
+}
+
+model Feedback {
+  id            Int            @id @default(autoincrement())
+  memberNo      String
+  member        Member         @relation(fields: [memberNo], references: [Membership_No])
+  categoryId    Int?
+  category      FeedbackCategory? @relation(fields: [categoryId], references: [id])
+  subCategoryId    Int?
+  subCategory      FeedbackSubCategory? @relation(fields: [subCategoryId], references: [id])
+  otherSubCategory String?
+  subject          String
+  message       String         @db.Text
+  status        FeedbackStatus @default(PENDING)
+  remarks       FeedbackRemark[]
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([memberNo])
+  @@index([categoryId])
+  @@index([subCategoryId])
+}
+
+model FeedbackCategory {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  feedbacks Feedback[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model FeedbackSubCategory {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  feedbacks Feedback[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model FeedbackRemark {
+  id         Int      @id @default(autoincrement())
+  feedbackId Int
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  adminName  String
+  remark     String   @db.Text
+
+  createdAt  DateTime @default(now())
+
+  @@index([feedbackId])
+}

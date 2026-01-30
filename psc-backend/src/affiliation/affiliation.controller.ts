@@ -26,7 +26,7 @@ import { PermissionsGuard } from 'src/common/guards/permission.guard';
 
 @Controller('affiliation')
 export class AffiliationController {
-  constructor(private affiliationService: AffiliationService) {}
+  constructor(private affiliationService: AffiliationService) { }
 
   // -------------------- AFFILIATED CLUBS --------------------
 
@@ -106,5 +106,14 @@ export class AffiliationController {
       { ...body, membershipNo: req.user.id },
       sender,
     );
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Get('stats')
+  async getAffiliatedClubStats(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return await this.affiliationService.getAffiliatedClubStats(from, to);
   }
 }

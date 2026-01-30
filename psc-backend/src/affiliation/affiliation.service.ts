@@ -23,7 +23,7 @@ export class AffiliationService {
     private prismaService: PrismaService,
     private mailerService: MailerService,
     private cloudinary: CloudinaryService,
-  ) {}
+  ) { }
 
   // -------------------- AFFILIATED CLUBS --------------------
 
@@ -288,5 +288,37 @@ export class AffiliationService {
     </body>
     </html>
   `;
+  }
+
+  async getAffiliatedClubStats(from?: string, to?: string) {
+    const where: any = {};
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
+
+    const stats = await this.prismaService.affiliatedClubRequest.groupBy({
+      by: ['affiliatedClubId'],
+      where,
+      _count: {
+        id: true,
+      },
+    });
+
+    const clubs = await this.prismaService.affiliatedClub.findMany({
+      where: {
+        id: { in: stats.map((s) => s.affiliatedClubId) },
+      },
+      select: { id: true, name: true },
+    });
+
+    return stats
+      .map((stat) => ({
+        clubName:
+          clubs.find((c) => c.id === stat.affiliatedClubId)?.name || 'Unknown',
+        requestCount: stat._count.id,
+      }))
+      .sort((a, b) => b.requestCount - a.requestCount);
   }
 }

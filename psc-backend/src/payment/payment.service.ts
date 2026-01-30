@@ -1502,6 +1502,49 @@ export class PaymentService {
     });
   }
 
+  async cleanupExpiredVouchers(membership_no?: string) {
+    const now = new Date();
+
+    // Find all pending vouchers that have expired
+    const expiredVouchers = await this.prismaService.paymentVoucher.findMany({
+      where: {
+        status: VoucherStatus.PENDING,
+        expiresAt: { lt: now },
+        ...(membership_no && { membership_no }),
+      },
+    });
+
+    if (expiredVouchers.length === 0) return;
+
+    for (const voucher of expiredVouchers) {
+      await this.prismaService.$transaction(async (prisma) => {
+        // 1. Delete associated booking if it's not confirmed
+        if (voucher.booking_type === 'ROOM') {
+          await prisma.roomBooking.deleteMany({
+            where: { id: voucher.booking_id, isConfirmed: false },
+          });
+        } else if (voucher.booking_type === 'HALL') {
+          await prisma.hallBooking.deleteMany({
+            where: { id: voucher.booking_id, isConfirmed: false },
+          });
+        } else if (voucher.booking_type === 'LAWN') {
+          await prisma.lawnBooking.deleteMany({
+            where: { id: voucher.booking_id, isConfirmed: false },
+          });
+        } else if (voucher.booking_type === 'PHOTOSHOOT') {
+          await prisma.photoshootBooking.deleteMany({
+            where: { id: voucher.booking_id, isConfirmed: false },
+          });
+        }
+
+        // 2. Delete the voucher itself
+        await prisma.paymentVoucher.delete({
+          where: { id: voucher.id },
+        });
+      });
+    }
+  }
+
   // check idempotency
   async checkIdempo(idempotencyKey: string) { }
 }

@@ -18,7 +18,8 @@ import {
   Lock,
   NotebookTabsIcon,
   Text,
-  Utensils
+  Utensils,
+  MessageSquare
 } from "lucide-react";
 
 import {
@@ -63,7 +64,8 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/calendar": "Calendar",
   "/contents": "Contents",
   "/bookings": "Bookings",
-  "/messing": "Messing"
+  "/messing": "Messing",
+  "/feedback": "Feedback"
 };
 
 const menuItems = [
@@ -113,6 +115,7 @@ const menuItems = [
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Contents", url: "/contents", icon: Text },
+  { title: "Feedback", url: "/feedback", icon: MessageSquare },
 ];
 
 export function AppSidebar() {

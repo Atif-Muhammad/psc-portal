@@ -22,6 +22,7 @@ import { AffiliationModule } from './affiliation/affiliation.module';
 import { ContentModule } from './content/content.module';
 import { MessingModule } from './messing/messing.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -49,8 +50,9 @@ import { RealtimeModule } from './realtime/realtime.module';
     ContentModule,
     MessingModule,
     RealtimeModule,
+    FeedbackModule,
   ],
   controllers: [],
   providers: [MailerService],
 })
-export class AppModule {}
+export class AppModule { }

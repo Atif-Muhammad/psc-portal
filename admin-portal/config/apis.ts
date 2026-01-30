@@ -1601,6 +1601,24 @@ export const createAffiliatedClubRequest = async (data: any): Promise<any> => {
   }
 };
 
+export const getAffiliatedClubStats = async (from?: string, to?: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/affiliation/stats`, {
+      params: { from, to },
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch stats";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
 export const updateAffiliatedClubRequestStatus = async (data: { id: number, status: string }): Promise<any> => {
   try {
     const response = await axios.patch(
@@ -1986,5 +2004,200 @@ export const deleteMessingItem = async (id: number) => {
     return response.data;
   } catch (error: any) {
     throw { message: error.response?.data?.message || "Error deleting item", status: error.response?.status || 500 };
+  }
+};
+
+// Feedback APIs
+export const getFeedbacks = async (): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/feedback`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const updateFeedbackStatus = async (
+  id: number,
+  status: string
+): Promise<any> => {
+  try {
+    const response = await axios.patch(
+      `${base_url}/feedback/${id}/status`,
+      { status },
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const addFeedbackRemark = async (
+  id: number,
+  data: { remark: string; adminName: string }
+): Promise<any> => {
+  try {
+    const response = await axios.post(
+      `${base_url}/feedback/${id}/remark`,
+      data,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getFeedbackCategories = async (): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/feedback/categories`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch categories";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const createFeedbackCategory = async (data: { name: string }): Promise<any> => {
+  try {
+    const response = await axios.post(`${base_url}/feedback/categories`, data, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to create category";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const deleteFeedbackCategory = async (id: number): Promise<any> => {
+  try {
+    const response = await axios.delete(`${base_url}/feedback/categories/${id}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to delete category";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getFeedbackSubCategories = async (): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/feedback/subcategories`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch subcategories";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const createFeedbackSubCategory = async (data: { name: string }): Promise<any> => {
+  try {
+    const response = await axios.post(`${base_url}/feedback/subcategories`, data, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to create subcategory";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const deleteFeedbackSubCategory = async (id: number): Promise<any> => {
+  try {
+    const response = await axios.delete(`${base_url}/feedback/subcategories/${id}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to delete subcategory";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const assignFeedbackCategory = async (id: number, categoryId: number | null): Promise<any> => {
+  try {
+    const response = await axios.patch(`${base_url}/feedback/${id}/category`, { categoryId }, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to assign category";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const assignFeedbackSubCategory = async (id: number, subCategoryId: number | null, otherSubCategory?: string): Promise<any> => {
+  try {
+    const response = await axios.patch(`${base_url}/feedback/${id}/subcategory`, { subCategoryId, otherSubCategory }, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to assign subcategory";
+
+    throw { message, status: error.response?.status || 500 };
   }
 };

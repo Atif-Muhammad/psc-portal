@@ -25,7 +25,7 @@ export class PaymentController {
   constructor(
     private payment: PaymentService,
     private bookingService: BookingService,
-  ) {}
+  ) { }
 
   // generate invoice:
 
@@ -92,6 +92,7 @@ export class PaymentController {
 
   @Get('member/vouchers')
   async getMemberVouchers(@Query('membershipNo') membershipNo: string) {
+    await this.payment.cleanupExpiredVouchers(membershipNo);
     return await this.payment.getMemberVouchers(membershipNo);
   }
 
@@ -154,6 +155,7 @@ export class PaymentController {
     }
 
     try {
+      await this.payment.cleanupExpiredVouchers();
       return await this.payment.getBillInquiry(voucherId);
     } catch (error) {
       console.error('Kuickpay Inquiry Error:', error);
