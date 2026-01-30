@@ -66,7 +66,10 @@ export default function AffiliatedClubs() {
 
   const { data: stats = [], isLoading: isLoadingStats } = useQuery({
     queryKey: ["affiliatedClubStats", dateRange.from, dateRange.to],
-    queryFn: () => getAffiliatedClubStats(dateRange.from.toISOString(), dateRange.to.toISOString()),
+    queryFn: () => getAffiliatedClubStats(
+      format(dateRange.from, "yyyy-MM-dd"),
+      format(dateRange.to, "yyyy-MM-dd")
+    ),
     retry: 1
   });
 
