@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { Plus, Edit, Trash2, Eye, Check, X, Calendar as CalendarIcon, TrendingUp, BarChart3 } from "lucide-react";
@@ -47,6 +48,11 @@ export default function AffiliatedClubs() {
     from: startOfMonth(new Date()),
     to: endOfMonth(new Date()),
   });
+  const [requestDateRange, setRequestDateRange] = useState<{ from: Date; to: Date }>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+  const [requestClubId, setRequestClubId] = useState<string>("ALL");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -59,8 +65,12 @@ export default function AffiliatedClubs() {
   });
 
   const { data: requests = [], isLoading: isLoadingRequests } = useQuery<AffiliatedClubRequest[]>({
-    queryKey: ["affiliatedClubRequests"],
-    queryFn: () => getAffiliatedClubRequests(),
+    queryKey: ["affiliatedClubRequests", requestDateRange.from, requestDateRange.to, requestClubId],
+    queryFn: () => getAffiliatedClubRequests(
+      format(requestDateRange.from, "yyyy-MM-dd"),
+      format(requestDateRange.to, "yyyy-MM-dd"),
+      requestClubId === "ALL" ? undefined : Number(requestClubId)
+    ),
     retry: 1
   });
 
@@ -367,6 +377,126 @@ export default function AffiliatedClubs() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="requests" className="space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">Date Range</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-[240px] justify-start text-left font-normal h-9",
+                          !requestDateRange && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {requestDateRange.from ? (
+                          requestDateRange.to ? (
+                            <>
+                              {format(requestDateRange.from, "LLL dd, y")} -{" "}
+                              {format(requestDateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(requestDateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={requestDateRange.from}
+                        selected={{ from: requestDateRange.from, to: requestDateRange.to }}
+                        onSelect={(range: any) =>
+                          range?.from && range?.to && setRequestDateRange(range)
+                        }
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase font-bold text-muted-foreground">Club</Label>
+                  <Select value={requestClubId} onValueChange={setRequestClubId}>
+                    <SelectTrigger className="w-[200px] h-9">
+                      <SelectValue placeholder="All Clubs" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Clubs</SelectItem>
+                      {clubs.map((club) => (
+                        <SelectItem key={club.id} value={String(club.id)}>
+                          {club.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Club</TableHead>
+                    <TableHead>Member No</TableHead>
+                    {/* <TableHead>Status</TableHead> */}
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoadingRequests ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8">
+                        Loading requests...
+                      </TableCell>
+                    </TableRow>
+                  ) : requests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        No requests found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    requests.map((request) => (
+                      <TableRow key={request.id}>
+                        <TableCell className="text-sm">
+                          {format(new Date(request.createdAt), "MMM dd, yyyy")}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {request.affiliatedClub?.name}
+                        </TableCell>
+                        <TableCell>{request.membershipNo}</TableCell>
+                        {/* <TableCell>{getStatusBadge(request.status)}</TableCell> */}
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setViewRequest(request)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="stats" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h3 className="text-xl font-semibold">Visit Statistics</h3>
@@ -501,10 +631,10 @@ export default function AffiliatedClubs() {
             </Card>
           </div>
         </TabsContent>
-      </Tabs>
+      </Tabs >
 
       {/* Club Create/Edit Dialog */}
-      <Dialog open={clubDialog} onOpenChange={setClubDialog}>
+      < Dialog open={clubDialog} onOpenChange={setClubDialog} >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingClub ? "Edit Club" : "Add New Club"}</DialogTitle>
@@ -653,10 +783,11 @@ export default function AffiliatedClubs() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Request View Dialog */}
-      <Dialog open={!!viewRequest} onOpenChange={() => setViewRequest(null)}>
+      < Dialog open={!!viewRequest
+      } onOpenChange={() => setViewRequest(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Request Details</DialogTitle>
@@ -741,7 +872,7 @@ export default function AffiliatedClubs() {
             </DialogFooter>
           )}
         </DialogContent>
-      </Dialog>
+      </Dialog >
     </div >
   );
 }

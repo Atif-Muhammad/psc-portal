@@ -150,8 +150,21 @@ export class AffiliationService {
 
   // -------------------- AFFILIATED CLUB REQUESTS --------------------
 
-  async getAffiliatedClubRequests() {
+  async getAffiliatedClubRequests(from?: string, to?: string, clubId?: number) {
+    const where: any = {};
+    if (clubId) where.affiliatedClubId = clubId;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
     return await this.prismaService.affiliatedClubRequest.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         affiliatedClub: true,

@@ -76,6 +76,7 @@ export default function ClubRequestForm() {
         const payload = {
             affiliatedClubId: Number(selectedClubId),
             membershipNo: membershipNo,
+            requestedDate: format(requestedDate!, "yyyy-MM-dd"),
         };
 
         createRequestMutation.mutate(payload);

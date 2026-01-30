@@ -1547,12 +1547,15 @@ export const deleteAffiliatedClub = async (id: number): Promise<any> => {
 
 // ==================== Affiliated Club Requests ====================
 
-export const getAffiliatedClubRequests = async (status?: string): Promise<any> => {
+export const getAffiliatedClubRequests = async (from?: string, to?: string, clubId?: number): Promise<any> => {
   try {
-    const url = status
-      ? `${base_url}/affiliation/requests?status=${status}`
-      : `${base_url}/affiliation/requests`;
-    const response = await axios.get(url, {
+    const params: any = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    if (clubId) params.clubId = clubId;
+
+    const response = await axios.get(`${base_url}/affiliation/requests`, {
+      params,
       withCredentials: true,
     });
     return response.data;

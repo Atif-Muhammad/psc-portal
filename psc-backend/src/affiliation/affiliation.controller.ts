@@ -89,8 +89,16 @@ export class AffiliationController {
   // -------------------- AFFILIATED CLUB REQUESTS --------------------
 
   @Get('requests')
-  async getAffiliatedClubRequests() {
-    return await this.affiliationService.getAffiliatedClubRequests();
+  async getAffiliatedClubRequests(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('clubId') clubId?: string,
+  ) {
+    return await this.affiliationService.getAffiliatedClubRequests(
+      from,
+      to,
+      clubId ? Number(clubId) : undefined,
+    );
   }
 
   @Get('requests/:id')
@@ -101,9 +109,10 @@ export class AffiliationController {
   @UseGuards(JwtAccGuard)
   @Post('requests')
   async createRequest(@Body() body: any, @Req() req: any) {
-    const sender = req.user?.name || 'member';
+    console.log(req.body)
+    const sender = req.body?.membershipNo;
     return await this.affiliationService.createRequest(
-      { ...body, membershipNo: req.user.id },
+      { ...body, membershipNo: sender },
       sender,
     );
   }
