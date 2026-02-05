@@ -1,6 +1,11 @@
 // Add these Pakistan Time utility functions
 export const parsePakistanDate = (dateString: string): Date => {
-  // Parse date string as Pakistan Time (UTC+5)
+  if (!dateString) return new Date();
+  // If it's already a full ISO string (or contains T), just parse it directly
+  if (dateString.includes('T')) {
+    return new Date(dateString);
+  }
+  // Parse date-only string as Pakistan Time (UTC+5)
   const date = new Date(dateString + 'T00:00:00+05:00');
   return date;
 };

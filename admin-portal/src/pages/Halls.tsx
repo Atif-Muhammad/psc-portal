@@ -637,6 +637,9 @@ export default function Halls() {
     endDate: "",
   });
 
+  const [editingOOIndex, setEditingOOIndex] = useState<number | null>(null);
+  const [editingEditOOIndex, setEditingEditOOIndex] = useState<number | null>(null);
+
   // Add Form State
   const [form, setForm] = useState({
     name: "",
@@ -819,10 +822,17 @@ export default function Halls() {
       return;
     }
 
-    setForm(prev => ({
-      ...prev,
-      outOfOrders: [...prev.outOfOrders, { ...newOutOfOrder }]
-    }));
+    if (editingOOIndex !== null) {
+      const updated = [...form.outOfOrders];
+      updated[editingOOIndex] = { ...newOutOfOrder };
+      setForm(prev => ({ ...prev, outOfOrders: updated }));
+      setEditingOOIndex(null);
+    } else {
+      setForm(prev => ({
+        ...prev,
+        outOfOrders: [...prev.outOfOrders, { ...newOutOfOrder }]
+      }));
+    }
 
     // Reset new form
     setNewOutOfOrder({
@@ -859,10 +869,17 @@ export default function Halls() {
       return;
     }
 
-    setEditForm(prev => ({
-      ...prev,
-      outOfOrders: [...prev.outOfOrders, { ...editNewOutOfOrder }]
-    }));
+    if (editingEditOOIndex !== null) {
+      const updated = [...editForm.outOfOrders];
+      updated[editingEditOOIndex] = { ...editNewOutOfOrder };
+      setEditForm(prev => ({ ...prev, outOfOrders: updated }));
+      setEditingEditOOIndex(null);
+    } else {
+      setEditForm(prev => ({
+        ...prev,
+        outOfOrders: [...prev.outOfOrders, { ...editNewOutOfOrder }]
+      }));
+    }
 
     // Reset new form
     setEditNewOutOfOrder({
@@ -1614,14 +1631,27 @@ export default function Halls() {
                               {oo.reason}
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveOutOfOrder(index)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingOOIndex(index);
+                                setNewOutOfOrder(oo);
+                              }}
+                              className="text-blue-600"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveOutOfOrder(index)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1704,7 +1734,7 @@ export default function Halls() {
                       variant="outline"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Maintenance Period
+                      {editingOOIndex !== null ? "Update Maintenance Period" : "Add Maintenance Period"}
                     </Button>
                   </div>
                 </div>
@@ -2445,14 +2475,27 @@ export default function Halls() {
                           {oo.reason}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveEditOutOfOrder(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setEditingEditOOIndex(index);
+                            setEditNewOutOfOrder(oo);
+                          }}
+                          className="text-blue-600"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveEditOutOfOrder(index)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2534,7 +2577,7 @@ export default function Halls() {
                   variant="outline"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Maintenance Period
+                  {editingEditOOIndex !== null ? "Update Maintenance Period" : "Add Maintenance Period"}
                 </Button>
               </div>
             </div>

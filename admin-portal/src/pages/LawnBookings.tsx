@@ -85,6 +85,10 @@ export interface LawnBooking {
   member?: Member;
   bookingTime?: string;
   paidBy?: string;
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   guestName?: string;
   guestContact?: string;
   eventType?: string;
@@ -216,6 +220,67 @@ const LawnPaymentSection = React.memo(
             Credit (Amount Owed)
           </div>
         </div>
+
+        {/* Payment Mode Selection */}
+        {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border rounded-lg bg-gray-50">
+            <div className="col-span-2">
+              <Label className="font-semibold text-blue-800">Payment Medium Details</Label>
+            </div>
+            <div>
+              <Label>Payment Mode *</Label>
+              <Select
+                value={(form as any).paymentMode || "CASH"}
+                onValueChange={(val) => onChange("paymentMode" as any, val)}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="CARD">Card</SelectItem>
+                  <SelectItem value="CHECK">Check</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(form as any).paymentMode === "CARD" && (
+              <div>
+                <Label>Card Number (Last 4) *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="e.g. 1234"
+                  value={(form as any).card_number || ""}
+                  onChange={(e) => onChange("card_number" as any, e.target.value)}
+                />
+              </div>
+            )}
+
+            {(form as any).paymentMode === "CHECK" && (
+              <div>
+                <Label>Check Number *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter check number"
+                  value={(form as any).check_number || ""}
+                  onChange={(e) => onChange("check_number" as any, e.target.value)}
+                />
+              </div>
+            )}
+
+            {((form as any).paymentMode === "CARD" || (form as any).paymentMode === "CHECK") && (
+              <div className="col-span-2">
+                <Label>Bank Name *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter bank name"
+                  value={(form as any).bank_name || ""}
+                  onChange={(e) => onChange("bank_name" as any, e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {(form.paymentStatus === "PAID" ||
           form.paymentStatus === "HALF_PAID") && (
@@ -490,6 +555,10 @@ export default function LawnBookings() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [calculatedPrice, setCalculatedPrice] = useState(0);
   const [guestCount, setGuestCount] = useState(0);
+  const [lPaymentMode, setLPaymentMode] = useState("CASH");
+  const [lCardNumber, setLCardNumber] = useState("");
+  const [lCheckNumber, setLCheckNumber] = useState("");
+  const [lBankName, setLBankName] = useState("");
 
   // Multi-date booking with individual time slots per date
   const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[]>([]);
@@ -879,6 +948,10 @@ export default function LawnBookings() {
       guestContact: "",
       guestCNIC: ""
     });
+    setLPaymentMode("CASH");
+    setLCardNumber("");
+    setLCheckNumber("");
+    setLBankName("");
   };
 
 
@@ -933,7 +1006,10 @@ export default function LawnBookings() {
       paidAmount: paidAmount,
       pendingAmount: calculatedPrice - paidAmount,
       pricingType: pricingType,
-      paymentMode: "CASH",
+      paymentMode: lPaymentMode,
+      card_number: lCardNumber,
+      check_number: lCheckNumber,
+      bank_name: lBankName,
       // Use first slot's time and event type for legacy support
       eventTime: bookingDetails[0].timeSlot,
       eventType: bookingDetails[0].eventType,
@@ -1334,8 +1410,27 @@ export default function LawnBookings() {
                       }
                     } else if (field === "paidAmount") {
                       setPaidAmount(value);
+                    } else if (field === "paymentMode") {
+                      setLPaymentMode(value);
+                    } else if (field === "card_number") {
+                      setLCardNumber(value);
+                    } else if (field === "check_number") {
+                      setLCheckNumber(value);
+                    } else if (field === "bank_name") {
+                      setLBankName(value);
                     }
                   }}
+                  // Pass the local states to form prop
+                  form={{
+                    paymentStatus: paymentStatus,
+                    totalPrice: calculatedPrice,
+                    paidAmount: paidAmount,
+                    pendingAmount: calculatedPrice - paidAmount,
+                    paymentMode: lPaymentMode,
+                    card_number: lCardNumber,
+                    check_number: lCheckNumber,
+                    bank_name: lBankName
+                  } as any}
                 />
               </div>
 
@@ -1951,11 +2046,29 @@ export default function LawnBookings() {
                   } else if (field === "paidAmount") {
                     updated.paidAmount = value;
                     updated.pendingAmount = updated.totalPrice - value;
+                  } else if (field === "paymentMode") {
+                    (updated as any).paymentMode = value;
+                  } else if (field === "card_number") {
+                    (updated as any).card_number = value;
+                  } else if (field === "check_number") {
+                    (updated as any).check_number = value;
+                  } else if (field === "bank_name") {
+                    (updated as any).bank_name = value;
                   }
 
                   return updated;
                 });
               }}
+              form={{
+                paymentStatus: editBooking?.paymentStatus || "UNPAID",
+                totalPrice: editBooking?.totalPrice || 0,
+                paidAmount: editBooking?.paidAmount || 0,
+                pendingAmount: editBooking?.pendingAmount || 0,
+                paymentMode: (editBooking as any)?.paymentMode || "CASH",
+                card_number: (editBooking as any)?.card_number || "",
+                check_number: (editBooking as any)?.check_number || "",
+                bank_name: (editBooking as any)?.bank_name || ""
+              } as any}
             />
           </div>
           <DialogFooter>
@@ -2001,7 +2114,10 @@ export default function LawnBookings() {
                   paidAmount: editBooking.paidAmount || 0,
                   pendingAmount: editBooking.pendingAmount || 0,
                   pricingType: editBooking.pricingType || "member",
-                  paymentMode: "CASH",
+                  paymentMode: (editBooking as any).paymentMode || "CASH",
+                  card_number: (editBooking as any).card_number,
+                  check_number: (editBooking as any).check_number,
+                  bank_name: (editBooking as any).bank_name,
                   eventTime: editBooking.bookingDetails[0].timeSlot, // Legacy support
                   eventType: editBooking.bookingDetails[0].eventType, // Legacy support
                   bookingDetails: editBooking.bookingDetails,

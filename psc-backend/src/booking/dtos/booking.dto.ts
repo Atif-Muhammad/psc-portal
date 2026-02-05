@@ -1,12 +1,6 @@
-import { PaymentMode } from '@prisma/client';
+import { PaymentMode, PaymentStatus } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional } from 'class-validator';
 
-enum PaymentStatus {
-  UNPAID,
-  HALF_PAID,
-  PAID,
-  TO_BILL,
-}
 // enum PaymentMode {
 //     CASH,
 //     ONLINE
@@ -84,4 +78,14 @@ export class BookingDto {
   specialRequests?: string;
   @IsOptional()
   remarks?: string;
+  @IsOptional()
+  card_number?: string;
+  @IsOptional()
+  check_number?: string;
+  @IsOptional()
+  bank_name?: string;
+  @IsOptional()
+  generateAdvanceVoucher?: boolean;
+  @IsOptional()
+  advanceVoucherAmount?: string | number;
 }

@@ -1,6 +1,7 @@
 import React from "react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { RoomType, Room, BookingForm, DateStatus } from "@/types/room-booking.type";
 import { FormInput, SpecialRequestsInput } from "./FormInputs";
 import { PaymentSection } from "./PaymentSection";
@@ -364,9 +365,15 @@ export const BookingFormComponent = React.memo(({
         </div>
       )}
 
-      {/* Row 6: Payment */}
+
+      {/* Row 7: Payment */}
       <div className="col-span-12 border-t pt-4">
-        <PaymentSection form={form} onChange={onChange} isEdit={isEdit} />
+        <PaymentSection
+          form={form}
+          onChange={onChange}
+          isEdit={isEdit}
+          roomCount={selectedRoomIds?.length || (form.roomId ? 1 : 0)}
+        />
       </div>
 
     </div>

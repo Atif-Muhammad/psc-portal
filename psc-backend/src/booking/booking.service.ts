@@ -15,6 +15,7 @@ import {
   PaidBy,
   PaymentMode,
   PaymentStatus,
+  Channel,
   Prisma,
   VoucherStatus,
   VoucherType,
@@ -24,11 +25,11 @@ import {
   getPakistanDate,
   parsePakistanDate,
 } from 'src/utils/time';
-import { generateNumericVoucherNo } from 'src/utils/id';
+import { generateNumericVoucherNo, generateConsumerNumber } from 'src/utils/id';
 
 @Injectable()
 export class BookingService {
-  constructor(private prismaService: PrismaService) {}
+  constructor(private prismaService: PrismaService) { }
 
   private formatHallBookingRemarks(
     hallName: string,
@@ -66,6 +67,15 @@ export class BookingService {
 
     return remarks;
   }
+  private calculateAdvanceAmount(roomCount: number, totalPrice: number): number {
+    if (roomCount === 0) return 0;
+    let percentage = 0;
+    if (roomCount >= 1 && roomCount <= 2) percentage = 0.25;
+    else if (roomCount >= 3 && roomCount <= 5) percentage = 0.5;
+    else if (roomCount >= 6) percentage = 0.75;
+    return Math.round(totalPrice * percentage);
+  }
+
   async lock() {
     const bookings = await this.prismaService.roomBooking.findMany({
       where: {
@@ -112,6 +122,8 @@ export class BookingService {
       guestName,
       guestCNIC,
       reservationId,
+      generateAdvanceVoucher,
+      advanceVoucherAmount,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -244,27 +256,31 @@ export class BookingService {
       }
     }
 
-    // ── PAYMENT CALCULATION ──────────────────────────────────
     const total = Number(totalPrice);
-    let paid = 0,
-      owed = total;
+    let intendedPaid = 0;
 
-    if (paymentStatus === (PaymentStatus.PAID as unknown)) {
-      paid = total;
-      owed = 0;
-    } else if (paymentStatus === (PaymentStatus.HALF_PAID as unknown)) {
-      paid = Number(paidAmount) || 0;
-      if (paid <= 0 || paid >= total)
-        throw new ConflictException(
-          'Paid amount must be >0 and <total for half-paid',
-        );
-      owed = total - paid;
-    } else if (paymentStatus === (PaymentStatus.TO_BILL as unknown)) {
-      paid = Number(paidAmount) || 0;
-      owed = total - paid;
+    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+
+    if (String(paymentStatus) === 'PAID') {
+      intendedPaid = total;
+    } else if (
+      String(paymentStatus) === 'HALF_PAID' ||
+      String(paymentStatus) === 'ADVANCE_PAYMENT'
+    ) {
+      intendedPaid = Number(paidAmount) || 0;
+    } else if (
+      String(paymentStatus) === 'TO_BILL'
+    ) {
+      intendedPaid = Number(paidAmount) || 0;
     }
 
-    const isToBill = paymentStatus === (PaymentStatus.TO_BILL as unknown);
+    // For ONLINE, initial paid amount is 0 as we want pending vouchers.
+    // For others (even HALF_PAID), it is CONFIRMED immediately, so paid is intendedPaid.
+    const paid = (isOnline) ? 0 : intendedPaid;
+    const owed = total - paid;
+
+    const isHalfPaid = String(paymentStatus) === 'HALF_PAID';
+    const isToBill = String(paymentStatus) === 'TO_BILL';
     const amountToBalance = isToBill ? owed : 0;
     const finalOwed = isToBill ? 0 : owed;
 
@@ -281,8 +297,8 @@ export class BookingService {
               pricingType === 'member'
                 ? r.roomType.priceMember
                 : pricingType === 'forces' ||
-                    pricingType === 'forces-self' ||
-                    pricingType === 'forces-guest'
+                  pricingType === 'forces-self' ||
+                  pricingType === 'forces-guest'
                   ? r.roomType.priceForces || 0
                   : r.roomType.priceGuest,
           })),
@@ -332,25 +348,75 @@ export class BookingService {
     });
 
     // ── CREATE PAYMENT VOUCHER ───────────────────────────────
-    if (paid > 0) {
-      const voucherType =
-        paymentStatus === (PaymentStatus.PAID as unknown)
-          ? VoucherType.FULL_PAYMENT
-          : VoucherType.HALF_PAYMENT;
+    // Track if we've created a main payment voucher to prevent duplicates with advance voucher
+    let mainVoucherCreated = false;
 
+    if (intendedPaid > 0) {
+      let voucherType: VoucherType;
+      let status: VoucherStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+
+      if (String(paymentStatus) === 'PAID') {
+        voucherType = VoucherType.FULL_PAYMENT;
+      } else if (
+        String(paymentStatus) === 'ADVANCE_PAYMENT'
+      ) {
+        voucherType = VoucherType.ADVANCE_PAYMENT;
+      } else {
+        voucherType = VoucherType.HALF_PAYMENT;
+      }
+
+      const vno = generateNumericVoucherNo();
       await this.prismaService.paymentVoucher.create({
         data: {
-          voucher_no: generateNumericVoucherNo(),
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
           booking_type: 'ROOM',
           booking_id: booking.id,
           membership_no: membershipNo,
-          amount: paid,
-          payment_mode: paymentMode as unknown as PaymentMode,
-          voucher_type: voucherType,
-          status: VoucherStatus.CONFIRMED,
-          issued_by: 'admin',
-          remarks: `Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Guests: ${numberOfAdults}A/${numberOfChildren}C${specialRequests ? ` | ${specialRequests}` : ''}`,
-        },
+          amount: intendedPaid,
+          payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
+          voucher_type: voucherType as VoucherType,
+          status: status,
+          issued_by: createdBy || 'admin',
+          paid_at: status === VoucherStatus.CONFIRMED ? new Date() : null,
+          card_number: payload.card_number,
+          check_number: payload.check_number,
+          bank_name: payload.bank_name,
+          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
+          remarks: `${isOnline ? 'ONLINE ' : ''}${isHalfPaid ? 'HALF-PAYMENT ' : ''}Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Guests: ${numberOfAdults}A/${numberOfChildren}C${specialRequests ? ` | ${specialRequests}` : ''}`,
+        } as any,
+      });
+      mainVoucherCreated = true;
+    }
+
+    // ── CREATE ADVANCE PAYMENT VOUCHER ───────────────────────
+    // Only create if:
+    // 1. generateAdvanceVoucher flag is set AND amount > 0
+    // 2. We haven't already created an ADVANCE_PAYMENT voucher above
+    // 3. The advance amount is different from the main payment (to prevent exact duplicates)
+    if (
+      generateAdvanceVoucher &&
+      Number(advanceVoucherAmount) > 0 &&
+      !(mainVoucherCreated &&
+        String(paymentStatus) === 'ADVANCE_PAYMENT' &&
+        Number(advanceVoucherAmount) === intendedPaid)
+    ) {
+      const vno = generateNumericVoucherNo();
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          booking_type: 'ROOM',
+          booking_id: booking.id,
+          membership_no: membershipNo,
+          amount: Number(advanceVoucherAmount),
+          payment_mode: PaymentMode.CASH,
+          voucher_type: VoucherType.ADVANCE_PAYMENT,
+          status: VoucherStatus.PENDING,
+          issued_by: createdBy || 'admin',
+          paid_at: null,
+          remarks: `Advance payment for room booking: ${roomNumbers} from ${formatPakistanDate(checkInDate)} to ${formatPakistanDate(checkOutDate)}. Total Price: Rs. ${total}`,
+        } as any,
       });
     }
 
@@ -383,6 +449,11 @@ export class BookingService {
       guestContact,
       guestName,
       guestCNIC,
+      card_number,
+      check_number,
+      bank_name,
+      generateAdvanceVoucher,
+      advanceVoucherAmount,
     } = payload;
 
     if (!id) throw new BadRequestException('Booking ID required');
@@ -540,7 +611,7 @@ export class BookingService {
     const currStatus = booking.paymentStatus;
 
     // Favor payload values, fall back to current values
-    let newPaymentStatus =
+    let newPaymentStatus: PaymentStatus =
       (paymentStatus as unknown as PaymentStatus) || currStatus;
     const newTotal = totalPrice !== undefined ? Number(totalPrice) : currTotal;
 
@@ -551,32 +622,28 @@ export class BookingService {
 
     let newPaid = currPaid;
 
-    if (
-      isPriceIncrease &&
-      !isExplicitStatusChange &&
-      !isExplicitPaidAmount &&
-      currStatus === (PaymentStatus.PAID as unknown)
-    ) {
-      // Price increased, status was PAID, but no new status/amount sent -> AUTO DOWNGRADE
-      newPaymentStatus = PaymentStatus.HALF_PAID as unknown as PaymentStatus;
-      newPaid = currPaid;
+    // Respect manual status changes and amounts from UI
+    if (String(newPaymentStatus) === 'PAID') {
+      newPaid = isExplicitPaidAmount ? Number(paidAmount) : Math.max(newTotal, currPaid);
+    } else if (String(newPaymentStatus) === 'UNPAID') {
+      newPaid = 0;
     } else {
-      // Respect manual status changes
-      if (newPaymentStatus === PaymentStatus.PAID) {
-        newPaid = newTotal;
-      } else if (newPaymentStatus === PaymentStatus.UNPAID) {
-        newPaid = 0;
-      } else if (newPaymentStatus === PaymentStatus.HALF_PAID) {
-        newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
-      } else if (newPaymentStatus === PaymentStatus.TO_BILL) {
-        newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
-      }
+      newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
     }
 
+    // ── CRITICAL: For ONLINE payments, don't add amount to booking yet ──
+    // The amount will be added by /bill-payment when voucher is confirmed
+    // This prevents double-adding: once here and once in /bill-payment
+    const isOnline =
+      paymentMode === (PaymentMode.ONLINE as unknown) ||
+      String(paymentMode) === 'ONLINE';
+
+    let dbPaid = isOnline ? currPaid : newPaid;
+
     // Adjustment for TO_BILL
-    let newOwed = newTotal - newPaid;
+    let newOwed = newTotal - dbPaid;
     let amountToBalance = 0;
-    if (newPaymentStatus === PaymentStatus.TO_BILL) {
+    if (newPaymentStatus === (PaymentStatus.TO_BILL as unknown) || newPaymentStatus === 'TO_BILL') {
       amountToBalance = newOwed;
       newOwed = 0;
     }
@@ -597,12 +664,19 @@ export class BookingService {
         checkIn: newCheckIn,
         checkOut: newCheckOut,
         remarks: remarks,
+        generateAdvanceVoucher,
+        advanceVoucherAmount: Number(advanceVoucherAmount),
+        roomCount: targetRoomIds.length,
       },
       (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
       'admin',
+      updatedBy,
+      card_number,
+      check_number,
+      bank_name,
     );
 
-    const paidDiff = newPaid - currPaid;
+    const paidDiff = dbPaid - currPaid;
     const owedDiff = newOwed - (currTotal - currPaid);
 
     // ── UPDATE BOOKING ──────────────────────────────────────
@@ -619,8 +693,8 @@ export class BookingService {
               (pricingType ?? booking.pricingType) === 'member'
                 ? r.roomType.priceMember
                 : ['forces', 'forces-self', 'forces-guest'].includes(
-                      pricingType ?? booking.pricingType,
-                    )
+                  pricingType ?? booking.pricingType,
+                )
                   ? r.roomType.priceForces || 0
                   : r.roomType.priceGuest,
           })),
@@ -630,7 +704,7 @@ export class BookingService {
         totalPrice: newTotal,
         paymentStatus: newPaymentStatus,
         pricingType: pricingType ?? booking.pricingType,
-        paidAmount: newPaid,
+        paidAmount: dbPaid,
         pendingAmount: newOwed,
         numberOfAdults: newAdults,
         numberOfChildren: newChildren,
@@ -734,7 +808,6 @@ export class BookingService {
     return await this.prismaService.roomBooking.findMany(args);
   }
 
-  // ... (cBookingRoom and uBookingRoom are above)
 
   private formatLawnBookingRemarks(
     lawnName: string,
@@ -766,7 +839,6 @@ export class BookingService {
     return remarks;
   }
 
-  // Helper methods for uBookingRoom
   private async handleVoucherUpdateUnified(
     bookingId: number,
     bookingType: 'ROOM' | 'HALL' | 'LAWN' | 'PHOTOSHOOT',
@@ -789,14 +861,29 @@ export class BookingService {
       eventTime?: string;
       eventType?: string;
       bookingDetails?: any[];
+      generateAdvanceVoucher?: boolean;
+      advanceVoucherAmount?: number;
       remarks?: string;
+      roomCount?: number;
     },
     paymentMode: PaymentMode = PaymentMode.CASH,
     issuedBy: string = 'admin',
     updatedBy: string = 'system',
+    card_number?: string,
+    check_number?: string,
+    bank_name?: string,
   ) {
     const paidDiff = newPaid - oldPaid;
     let refundAmount = 0;
+
+    // Track if we created a voucher during this execution to prevent duplicates
+    let voucherCreatedForPaymentIncrease = false;
+    let voucherAmountCreated = 0;
+    let voucherCreatedIsOnline = false;
+
+    const roomCount = bookingType === 'ROOM' ? details.roomCount || 0 : 1;
+    const oldRequiredAdvance = this.calculateAdvanceAmount(roomCount, oldTotal);
+    const newRequiredAdvance = this.calculateAdvanceAmount(roomCount, newTotal);
 
     // Downgrade Check: If status changed from PAID to HALF_PAID, update existing vouchers
     if (
@@ -815,12 +902,31 @@ export class BookingService {
       });
     }
 
+    // Remark Append Helper
+    const appendUpdateRemark = async (newText: string) => {
+      const existingVouchers = await this.prismaService.paymentVoucher.findMany({
+        where: { booking_id: bookingId, booking_type: bookingType },
+      });
+
+      for (const v of existingVouchers) {
+        if (!v?.remarks?.includes(`UPDATE: ${newText}`)) {
+          await this.prismaService.paymentVoucher.update({
+            where: { id: v.id },
+            data: { remarks: `${v.remarks} | UPDATE: ${newText}` },
+          });
+        }
+      }
+    };
+
     const commonData = {
       booking_id: bookingId,
       booking_type: bookingType,
       membership_no: membershipNo,
       payment_mode: paymentMode,
       issued_by: issuedBy,
+      card_number,
+      check_number,
+      bank_name,
     };
 
     let itemInfo = '';
@@ -842,82 +948,220 @@ export class BookingService {
     const baseRemarks =
       bookingType === 'HALL'
         ? this.formatHallBookingRemarks(
-            details.hallName || 'Hall',
-            details.bookingDate!,
-            details.endDate || details.bookingDate!,
-            details.eventType!,
-            details.bookingDetails || [],
-            details.eventTime!,
-          ) + (details.remarks ? ` | ${details.remarks}` : '')
+          details.hallName || 'Hall',
+          details.bookingDate!,
+          details.endDate || details.bookingDate!,
+          details.eventType!,
+          details.bookingDetails || [],
+          details.eventTime!,
+        ) + (details.remarks ? ` | ${details.remarks}` : '')
         : bookingType === 'LAWN'
           ? this.formatLawnBookingRemarks(
-              details.lawnName || 'Lawn',
-              details.bookingDetails || [],
-              details.bookingDate!,
-              details.eventTime!,
-            ) + (details.remarks ? ` | ${details.remarks}` : '')
+            details.lawnName || 'Lawn',
+            details.bookingDetails || [],
+            details.bookingDate!,
+            details.eventTime!,
+          ) + (details.remarks ? ` | ${details.remarks}` : '')
           : `${itemInfo} | ${dateInfo}${details.remarks ? ` | ${details.remarks}` : ''}`;
 
     if (paidDiff < 0) {
-      // Scenario: Payment decreased (Less -> cancel the voucher and gen new)
-      await this.prismaService.paymentVoucher.updateMany({
-        where: {
-          booking_id: bookingId,
-          booking_type: bookingType,
-          status: VoucherStatus.CONFIRMED,
-          voucher_type: {
-            in: [VoucherType.FULL_PAYMENT, VoucherType.HALF_PAYMENT],
-          },
-        },
-        data: { status: VoucherStatus.CANCELLED },
-      });
-
-      if (newPaid > 0) {
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            voucher_no: generateNumericVoucherNo(),
-            ...commonData,
-            amount: newPaid,
-            voucher_type:
-              newStatus === PaymentStatus.PAID
-                ? VoucherType.FULL_PAYMENT
-                : VoucherType.HALF_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
-            remarks: `${baseRemarks} | Payment Correction (Decrease)`,
-          },
-        });
-      }
-
-      // Check for refund if it was fully paid before and now charges are less
-      if (oldStatus === PaymentStatus.PAID && newPaid < oldTotal) {
-        refundAmount = oldTotal - newPaid;
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            voucher_no: generateNumericVoucherNo(),
-            ...commonData,
-            amount: refundAmount,
-            payment_mode: PaymentMode.CASH,
-            voucher_type: VoucherType.REFUND,
-            status: VoucherStatus.PENDING,
-            remarks: `Refund for reduced charges | ${dateInfo}`,
-          },
-        });
-      }
+      const updateText = `Payment decreased from ${oldPaid} to ${newPaid}`;
+      await appendUpdateRemark(updateText);
     } else if (paidDiff > 0) {
-      // Scenario: Payment increased (greater will gen new for the new amount)
+      const vno = generateNumericVoucherNo();
+      const updateText = `Payment increased by ${paidDiff} (Total now ${newPaid})`;
+
+      let vType: VoucherType =
+        newStatus === (PaymentStatus.PAID as unknown) || newStatus === 'PAID'
+          ? VoucherType.FULL_PAYMENT
+          : VoucherType.HALF_PAYMENT;
+      let vStatus: VoucherStatus = VoucherStatus.CONFIRMED;
+
+      const isAdvanceStatus =
+        newStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
+        newStatus === 'ADVANCE_PAYMENT';
+      const isOnline =
+        paymentMode === (PaymentMode.ONLINE as unknown) ||
+        String(paymentMode) === 'ONLINE';
+
+      if (isAdvanceStatus || isOnline) {
+        vType = VoucherType.ADVANCE_PAYMENT;
+        vStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+      }
+
       await this.prismaService.paymentVoucher.create({
         data: {
-          voucher_no: generateNumericVoucherNo(),
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
           ...commonData,
           amount: paidDiff,
-          voucher_type:
-            newStatus === PaymentStatus.PAID
-              ? VoucherType.FULL_PAYMENT
-              : VoucherType.HALF_PAYMENT,
-          status: VoucherStatus.CONFIRMED,
-          remarks: `${baseRemarks} | Payment Update (Increase)`,
-        },
+          voucher_type: vType,
+          status: vStatus,
+          paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
+          card_number: card_number,
+          check_number: check_number,
+          bank_name: bank_name,
+          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
+          remarks: `${baseRemarks} | UPDATE: ${updateText}`,
+        } as any,
       });
+
+      // Mark that we created a voucher and track the amount and type
+      voucherCreatedForPaymentIncrease = true;
+      voucherAmountCreated = paidDiff;
+      voucherCreatedIsOnline = isOnline;
+
+      await appendUpdateRemark(updateText);
+    }
+
+    const effectivePaid = Math.max(newPaid, oldPaid);
+    if (effectivePaid > newTotal) {
+      refundAmount = effectivePaid - newTotal;
+      const refundVno = generateNumericVoucherNo();
+      const refundText = `Overpayment Refund: Effective ${effectivePaid} for total ${newTotal}`;
+
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(refundVno)),
+          voucher_no: refundVno,
+          ...commonData,
+          amount: refundAmount,
+          payment_mode: PaymentMode.CASH,
+          voucher_type: VoucherType.REFUND,
+          status: VoucherStatus.PENDING,
+          paid_at: null,
+          remarks: `${baseRemarks} | UPDATE: ${refundText}`,
+        } as any,
+      });
+
+      await appendUpdateRemark(refundText);
+    }
+
+    if (
+      newTotal > oldTotal &&
+      (newStatus === 'ADVANCE_PAYMENT' || oldStatus === 'ADVANCE_PAYMENT')
+    ) {
+      const confirmedAdvanceVouchers =
+        await this.prismaService.paymentVoucher.findMany({
+          where: {
+            booking_id: bookingId,
+            booking_type: bookingType,
+            status: VoucherStatus.CONFIRMED,
+            voucher_type: VoucherType.ADVANCE_PAYMENT,
+          },
+        });
+      const totalAdvancePaid = confirmedAdvanceVouchers.reduce(
+        (acc, v) => acc + Number(v.amount),
+        0,
+      );
+
+      if (
+        totalAdvancePaid >= oldRequiredAdvance &&
+        newRequiredAdvance > totalAdvancePaid
+      ) {
+        const advDiff = newRequiredAdvance - totalAdvancePaid;
+
+        // ── PREVENT DUPLICATE: Don't create if we already created a voucher for payment increase
+        // with the same amount (this happens when payment increase matches advance requirement increase)
+        const shouldCreateAdvanceVoucher = !(
+          voucherCreatedForPaymentIncrease &&
+          voucherAmountCreated === advDiff
+        );
+
+        if (shouldCreateAdvanceVoucher) {
+          const advVno = generateNumericVoucherNo();
+          const advUpdateText = `Required advance increased from ${oldRequiredAdvance} to ${newRequiredAdvance}`;
+
+          await this.prismaService.paymentVoucher.create({
+            data: {
+              consumer_number: generateConsumerNumber(Number(advVno)),
+              voucher_no: advVno,
+              ...commonData,
+              amount: advDiff,
+              voucher_type: VoucherType.ADVANCE_PAYMENT,
+              status: VoucherStatus.PENDING,
+              paid_at: null,
+              remarks: `${baseRemarks} | UPDATE: ${advUpdateText}`,
+            } as any,
+          });
+          await appendUpdateRemark(advUpdateText);
+        }
+      }
+    }
+
+    // ── HANDLE PRICE DECREASE: Refund Advance Overpayment ───────
+    if (
+      newTotal < oldTotal &&
+      (newStatus === 'ADVANCE_PAYMENT' ||
+        newStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown))
+    ) {
+      const confirmedAdvanceVouchers =
+        await this.prismaService.paymentVoucher.findMany({
+          where: {
+            booking_id: bookingId,
+            booking_type: bookingType,
+            voucher_type: VoucherType.ADVANCE_PAYMENT,
+            status: VoucherStatus.CONFIRMED, // Only count confirmed/paid advances
+          },
+        });
+      const totalAdvancePaid = confirmedAdvanceVouchers.reduce(
+        (acc, v) => acc + Number(v.amount),
+        0,
+      );
+
+      // If user paid more advance than now required, generate refund voucher
+      if (totalAdvancePaid > newRequiredAdvance) {
+        const advanceRefundAmount = totalAdvancePaid - newRequiredAdvance;
+        const refundVno = generateNumericVoucherNo();
+        const refundText = `Advance overpayment refund: Paid ${totalAdvancePaid} but only ${newRequiredAdvance} required (total decreased from ${oldTotal} to ${newTotal})`;
+
+        await this.prismaService.paymentVoucher.create({
+          data: {
+            consumer_number: generateConsumerNumber(Number(refundVno)),
+            voucher_no: refundVno,
+            ...commonData,
+            amount: advanceRefundAmount,
+            payment_mode: PaymentMode.CASH, // Refunds are typically cash
+            voucher_type: VoucherType.REFUND,
+            status: VoucherStatus.CONFIRMED, // Auto-approved refund
+            paid_at: new Date(), // Mark as paid immediately
+            remarks: `${baseRemarks} | UPDATE: ${refundText}`,
+          } as any,
+        });
+
+        await appendUpdateRemark(refundText);
+      }
+    }
+
+    // ── PREVENT DUPLICATE ADVANCE VOUCHER ────────────────────────
+    // Only create advance voucher if:
+    // 1. generateAdvanceVoucher flag is set AND amount > 0
+    // 2. We haven't already created a voucher for payment increase with matching amount
+    //    (This includes ONLINE payments which become ADVANCE_PAYMENT type vouchers)
+    if (
+      details.generateAdvanceVoucher &&
+      details.advanceVoucherAmount &&
+      details.advanceVoucherAmount > 0 &&
+      !(voucherCreatedForPaymentIncrease &&
+        voucherAmountCreated === details.advanceVoucherAmount)
+    ) {
+      const vno = generateNumericVoucherNo();
+      const advText = `Additional Advance Payment: ${details.advanceVoucherAmount}`;
+
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          ...commonData,
+          amount: details.advanceVoucherAmount,
+          voucher_type: VoucherType.ADVANCE_PAYMENT,
+          status: VoucherStatus.PENDING,
+          paid_at: null,
+          remarks: `${baseRemarks} | UPDATE: ${advText}`,
+        } as any,
+      });
+
+      await appendUpdateRemark(advText);
     }
 
     return refundAmount;
@@ -929,19 +1173,25 @@ export class BookingService {
     checkOut: Date,
     remarks?: string,
   ) {
-    await this.prismaService.paymentVoucher.updateMany({
+    const existingVouchers = await this.prismaService.paymentVoucher.findMany({
       where: {
         booking_id: bookingId,
         booking_type: 'ROOM',
-        status: VoucherStatus.CONFIRMED,
-        voucher_type: {
-          in: [VoucherType.FULL_PAYMENT, VoucherType.HALF_PAYMENT],
-        },
-      },
-      data: {
-        remarks: `${formatPakistanDate(checkIn)} to ${formatPakistanDate(checkOut)}${remarks ? ` | ${remarks}` : ''}`,
       },
     });
+
+    const newDateText = `New Dates: ${formatPakistanDate(checkIn)} to ${formatPakistanDate(checkOut)}${remarks ? ` | ${remarks}` : ''}`;
+
+    for (const v of existingVouchers) {
+      if (!v.remarks?.includes(newDateText)) {
+        await this.prismaService.paymentVoucher.update({
+          where: { id: v.id },
+          data: {
+            remarks: `${v.remarks} | UPDATE: ${newDateText}`,
+          },
+        });
+      }
+    }
   }
 
   private async updateRoomStatus(
@@ -1019,6 +1269,9 @@ export class BookingService {
       guestContact,
       guestName,
       remarks = '',
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -1129,7 +1382,7 @@ export class BookingService {
 
       const nights = Math.ceil(
         (checkOutDate.getTime() - checkInDate.getTime()) /
-          (1000 * 60 * 60 * 24),
+        (1000 * 60 * 60 * 24),
       );
 
       let calculatedTotal = 0;
@@ -1230,9 +1483,11 @@ export class BookingService {
           paymentStatus === 'PAID'
             ? VoucherType.FULL_PAYMENT
             : VoucherType.HALF_PAYMENT;
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'ROOM',
             booking_id: booking.id,
             membership_no: membershipNo,
@@ -1242,7 +1497,10 @@ export class BookingService {
             status: VoucherStatus.CONFIRMED,
             issued_by: 'system',
             remarks: `Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Online Booking`,
-          },
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
 
@@ -1664,6 +1922,9 @@ export class BookingService {
       guestContact,
       remarks,
       reservationId,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -1798,7 +2059,7 @@ export class BookingService {
               // Compare using local date string (YYYY-MM-DD)
               return (
                 dDate.toLocaleDateString('en-PK') ===
-                  currentCheckDate.toLocaleDateString('en-PK') &&
+                currentCheckDate.toLocaleDateString('en-PK') &&
                 d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
               );
             });
@@ -1881,12 +2142,11 @@ export class BookingService {
       if ((paymentStatus as unknown as PaymentStatus) === 'PAID') {
         paid = total;
         owed = 0;
-      } else if ((paymentStatus as unknown as PaymentStatus) === 'HALF_PAID') {
+      } else if (
+        (paymentStatus as unknown as PaymentStatus) === 'HALF_PAID' ||
+        (paymentStatus as unknown as PaymentStatus) === 'ADVANCE_PAYMENT'
+      ) {
         paid = Number(paidAmount) || 0;
-        if (paid <= 0 || paid >= total)
-          throw new ConflictException(
-            'For half-paid: paid amount must be >0 and <total',
-          );
         owed = total - paid;
       } else if ((paymentStatus as unknown as PaymentStatus) === 'TO_BILL') {
         paid = Number(paidAmount) || 0;
@@ -1953,21 +2213,30 @@ export class BookingService {
 
       // ── CREATE PAYMENT VOUCHER ─────────────────────────────
       if (paid > 0) {
-        const voucherType =
-          (paymentStatus as unknown as PaymentStatus) === 'PAID'
-            ? VoucherType.FULL_PAYMENT
-            : VoucherType.HALF_PAYMENT;
+        let voucherType: VoucherType = VoucherType.HALF_PAYMENT;
+        if ((paymentStatus as unknown as PaymentStatus) === 'PAID') {
+          voucherType = VoucherType.FULL_PAYMENT;
+        } else if ((paymentStatus as unknown as PaymentStatus) === 'ADVANCE_PAYMENT') {
+          voucherType = VoucherType.ADVANCE_PAYMENT;
+        }
+
+        const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+        const vStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'HALL',
             booking_id: booked.id,
             membership_no: membershipNo,
             amount: paid,
             payment_mode: paymentMode as any,
             voucher_type: voucherType,
-            status: VoucherStatus.CONFIRMED,
+            status: vStatus,
             issued_by: 'admin',
+            paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
+            expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
             remarks: this.formatHallBookingRemarks(
               hall.name,
               booking,
@@ -1976,7 +2245,10 @@ export class BookingService {
               normalizedDetails,
               normalizedEventTime,
             ),
-          },
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
 
@@ -2008,6 +2280,9 @@ export class BookingService {
       guestName,
       guestContact,
       remarks,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     if (
@@ -2098,7 +2373,7 @@ export class BookingService {
         existing.endDate.getTime() !== endDate.getTime() || // Check endDate change
         existing.bookingTime !== normalizedEventTime ||
         JSON.stringify(existing.bookingDetails) !==
-          JSON.stringify(normalizedDetails);
+        JSON.stringify(normalizedDetails);
 
       if (detailsChanged) {
         // Granular check for each date/slot
@@ -2130,7 +2405,7 @@ export class BookingService {
                 const dDate = new Date(d.date);
                 return (
                   dDate.toLocaleDateString('en-CA') ===
-                    currentCheckDate.toLocaleDateString('en-CA') &&
+                  currentCheckDate.toLocaleDateString('en-CA') &&
                   d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
                 );
               });
@@ -2230,14 +2505,30 @@ export class BookingService {
           newPaid = newTotal;
         } else if (newPaymentStatus === PaymentStatus.UNPAID) {
           newPaid = 0;
-        } else if (newPaymentStatus === PaymentStatus.HALF_PAID) {
+        } else if (
+          newPaymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
+          newPaymentStatus === 'HALF_PAID' ||
+          newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
+          newPaymentStatus === 'ADVANCE_PAYMENT'
+        ) {
           newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
-        } else if (newPaymentStatus === PaymentStatus.TO_BILL) {
+        } else if (
+          newPaymentStatus === (PaymentStatus.TO_BILL as unknown) ||
+          newPaymentStatus === 'TO_BILL'
+        ) {
           newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
         }
       }
 
-      let newOwed = newTotal - newPaid;
+      // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is ONLINE
+      let dbPaid = newPaid;
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+
+      if (isOnline && newPaid > currPaid) {
+        dbPaid = currPaid;
+      }
+
+      let newOwed = newTotal - dbPaid;
       let amountToBalance = 0;
       if (newPaymentStatus === PaymentStatus.TO_BILL) {
         amountToBalance = newOwed;
@@ -2263,11 +2554,15 @@ export class BookingService {
           bookingDetails: normalizedDetails,
           remarks: remarks,
         },
-        PaymentMode.CASH,
+        (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
         'admin',
+        updatedBy,
+        card_number,
+        check_number,
+        bank_name,
       );
 
-      const paidDiff = newPaid - currPaid;
+      const paidDiff = dbPaid - currPaid;
       const owedDiff = newOwed - (currTotal - currPaid);
 
       // ── UPDATE BOOKING ─────────────────────────────────────
@@ -2403,6 +2698,9 @@ export class BookingService {
       paidBy = 'MEMBER',
       guestName,
       guestContact,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -2524,7 +2822,7 @@ export class BookingService {
               const dDate = new Date(d.date);
               return (
                 dDate.toLocaleDateString('en-CA') ===
-                  currentCheckDate.toLocaleDateString('en-CA') &&
+                currentCheckDate.toLocaleDateString('en-CA') &&
                 d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
               );
             });
@@ -2692,9 +2990,11 @@ export class BookingService {
           paymentStatus === 'PAID'
             ? VoucherType.FULL_PAYMENT
             : VoucherType.HALF_PAYMENT;
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'HALL',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
@@ -2712,7 +3012,10 @@ export class BookingService {
                 normalizedDetails,
                 normalizedEventTime,
               ) + (specialRequests ? ` | ${specialRequests}` : ''),
-          },
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
 
@@ -3138,6 +3441,9 @@ export class BookingService {
       eventType,
       bookingDetails,
       reservationId,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     if (
@@ -3311,12 +3617,11 @@ export class BookingService {
       if ((paymentStatus as unknown as PaymentStatus) === 'PAID') {
         paid = total;
         owed = 0;
-      } else if ((paymentStatus as unknown as PaymentStatus) === 'HALF_PAID') {
+      } else if (
+        (paymentStatus as unknown as PaymentStatus) === 'HALF_PAID' ||
+        (paymentStatus as unknown as PaymentStatus) === 'ADVANCE_PAYMENT'
+      ) {
         paid = Number(paidAmount) || 0;
-        if (paid <= 0 || paid >= total)
-          throw new ConflictException(
-            'For half-paid: paid amount must be >0 and <total',
-          );
         owed = total - paid;
       }
       if (isToBill) {
@@ -3376,15 +3681,17 @@ export class BookingService {
         // Using 'this' in arrow function inside transaction might be tricky if context is lost,
         // but verify: this is class method, transaction callback is arrow function capturing 'this'.
         const remarks = this.formatLawnBookingRemarks(
-          lawn.description,
+          lawn.description || "",
           bookingDetails as any[],
           booking,
           currentSlot,
         );
 
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'LAWN',
             booking_id: booked.id,
             membership_no: membershipNo,
@@ -3393,11 +3700,24 @@ export class BookingService {
             voucher_type:
               (paymentStatus as unknown as PaymentStatus) === 'PAID'
                 ? VoucherType.FULL_PAYMENT
-                : VoucherType.HALF_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
+                : (paymentStatus as unknown as PaymentStatus) === 'ADVANCE_PAYMENT'
+                  ? VoucherType.ADVANCE_PAYMENT
+                  : VoucherType.HALF_PAYMENT,
+            status: (paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE')
+              ? VoucherStatus.PENDING
+              : VoucherStatus.CONFIRMED,
             issued_by: 'admin',
+            paid_at: (paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE')
+              ? null
+              : new Date(),
+            expiresAt: (paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE')
+              ? new Date(Date.now() + 60 * 60 * 1000)
+              : null,
             remarks: `${remarks} | ${numberOfGuests} guests`,
-          },
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
 
@@ -3425,6 +3745,9 @@ export class BookingService {
       remarks,
       eventType,
       bookingDetails,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     if (
@@ -3566,10 +3889,34 @@ export class BookingService {
         newPaymentStatus = PaymentStatus.HALF_PAID as unknown as PaymentStatus;
       }
       let newPaid = currPaid;
-      if (newPaymentStatus === PaymentStatus.PAID) newPaid = newTotal;
-      else if (newPaymentStatus === PaymentStatus.UNPAID) newPaid = 0;
-      else newPaid = paidAmount !== undefined ? Number(paidAmount) : currPaid;
-      let newOwed = newTotal - newPaid;
+      if (
+        newPaymentStatus === (PaymentStatus.PAID as unknown) ||
+        newPaymentStatus === 'PAID'
+      ) {
+        newPaid = newTotal;
+      } else if (
+        newPaymentStatus === (PaymentStatus.UNPAID as unknown) ||
+        newPaymentStatus === 'UNPAID'
+      ) {
+        newPaid = 0;
+      } else if (
+        newPaymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
+        newPaymentStatus === 'HALF_PAID' ||
+        newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
+        newPaymentStatus === 'ADVANCE_PAYMENT'
+      ) {
+        newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
+      }
+
+      // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is ONLINE
+      let dbPaid = newPaid;
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+
+      if (isOnline && newPaid > currPaid) {
+        dbPaid = currPaid;
+      }
+
+      let newOwed = newTotal - dbPaid;
       let amountToBalance = 0;
       if (newPaymentStatus === PaymentStatus.TO_BILL) {
         amountToBalance = newOwed;
@@ -3587,18 +3934,22 @@ export class BookingService {
         currPaid,
         currStatus,
         {
-          lawnName: lawn.description,
+          lawnName: lawn.description || undefined,
           bookingDate: booking,
           endDate: endDate,
           eventTime: currentSlot,
           remarks: remarks,
           bookingDetails: bookingDetails || [],
         },
-        PaymentMode.CASH,
+        (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
         'admin',
+        updatedBy,
+        card_number,
+        check_number,
+        bank_name,
       );
 
-      const paidDiff = newPaid - currPaid;
+      const paidDiff = dbPaid - currPaid;
       const owedDiff = newOwed - (currTotal - currPaid);
 
       // ── MANAGE HOLDS ──
@@ -3708,6 +4059,9 @@ export class BookingService {
       guestContact,
       eventType,
       bookingDetails,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     if (
@@ -3925,15 +4279,17 @@ export class BookingService {
       // ── VOUCHER ──
       if (paid > 0) {
         const vRemarks = this.formatLawnBookingRemarks(
-          lawn.description,
+          lawn.description || "",
           bookingDetails || [],
           booking,
           currentSlot,
         );
 
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'LAWN',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
@@ -3945,8 +4301,11 @@ export class BookingService {
                 : VoucherType.HALF_PAYMENT,
             status: VoucherStatus.CONFIRMED,
             issued_by: 'member',
-            remarks: `${vRemarks} | ${numberOfGuests} guests${specialRequests ? ` | ${specialRequests}` : ''}`,
-          },
+            remarks: `${vRemarks} | Member Booking`,
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
 
@@ -4146,7 +4505,7 @@ export class BookingService {
         currPaid,
         currStatus,
         {
-          lawnName: lawn.description,
+          lawnName: lawn.description || undefined,
           bookingDate: booking,
           endDate: endDate,
           eventTime: currentSlot,
@@ -4284,6 +4643,9 @@ export class BookingService {
       guestName,
       guestContact,
       reservationId,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     // 1. Validate Member
@@ -4369,14 +4731,16 @@ export class BookingService {
     let amountToBalance = 0;
     const isToBill = (paymentStatus as unknown as string) === 'TO_BILL';
 
-    if (paymentStatus === (PaymentStatus.PAID as unknown)) {
+    if (paymentStatus === (PaymentStatus.PAID as unknown) || String(paymentStatus) === 'PAID') {
       paid = total;
       owed = 0;
-    } else if (paymentStatus === (PaymentStatus.HALF_PAID as unknown)) {
+    } else if (
+      paymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
+      String(paymentStatus) === 'HALF_PAID' ||
+      paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
+      String(paymentStatus) === 'ADVANCE_PAYMENT'
+    ) {
       paid = Number(paidAmount) || 0;
-      if (paid <= 0) throw new ConflictException('Paid amount must be > 0');
-      if (paid >= total)
-        throw new ConflictException('Paid amount must be < total');
       owed = total - paid;
     } else if (isToBill) {
       amountToBalance = owed;
@@ -4425,24 +4789,36 @@ export class BookingService {
     // 7. Create Voucher
     if (paid > 0) {
       let voucherType: VoucherType | null = null;
-      if (paymentStatus === (PaymentStatus.PAID as unknown))
+      if (paymentStatus === (PaymentStatus.PAID as unknown) || String(paymentStatus) === 'PAID')
         voucherType = VoucherType.FULL_PAYMENT;
-      else if (paymentStatus === (PaymentStatus.HALF_PAID as unknown))
+      else if (paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) || String(paymentStatus) === 'ADVANCE_PAYMENT')
+        voucherType = VoucherType.ADVANCE_PAYMENT;
+      else
         voucherType = VoucherType.HALF_PAYMENT;
 
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+      const vStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+
+      const vno = generateNumericVoucherNo();
       await this.prismaService.paymentVoucher.create({
         data: {
-          voucher_no: generateNumericVoucherNo(),
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
           booking_type: 'PHOTOSHOOT',
           booking_id: booking.id,
           membership_no: membershipNo,
           amount: paid,
           payment_mode: paymentMode as unknown as PaymentMode,
           voucher_type: voucherType!,
-          status: VoucherStatus.CONFIRMED,
+          status: vStatus,
           issued_by: 'admin',
+          paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
+          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
           remarks: `Photoshoot | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}`,
-        },
+          card_number,
+          check_number,
+          bank_name,
+        } as any,
       });
     }
 
@@ -4465,6 +4841,9 @@ export class BookingService {
       guestName,
       guestContact,
       remarks,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     if (!id || !membershipNo || !entityId)
@@ -4569,7 +4948,7 @@ export class BookingService {
           newMainStartTime = d;
           newMainEndTime = new Date(d.getTime() + 2 * 60 * 60 * 1000);
         }
-      } catch (e) {}
+      } catch (e) { }
     } else if (timeSlot) {
       const d = parsePakistanDate(timeSlot);
       newMainStartTime = d;
@@ -4582,7 +4961,7 @@ export class BookingService {
       existing.photoshootId !== Number(entityId) ||
       existing.bookingDate.getTime() !== booking.getTime() ||
       JSON.stringify(existing.bookingDetails) !==
-        JSON.stringify(normalizedDetails) ||
+      JSON.stringify(normalizedDetails) ||
       (timeSlot &&
         parsePakistanDate(timeSlot).getTime() !== existing.startTime.getTime());
 
@@ -4675,16 +5054,35 @@ export class BookingService {
       newPaymentStatus = PaymentStatus.HALF_PAID as unknown as PaymentStatus;
       newPaid = currPaid;
     } else {
-      if (newPaymentStatus === PaymentStatus.PAID) {
+      if (
+        newPaymentStatus === (PaymentStatus.PAID as unknown) ||
+        newPaymentStatus === 'PAID'
+      ) {
         newPaid = newTotal;
-      } else if (newPaymentStatus === PaymentStatus.UNPAID) {
+      } else if (
+        newPaymentStatus === (PaymentStatus.UNPAID as unknown) ||
+        newPaymentStatus === 'UNPAID'
+      ) {
         newPaid = 0;
-      } else {
-        newPaid = paidAmount !== undefined ? Number(paidAmount) : currPaid;
+      } else if (
+        newPaymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
+        newPaymentStatus === 'HALF_PAID' ||
+        newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
+        newPaymentStatus === 'ADVANCE_PAYMENT'
+      ) {
+        newPaid = isExplicitPayment ? Number(paidAmount) : currPaid;
       }
     }
 
-    let newOwed = newTotal - newPaid;
+    // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is ONLINE
+    let dbPaid = newPaid;
+    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+
+    if (isOnline && newPaid > currPaid) {
+      dbPaid = currPaid;
+    }
+
+    let newOwed = newTotal - dbPaid;
     let amountToBalance = 0;
     if (newPaymentStatus === PaymentStatus.TO_BILL) {
       amountToBalance = newOwed;
@@ -4702,7 +5100,7 @@ export class BookingService {
       currPaid,
       currStatus,
       {
-        photoshootDesc: photoshoot.description,
+        photoshootDesc: photoshoot.description || undefined,
         bookingDate: newMainDate,
         eventTime: newMainStartTime.toLocaleTimeString(),
         bookingDetails: normalizedDetails,
@@ -4710,9 +5108,13 @@ export class BookingService {
       },
       (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
       'admin',
+      updatedBy,
+      card_number,
+      check_number,
+      bank_name,
     );
 
-    const paidDiff = newPaid - currPaid;
+    const paidDiff = dbPaid - currPaid;
     const owedDiff = newOwed - (currTotal - currPaid);
 
     // ── UPDATE BOOKING ───────────────────────────────────────
@@ -4727,7 +5129,7 @@ export class BookingService {
         totalPrice: newTotal,
         paymentStatus: newPaymentStatus,
         pricingType: pricingType ?? existing.pricingType,
-        paidAmount: newPaid,
+        paidAmount: dbPaid,
         pendingAmount: newOwed,
         refundAmount,
         paidBy: paidBy || existing.paidBy, // Preserve existing if not provided
@@ -4801,6 +5203,9 @@ export class BookingService {
       paidBy = 'MEMBER',
       guestName,
       guestContact,
+      card_number,
+      check_number,
+      bank_name,
     } = payload;
 
     // ── 1. VALIDATE REQUIRED FIELDS ─────────────────────────
@@ -4956,9 +5361,11 @@ export class BookingService {
         else if (paymentStatus === ('HALF_PAID' as unknown))
           voucherType = VoucherType.HALF_PAYMENT;
 
+        const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
-            voucher_no: generateNumericVoucherNo(),
+            consumer_number: generateConsumerNumber(Number(vno)),
+            voucher_no: vno,
             booking_type: 'PHOTOSHOOT',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
@@ -4968,7 +5375,10 @@ export class BookingService {
             status: VoucherStatus.CONFIRMED,
             issued_by: 'member',
             remarks: `Photoshoot: ${photoshoot.description} | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}${specialRequests ? ` | Requests: ${specialRequests}` : ''}`,
-          },
+            card_number,
+            check_number,
+            bank_name,
+          } as any,
         });
       }
       // console.log(booked);
@@ -5137,7 +5547,7 @@ export class BookingService {
       currPaid,
       currStatus,
       {
-        photoshootDesc: photoshoot.description,
+        photoshootDesc: photoshoot.description || undefined,
         bookingDate: booking,
         eventTime: newStartTime.toLocaleTimeString(),
         remarks: remarks,
@@ -5353,7 +5763,7 @@ export class BookingService {
     if (!bookingId || isNaN(bookingId)) {
       return [];
     }
-    const vouchers = await this.prismaService.paymentVoucher.findMany({
+    return await this.prismaService.paymentVoucher.findMany({
       where: {
         booking_type: bookingType as BookingType,
         booking_id: bookingId,
@@ -5362,32 +5772,44 @@ export class BookingService {
         issued_at: 'desc',
       },
     });
-
-    const prefix = process.env.KUICKPAY_PREFIX || '01520';
-    return vouchers.map((v) => ({
-      ...v,
-      consumer_number: `${prefix}${v.id.toString().padStart(13, '0')}`,
-    }));
   }
 
   async updateVoucherStatus(
-    voucherId: number,
+    consumer_number: string,
     status: 'PENDING' | 'CONFIRMED' | 'CANCELLED',
     updatedBy: string,
+    paymentDetails?: {
+      payment_mode: PaymentMode;
+      card_number?: string;
+      check_number?: string;
+      bank_name?: string;
+    },
   ) {
     const voucher = await this.prismaService.paymentVoucher.findUnique({
-      where: { id: voucherId },
+      where: { consumer_number: consumer_number },
     });
 
     if (!voucher) {
       throw new NotFoundException('Voucher not found');
     }
 
+    const data: any = {
+      status: status as VoucherStatus,
+      issued_by: updatedBy,
+      paid_at: (status as VoucherStatus) === VoucherStatus.CONFIRMED ? new Date() : undefined,
+    };
+
+    if (paymentDetails) {
+      data.payment_mode = paymentDetails.payment_mode;
+      data.card_number = paymentDetails.card_number;
+      data.check_number = paymentDetails.check_number;
+      data.bank_name = paymentDetails.bank_name;
+      data.channel = Channel.ADMIN_PORTAL;
+    }
+
     return await this.prismaService.paymentVoucher.update({
-      where: { id: voucherId },
-      data: {
-        status: status as VoucherStatus,
-      },
+      where: { consumer_number: consumer_number },
+      data,
     });
   }
 
@@ -5459,9 +5881,9 @@ export class BookingService {
     }
   }
 
-  async cancelUnpaidBooking(voucherId: number) {
+  async cancelUnpaidBooking(consumer_number: string) {
     const voucher = await this.prismaService.paymentVoucher.findUnique({
-      where: { id: voucherId },
+      where: { consumer_number: consumer_number },
     });
 
     if (!voucher) {
@@ -5478,7 +5900,7 @@ export class BookingService {
 
     return await this.prismaService.$transaction(async (prisma) => {
       // 1. Delete Voucher
-      await prisma.paymentVoucher.delete({ where: { id: voucherId } });
+      await prisma.paymentVoucher.delete({ where: { consumer_number: consumer_number } });
 
       // 2. Delete Booking and associated Holdings
       if (booking_type === 'ROOM') {

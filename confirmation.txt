@@ -1,0 +1,51 @@
+total amount for booking one room = Rs. 100
+
+
+1. New booking (create)
+	total amount = 100
+	-> generate voucher 25% advance payment
+		100 % 25 = Rs. 25
+	-> confirm payment for Rs. 25
+
+	=== voucher for Rs. 25 ===
+
+------------------------------------------------------------
+
+Now continue with other scenarios:
+
+2. Booking date/room extension (Update)
+	---> i.e., dates (1-2 [1 night] became 1-3 [2 nights])
+	total amount (new) = 200
+	generate new voucher for the remaining advance:
+	
+	new advance = 200 % 25 = Rs. 50
+
+	paid advance = Rs 25
+	payable advance = new advance - paid advance = 50 - 25 = Rs. 25
+	
+	so the new voucher will be generated for Rs. 25, and already paid one is Rs. 25 and the total became Rs. 50
+
+
+	=== voucher for Rs. 25 and keep the previous voucher of Rs. 25 ===
+---------------------------------------------------------------
+3. Booking date/room reduction (Update)
+	---> i.e., dates (1-3 [2 nights] became 1-2 [1 night])
+	total amount (new) = 100
+	so the advance became = 100 % 25 = Rs. 25
+	paid advance = Rs. 50
+	difference = paid advance - new advance = 50 - 25 = Rs. 25
+	
+	=> we need to refund Rs. 25
+	
+	=== voucher for Rs. 25 as 'Refund' and kepp all the previous vouchers with their original status ===
+		
+-----------------------------------------------------------------------
+
+
+
+rule: 
+	if newtotal > paidamount
+		generate 'payment' voucher
+	else if newtotal < paidamount
+		generate 'refund' voucher
+	

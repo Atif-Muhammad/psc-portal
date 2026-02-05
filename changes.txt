@@ -1,0 +1,74 @@
+Minor Fixes/Changes
+
+(1) room bookings
+	=> will work on these once the percentage for advance booking is applied <=
+		1. armed forces booking (minor bug -- will be fixed.
+
+(2) halls
+	1. add 'corporate event price' for pricing type.
+
+
+(3) halls + lawns booking
+	1. allow only one slot booking in a single date/day.
+		-> although allow admin to create multiple timeslot's bookings
+	2. remove 'corporate event' in event type from 'mobile app' but should be in portal.
+(4) photoshoot booking
+	1. change timing (8am - 9pm)
+
+
+(5) voucher fixes -- will work once confirmed -- 
+
+---------------------------------------------------------------------------
+
+Major Fixes/Changes
+
+1. Room Booking
+	1. add ppercentage for advance payment
+	2. add 'heads' to booking and sum them up in 'total payable'
+	i.e., food etc
+	rent amount = Rs. 100
+	food amount = Rs. 50
+	total payable = Rs. 150
+
+2. Room Booking (Affiliated Club)
+	1. new page/sub module for affiliated club room bookings
+
+	need -> affiliated club (select from menu/drop down), member_number from the affiliated club, rest like this existing room booking.
+	----- will apply guest charges -----
+
+3. hall + lawn booking
+	1. heads for booking i.e., DJ, Stage etc
+	-> will be added up to rent to make the total payable just like in room booking.
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

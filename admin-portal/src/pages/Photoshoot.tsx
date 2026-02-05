@@ -29,13 +29,27 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageUpload } from "@/components/ImageUpload";
 
+interface PhotoshootOutOfOrder {
+  id?: number;
+  reason: string;
+  startDate: string;
+  endDate: string;
+}
+
 interface PhotoshootForm {
   description: string;
   memberCharges: string;
   guestCharges: string;
   images: File[];
   existingImages: string[];
+  outOfOrders: PhotoshootOutOfOrder[];
 }
+
+const initialOutOfOrderState: PhotoshootOutOfOrder = {
+  reason: "",
+  startDate: new Date().toISOString().split("T")[0],
+  endDate: new Date().toISOString().split("T")[0],
+};
 
 const initialFormState: PhotoshootForm = {
   description: "",
@@ -43,6 +57,7 @@ const initialFormState: PhotoshootForm = {
   guestCharges: "",
   images: [],
   existingImages: [],
+  outOfOrders: [],
 };
 
 const getTimeSlotIcon = (slot: string) => {
@@ -53,6 +68,129 @@ const getTimeSlotIcon = (slot: string) => {
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString();
+};
+
+const MaintenanceIndicator = ({
+  outOfOrders,
+}: {
+  outOfOrders: PhotoshootOutOfOrder[];
+}) => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const today = now.getTime();
+
+  // All current or future periods
+  const activeAndFuture = outOfOrders
+    ?.filter((p) => new Date(p.endDate).getTime() >= today)
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()) || [];
+
+  const displayCount = 2;
+  const sliced = activeAndFuture.slice(0, displayCount);
+  const remaining = activeAndFuture.length - displayCount;
+
+  if (activeAndFuture.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 mt-2">
+      {sliced.map((p, idx) => {
+        const isCurrent = new Date(p.startDate).getTime() <= today && new Date(p.endDate).getTime() >= today;
+        return (
+          <div key={idx} className="flex flex-col gap-0.5 bg-orange-50 p-1.5 rounded border border-orange-100 text-left">
+            <div className="flex items-center gap-1">
+              <Badge
+                variant={isCurrent ? "destructive" : "secondary"}
+                className={`text-[9px] py-0 px-1 h-3.5 ${!isCurrent ? "bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200" : ""}`}
+              >
+                {isCurrent ? "Maintenance" : "Scheduled"}
+              </Badge>
+            </div>
+            <span className={`text-[10px] font-medium leading-tight ${isCurrent ? "text-red-700" : "text-orange-700"}`}>
+              {p.reason}
+            </span>
+            <span className="text-[9px] text-muted-foreground italic">
+              ({formatDate(p.startDate)} - {formatDate(p.endDate)})
+            </span>
+          </div>
+        );
+      })}
+      {remaining > 0 && (
+        <span className="text-[9px] text-muted-foreground font-medium pl-1">
+          + {remaining} more periods
+        </span>
+      )}
+    </div>
+  );
+};
+
+const OutOfOrderPeriods = ({
+  periods,
+  onAddPeriod,
+  onRemovePeriod,
+  newPeriod,
+  onNewPeriodChange,
+  onEditPeriod,
+  editingIndex,
+}: {
+  periods: PhotoshootOutOfOrder[];
+  onAddPeriod: () => void;
+  onRemovePeriod: (index: number) => void;
+  newPeriod: PhotoshootOutOfOrder;
+  onNewPeriodChange: (period: PhotoshootOutOfOrder) => void;
+  onEditPeriod: (index: number) => void;
+  editingIndex: number | null;
+}) => {
+  return (
+    <div className="space-y-4 p-4 rounded-lg border bg-slate-50/50">
+      <div className="flex items-center justify-between">
+        <Label className="text-base font-semibold flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-orange-600" />
+          Maintenance Periods
+        </Label>
+        <Badge variant="outline">{periods.length} Saved</Badge>
+      </div>
+
+      {periods.length > 0 && (
+        <div className="space-y-2">
+          {periods.map((period, index) => (
+            <div key={index} className="flex justify-between items-center bg-white p-2 border rounded text-xs">
+              <div>
+                <span className="font-bold text-orange-800">{formatDate(period.startDate)} - {formatDate(period.endDate)}</span>
+                <p className="text-muted-foreground italic">{period.reason}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => onEditPeriod(index)}>
+                  <Edit className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemovePeriod(index)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 p-3 border-2 border-dashed rounded-md bg-orange-50/30">
+        <div className="col-span-2">
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Reason</Label>
+          <Input value={newPeriod.reason} onChange={(e) => onNewPeriodChange({ ...newPeriod, reason: e.target.value })} placeholder="Maintenance Reason" />
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Start</Label>
+          <Input type="date" value={newPeriod.startDate} onChange={(e) => onNewPeriodChange({ ...newPeriod, startDate: e.target.value })} />
+        </div>
+        <div>
+          <Label className="text-[10px] uppercase font-bold text-muted-foreground">End</Label>
+          <Input type="date" value={newPeriod.endDate} onChange={(e) => onNewPeriodChange({ ...newPeriod, endDate: e.target.value })} />
+        </div>
+        <Button className="col-span-2 h-8 text-xs bg-orange-600 hover:bg-orange-700" onClick={onAddPeriod}>
+          {editingIndex !== null ? "Update Period" : "Add Maintenance Period"}
+        </Button>
+      </div>
+    </div>
+  );
 };
 
 export default function Photoshoot() {
@@ -84,6 +222,70 @@ export default function Photoshoot() {
   const [form, setForm] = useState<PhotoshootForm>(initialFormState);
   const [editForm, setEditForm] = useState<PhotoshootForm>(initialFormState);
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([]);
+
+  // Maintenance states
+  const [newOutOfOrder, setNewOutOfOrder] = useState<PhotoshootOutOfOrder>(initialOutOfOrderState);
+  const [editNewOutOfOrder, setEditNewOutOfOrder] = useState<PhotoshootOutOfOrder>(initialOutOfOrderState);
+  const [editingOOIndex, setEditingOOIndex] = useState<number | null>(null);
+  const [editingEditOOIndex, setEditingEditOOIndex] = useState<number | null>(null);
+
+  const handleAddOutOfOrder = () => {
+    if (!newOutOfOrder.reason || !newOutOfOrder.startDate || !newOutOfOrder.endDate) {
+      toast({ title: "Please fill all maintenance fields", variant: "destructive" });
+      return;
+    }
+    if (editingOOIndex !== null) {
+      const updated = [...form.outOfOrders];
+      updated[editingOOIndex] = newOutOfOrder;
+      setForm(prev => ({ ...prev, outOfOrders: updated }));
+      setEditingOOIndex(null);
+    } else {
+      setForm(prev => ({ ...prev, outOfOrders: [...prev.outOfOrders, newOutOfOrder] }));
+    }
+    setNewOutOfOrder(initialOutOfOrderState);
+  };
+
+  const handleRemoveOutOfOrder = (index: number) => {
+    setForm(prev => ({ ...prev, outOfOrders: prev.outOfOrders.filter((_, i) => i !== index) }));
+    if (editingOOIndex === index) {
+      setEditingOOIndex(null);
+      setNewOutOfOrder(initialOutOfOrderState);
+    }
+  };
+
+  const handleEditOutOfOrder = (index: number) => {
+    setNewOutOfOrder(form.outOfOrders[index]);
+    setEditingOOIndex(index);
+  };
+
+  const handleAddEditOutOfOrder = () => {
+    if (!editNewOutOfOrder.reason || !editNewOutOfOrder.startDate || !editNewOutOfOrder.endDate) {
+      toast({ title: "Please fill all maintenance fields", variant: "destructive" });
+      return;
+    }
+    if (editingEditOOIndex !== null) {
+      const updated = [...editForm.outOfOrders];
+      updated[editingEditOOIndex] = editNewOutOfOrder;
+      setEditForm(prev => ({ ...prev, outOfOrders: updated }));
+      setEditingEditOOIndex(null);
+    } else {
+      setEditForm(prev => ({ ...prev, outOfOrders: [...prev.outOfOrders, editNewOutOfOrder] }));
+    }
+    setEditNewOutOfOrder(initialOutOfOrderState);
+  };
+
+  const handleRemoveEditOutOfOrder = (index: number) => {
+    setEditForm(prev => ({ ...prev, outOfOrders: prev.outOfOrders.filter((_, i) => i !== index) }));
+    if (editingEditOOIndex === index) {
+      setEditingEditOOIndex(null);
+      setEditNewOutOfOrder(initialOutOfOrderState);
+    }
+  };
+
+  const handleEditEditOutOfOrder = (index: number) => {
+    setEditNewOutOfOrder(editForm.outOfOrders[index]);
+    setEditingEditOOIndex(index);
+  };
 
   const { data: photoshoots = [], isLoading: isLoadingPhotoshoots } = useQuery({
     queryKey: ["photoshoots"],
@@ -156,8 +358,8 @@ export default function Photoshoot() {
   });
 
   const handleCreate = () => {
-    if (!form.description || !form.memberCharges || !form.guestCharges) {
-      toast({ title: "All fields are required", variant: "destructive" });
+    if (!form.memberCharges || !form.guestCharges) {
+      toast({ title: "Charges are required", variant: "destructive" });
       return;
     }
 
@@ -170,14 +372,15 @@ export default function Photoshoot() {
     fd.append("description", form.description);
     fd.append("memberCharges", form.memberCharges);
     fd.append("guestCharges", form.guestCharges);
+    fd.append("outOfOrders", JSON.stringify(form.outOfOrders));
     form.images.forEach((file) => fd.append("files", file));
 
     createMutation.mutate(fd);
   };
 
   const handleUpdate = () => {
-    if (!editForm.description || !editForm.memberCharges || !editForm.guestCharges) {
-      toast({ title: "All fields are required", variant: "destructive" });
+    if (!editForm.memberCharges || !editForm.guestCharges) {
+      toast({ title: "Charges are required", variant: "destructive" });
       return;
     }
 
@@ -192,6 +395,7 @@ export default function Photoshoot() {
     fd.append("description", editForm.description);
     fd.append("memberCharges", editForm.memberCharges);
     fd.append("guestCharges", editForm.guestCharges);
+    fd.append("outOfOrders", JSON.stringify(editForm.outOfOrders));
 
     // Add existing image public IDs
     editForm.existingImages.forEach((publicId) => fd.append("existingimgs", publicId));
@@ -249,7 +453,11 @@ export default function Photoshoot() {
         guestCharges: editPhotoshoot.guestCharges?.toString() || "",
         images: [],
         existingImages: existingPublicIds,
+        outOfOrders: editPhotoshoot.outOfOrders || [],
       });
+
+      setEditNewOutOfOrder(initialOutOfOrderState);
+      setEditingEditOOIndex(null);
 
       // Store URLs for preview (separate state)
       setEditImagePreviews(existingImageUrls);
@@ -306,7 +514,7 @@ export default function Photoshoot() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <Label>Description *</Label>
+                  <Label>Description</Label>
                   <Textarea
                     value={form.description}
                     onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
@@ -358,6 +566,17 @@ export default function Photoshoot() {
                     />
                   </div>
                 </div>
+                <div className="col-span-2">
+                  <OutOfOrderPeriods
+                    periods={form.outOfOrders}
+                    newPeriod={newOutOfOrder}
+                    onNewPeriodChange={setNewOutOfOrder}
+                    onAddPeriod={handleAddOutOfOrder}
+                    onRemovePeriod={handleRemoveOutOfOrder}
+                    onEditPeriod={handleEditOutOfOrder}
+                    editingIndex={editingOOIndex}
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
@@ -403,11 +622,14 @@ export default function Photoshoot() {
                 {photoshoots.map((item: any) => (
                   <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium max-w-md">
-                      <div className="space-y-1">
-                        <p className="font-semibold">{item.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Created: {new Date(item.createdAt).toLocaleDateString()}
-                        </p>
+                      <div className="space-y-2">
+                        <div className="space-y-1">
+                          <p className="font-semibold">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Created: {new Date(item.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <MaintenanceIndicator outOfOrders={item.outOfOrders} />
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold">
@@ -759,6 +981,9 @@ export default function Photoshoot() {
                 <TabsTrigger value="bookings" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
                   Bookings ({detailLogs?.bookings?.length || 0})
                 </TabsTrigger>
+                <TabsTrigger value="maintenance" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
+                  Maintenance ({detailLogs?.outOfOrders?.length || 0})
+                </TabsTrigger>
               </TabsList>
 
               <div className="mt-4 min-h-[300px]">
@@ -877,6 +1102,49 @@ export default function Photoshoot() {
                         </Table>
                       </div>
                     </TabsContent>
+
+                    <TabsContent value="maintenance" className="mt-0 outline-none">
+                      <div className="border border-slate-100 rounded-lg overflow-hidden bg-white">
+                        <Table>
+                          <TableHeader className="bg-slate-50/50">
+                            <TableRow className="hover:bg-transparent border-slate-100">
+                              <TableHead className="text-[11px] h-9 text-slate-500">Reason</TableHead>
+                              <TableHead className="text-[11px] h-9 text-slate-500">From</TableHead>
+                              <TableHead className="text-[11px] h-9 text-slate-500">To</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {detailLogs?.outOfOrders?.length ? (
+                              detailLogs.outOfOrders.map((oo: any) => (
+                                <TableRow key={oo.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
+                                  <TableCell className="py-2">
+                                    <span className="font-semibold text-xs text-slate-700">{oo.reason}</span>
+                                  </TableCell>
+                                  <TableCell className="text-xs py-2 text-slate-600">
+                                    {format(new Date(oo.startDate), "LLL dd, y")}
+                                  </TableCell>
+                                  <TableCell className="text-xs py-2 text-slate-600">
+                                    {format(new Date(oo.endDate), "LLL dd, y")}
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={3}
+                                  className="text-center py-10 text-slate-400"
+                                >
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    <CalendarIcon className="h-6 w-6 opacity-10" />
+                                    <p className="text-[11px]">No maintenance periods found.</p>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
                   </>
                 )}
               </div>
@@ -896,7 +1164,7 @@ export default function Photoshoot() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label>Description *</Label>
+              <Label>Description</Label>
               <Textarea
                 value={editForm.description}
                 onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
@@ -967,6 +1235,17 @@ export default function Photoshoot() {
                   maxImages={5}
                 />
               </div>
+            </div>
+            <div className="col-span-2">
+              <OutOfOrderPeriods
+                periods={editForm.outOfOrders}
+                newPeriod={editNewOutOfOrder}
+                onNewPeriodChange={setEditNewOutOfOrder}
+                onAddPeriod={handleAddEditOutOfOrder}
+                onRemovePeriod={handleRemoveEditOutOfOrder}
+                onEditPeriod={handleEditEditOutOfOrder}
+                editingIndex={editingEditOOIndex}
+              />
             </div>
             {editPhotoshoot?.isBooked && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">

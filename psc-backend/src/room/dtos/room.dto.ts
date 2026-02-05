@@ -14,8 +14,8 @@ export class RoomDto {
   roomNumber: string;
   @IsNotEmpty({ message: 'Room type must be provided' })
   roomTypeId: string;
-  @IsNotEmpty({ message: 'Description must be provided' })
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @IsNotEmpty({ message: 'Activity must be provided' })
   isActive: boolean | string;

@@ -61,6 +61,7 @@ import {
   calculateAccountingValues,
   getDateStatuses,
   calculatePrice,
+  calculateAdvanceDetails,
 } from "@/utils/bookingUtils";
 import { parseLocalDate } from "@/utils/hallBookingUtils";
 import { format, startOfDay, addYears } from "date-fns";
@@ -545,6 +546,12 @@ export default function RoomBookings() {
     return basePrice * roomCount;
   };
 
+  const calculateAdvance = (roomCount: number, totalPrice: number, paidAmount: number = 0) => {
+    const required = calculateAdvanceDetails(roomCount, totalPrice).requiredAmount;
+    const remaining = required - (paidAmount || 0);
+    return Math.max(0, remaining);
+  };
+
   // Unified form change handler
   const createFormChangeHandler = (isEdit: boolean) => {
     return (field: keyof BookingForm, value: any) => {
@@ -575,16 +582,18 @@ export default function RoomBookings() {
             field === "roomTypeId" ? 0 : currentSelectedRoomIds.length
           );
           newForm.totalPrice = newPrice;
+          newForm.advanceVoucherAmount = calculateAdvance(currentSelectedRoomIds.length, newPrice, newForm.paidAmount);
 
           // AUTO-ADJUST PAYMENT STATUS WHEN DATES OR PRICING CHANGE IN EDIT MODE
           if (isEdit) {
             if (newPrice > oldPaid && oldPaymentStatus === "PAID") {
-              // Price Increased and was Fully Paid -> Downgrade to Half Paid
+              // Price Increased and was Fully Paid -> Downgrade to HALF_PAID but keep status name till they choose
+              // Note: the user might want to stay in PAID if they pay more, but for now we note the debt
               newForm.paymentStatus = "HALF_PAID";
               newForm.paidAmount = oldPaid; // Preserve existing paid amount
               newForm.pendingAmount = newPrice - oldPaid;
-            } else if (newPrice > oldTotal && (oldPaymentStatus === "HALF_PAID" || oldPaymentStatus === "UNPAID")) {
-              // Price Increased and was already partial/unpaid -> Preserve existing paid amount
+            } else if (newPrice > oldTotal && (oldPaymentStatus === "HALF_PAID" || oldPaymentStatus === "UNPAID" || oldPaymentStatus === "ADVANCE_PAYMENT")) {
+              // Price Increased -> Preserve existing paid amount
               newForm.paidAmount = oldPaid;
               newForm.pendingAmount = newPrice - oldPaid;
             } else {
@@ -696,7 +705,8 @@ export default function RoomBookings() {
         totalPrice: newTotal,
         paymentStatus: newStatus,
         paidAmount: newPaid,
-        pendingAmount: newPending
+        pendingAmount: newPending,
+        advanceVoucherAmount: calculateAdvance(newIds.length, newTotal, newPaid)
       }
     });
   };
@@ -769,7 +779,7 @@ export default function RoomBookings() {
       paymentStatus: form.paymentStatus,
       paidAmount: form.paidAmount,
       pendingAmount: form.pendingAmount,
-      paymentMode: "CASH",
+      paymentMode: form.paymentMode,
       numberOfAdults: form.numberOfAdults,
       numberOfChildren: form.numberOfChildren,
       specialRequests: form.specialRequests,
@@ -823,7 +833,7 @@ export default function RoomBookings() {
       paymentStatus: editForm.paymentStatus,
       paidAmount: editForm.paidAmount,
       pendingAmount: editForm.pendingAmount,
-      paymentMode: "CASH",
+      paymentMode: editForm.paymentMode,
       prevRoomId: editBooking?.roomId?.toString(),
       paidBy: editForm.paidBy,
       guestContact: editForm.guestContact,
@@ -866,6 +876,8 @@ export default function RoomBookings() {
         return <Badge variant="destructive">Unpaid</Badge>;
       case "TO_BILL":
         return <Badge className="bg-blue-600 text-white">To Bill</Badge>;
+      case "ADVANCE_PAYMENT":
+        return <Badge className="bg-purple-600 text-white">Advance Paid</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -885,6 +897,23 @@ export default function RoomBookings() {
     setEditAvailableRooms([]);
     setEditBooking(null);
     setEditSelectedRoomIds([]);
+  };
+
+  // Helper component to fetch and display vouchers
+  const DetailBookingView = ({ booking }: { booking: Booking }) => {
+    const { data: detailVouchers = [], isLoading } = useQuery({
+      queryKey: ['vouchers', 'ROOM', booking.id],
+      queryFn: () => getVouchers('ROOM', booking.id.toString()),
+      enabled: !!booking.id,
+    });
+
+    return (
+      <BookingDetailsCard
+        booking={booking}
+        vouchers={isLoading ? [] : detailVouchers}
+        className="rounded-none border-0 shadow-none"
+      />
+    );
   };
 
   return (
@@ -997,10 +1026,7 @@ export default function RoomBookings() {
       <Dialog open={openDetails} onOpenChange={setOpenDetails}>
         <DialogContent className="p-0 max-w-5xl min-w-[60vw] overflow-hidden">
           {detailBooking && (
-            <BookingDetailsCard
-              booking={detailBooking}
-              className="rounded-none border-0 shadow-none"
-            />
+            <DetailBookingView booking={detailBooking} />
           )}
         </DialogContent>
       </Dialog>

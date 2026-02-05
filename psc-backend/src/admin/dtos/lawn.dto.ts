@@ -2,7 +2,7 @@ import { IsNotEmpty, IsOptional } from 'class-validator';
 
 export class LawnDto {
   @IsOptional() id?: string;
-  @IsNotEmpty() description: string;
+  @IsOptional() description?: string;
   @IsNotEmpty() lawnCategoryId: string;
   @IsNotEmpty() minGuests: string;
   @IsNotEmpty() maxGuests: string;

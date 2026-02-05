@@ -10,4 +10,4 @@ import { ContentModule } from 'src/content/content.module';
   providers: [BookingService],
   exports: [BookingService],
 })
-export class BookingModule {}
+export class BookingModule { }

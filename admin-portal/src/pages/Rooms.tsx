@@ -211,6 +211,8 @@ export default function Rooms() {
     endDate: getPakistanDateString(new Date()),
   });
 
+  const [editingOOIndex, setEditingOOIndex] = useState<number | null>(null);
+
   const [reservationRemarks, setReservationRemarks] = useState("");
 
   useEffect(() => {
@@ -329,6 +331,7 @@ export default function Rooms() {
       startDate: getPakistanDateString(new Date()),
       endDate: getPakistanDateString(new Date()),
     });
+    setEditingOOIndex(null);
   };
 
   const openEditDialog = (room: Room) => {
@@ -365,7 +368,9 @@ export default function Rooms() {
       return;
     }
 
-    const alreadyExists = form.outOfOrders?.some(o => o.startDate === newOutOfOrder.startDate) || form.outOfOrders?.some(o => o.endDate === newOutOfOrder.endDate)
+    const alreadyExists = form.outOfOrders?.some((o, idx) =>
+      idx !== editingOOIndex && (o.startDate === newOutOfOrder.startDate || o.endDate === newOutOfOrder.endDate)
+    )
 
     if (alreadyExists) {
       toast({
@@ -376,10 +381,17 @@ export default function Rooms() {
       return;
     }
 
-    setForm({
-      ...form,
-      outOfOrders: [...form.outOfOrders, { ...newOutOfOrder }],
-    });
+    if (editingOOIndex !== null) {
+      const updated = [...form.outOfOrders];
+      updated[editingOOIndex] = { ...newOutOfOrder };
+      setForm({ ...form, outOfOrders: updated });
+      setEditingOOIndex(null);
+    } else {
+      setForm({
+        ...form,
+        outOfOrders: [...form.outOfOrders, { ...newOutOfOrder }],
+      });
+    }
 
     setNewOutOfOrder({
       reason: "",
@@ -1060,7 +1072,7 @@ export default function Rooms() {
                       variant="outline"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Maintenance Period
+                      {editingOOIndex !== null ? "Update Maintenance Period" : "Add Maintenance Period"}
                     </Button>
                   </div>
 
@@ -1078,14 +1090,27 @@ export default function Rooms() {
                               {oo.reason}
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveOutOfOrder(index)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingOOIndex(index);
+                                setNewOutOfOrder(oo);
+                              }}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveOutOfOrder(index)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1539,7 +1564,7 @@ export default function Rooms() {
                   variant="outline"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Maintenance Period
+                  {editingOOIndex !== null ? "Update Maintenance Period" : "Add Maintenance Period"}
                 </Button>
               </div>
 
@@ -1557,14 +1582,27 @@ export default function Rooms() {
                           {oo.reason}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveOutOfOrder(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setEditingOOIndex(index);
+                            setNewOutOfOrder(oo);
+                          }}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveOutOfOrder(index)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

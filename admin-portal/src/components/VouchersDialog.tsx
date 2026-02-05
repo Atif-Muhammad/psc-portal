@@ -25,6 +25,12 @@ export const VouchersDialog = React.memo(({
         return <Badge className="bg-green-100 text-green-800">Full Payment</Badge>;
       case "HALF_PAYMENT":
         return <Badge className="bg-blue-100 text-blue-800">Half Payment</Badge>;
+      case "ADVANCE_PAYMENT":
+        return <Badge className="bg-purple-100 text-purple-800">Advance Payment</Badge>;
+      case "REFUND":
+        return <Badge className="bg-orange-100 text-orange-800">Refund</Badge>;
+      case "ADJUSTMENT":
+        return <Badge className="bg-gray-100 text-gray-800">Adjustment</Badge>;
       default:
         return <Badge>{type}</Badge>;
     }
@@ -74,8 +80,13 @@ export const VouchersDialog = React.memo(({
                         {getStatusBadge(voucher.status)}
                       </div>
                       <div className="text-sm font-mono text-muted-foreground">
-                        Voucher #: {voucher.voucher_no}
+                        Consumer Number: {voucher.consumer_number}
                       </div>
+                      {voucher.voucher_no && (
+                        <div className="text-xs font-mono text-muted-foreground">
+                          Voucher No: {voucher.voucher_no}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
                       <div className="flex items-center gap-2">
@@ -94,7 +105,7 @@ export const VouchersDialog = React.memo(({
                         </Button>
                       </div>
                       <div>
-                        <div className="text-lg font-bold text-green-600">
+                        <div className={`text-lg font-bold ${voucher.voucher_type === 'REFUND' || voucher.voucher_type === 'ADJUSTMENT' ? 'text-red-600' : 'text-green-600'}`}>
                           PKR {parseFloat(voucher.amount).toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground capitalize">
@@ -124,7 +135,40 @@ export const VouchersDialog = React.memo(({
                         {new Date(voucher.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
+                    {voucher.paid_at && (
+                      <div>
+                        <div className="font-medium">Paid At</div>
+                        <div className="text-xs">
+                          {new Date(voucher.paid_at).toLocaleDateString()} {" "}
+                          {new Date(voucher.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Payment Details */}
+                  {(voucher.card_number || voucher.check_number || voucher.bank_name) && (
+                    <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                      <div className="font-medium mb-2">Payment Details</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {voucher.card_number && (
+                          <div>
+                            <span className="font-medium">Card (Last 4):</span> {voucher.card_number}
+                          </div>
+                        )}
+                        {voucher.check_number && (
+                          <div>
+                            <span className="font-medium">Cheque No:</span> {voucher.check_number}
+                          </div>
+                        )}
+                        {voucher.bank_name && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Bank:</span> {voucher.bank_name}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {voucher.transaction_id && (
                     <div className="mt-2 text-sm">

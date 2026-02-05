@@ -27,7 +27,7 @@ export class BookingController {
   constructor(
     private readonly bookingService: BookingService,
     private readonly contentService: ContentService,
-  ) {}
+  ) { }
 
   @Get('lock')
   async lockBookings() {
@@ -60,7 +60,7 @@ export class BookingController {
   ) {
     const adminName = req.user?.name || 'system';
     return await this.bookingService.updateVoucherStatus(
-      payload.voucherId,
+      payload.voucherId.toString(),
       payload.status as 'PENDING' | 'CONFIRMED' | 'CANCELLED',
       adminName,
     );
@@ -78,7 +78,7 @@ export class BookingController {
       return await this.bookingService.cBookingRoom(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -86,7 +86,7 @@ export class BookingController {
       return await this.bookingService.cBookingHall(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -94,7 +94,7 @@ export class BookingController {
       return await this.bookingService.cBookingLawn(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -102,7 +102,7 @@ export class BookingController {
       return await this.bookingService.cBookingPhotoshoot(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -117,7 +117,7 @@ export class BookingController {
       return await this.bookingService.uBookingRoom(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -125,7 +125,7 @@ export class BookingController {
       return await this.bookingService.uBookingHall(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -133,7 +133,7 @@ export class BookingController {
       return await this.bookingService.uBookingLawn(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -141,7 +141,7 @@ export class BookingController {
       return await this.bookingService.uBookingPhotoshoot(
         {
           ...payload,
-          paymentMode: PaymentMode.CASH,
+          paymentMode: payload.paymentMode || PaymentMode.CASH,
         },
         adminName,
       );
@@ -458,6 +458,6 @@ export class BookingController {
   async cancelUnpaidBooking(
     @Param('voucherId', ParseIntPipe) voucherId: number,
   ) {
-    return await this.bookingService.cancelUnpaidBooking(voucherId);
+    return await this.bookingService.cancelUnpaidBooking(voucherId.toString());
   }
 }

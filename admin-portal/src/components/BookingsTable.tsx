@@ -108,17 +108,14 @@ export const BookingsTable = React.memo(({
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    {(booking.paymentStatus === "PAID" ||
-                      booking.paymentStatus === "HALF_PAID") && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onViewVouchers(booking)}
-                          title="View Vouchers"
-                        >
-                          <Receipt className="h-4 w-4" />
-                        </Button>
-                      )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onViewVouchers(booking)}
+                      title="View Vouchers"
+                    >
+                      <Receipt className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

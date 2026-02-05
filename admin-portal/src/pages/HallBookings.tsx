@@ -70,6 +70,7 @@ import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, differenceInCalendarDays, addDays, addYears, startOfDay } from "date-fns";
 import { HallBookingDetailsCard } from "@/components/details/HallBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
+import { Channel, PaymentMode } from "@/types/hall-booking.type";
 
 
 // Payment section built for hall bookings
@@ -184,6 +185,67 @@ const HallPaymentSection = React.memo(
             Credit (Amount Owed)
           </div>
         </div>
+
+        {/* Payment Mode Selection */}
+        {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border rounded-lg bg-gray-50">
+            <div className="col-span-2">
+              <Label className="font-semibold text-blue-800">Payment Medium Details</Label>
+            </div>
+            <div>
+              <Label>Payment Mode *</Label>
+              <Select
+                value={form.paymentMode || "CASH"}
+                onValueChange={(val) => onChange("paymentMode", val)}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="CARD">Card</SelectItem>
+                  <SelectItem value="CHECK">Check</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {form.paymentMode === "CARD" && (
+              <div>
+                <Label>Card Number (Last 4) *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="e.g. 1234"
+                  value={form.card_number || ""}
+                  onChange={(e) => onChange("card_number", e.target.value)}
+                />
+              </div>
+            )}
+
+            {form.paymentMode === "CHECK" && (
+              <div>
+                <Label>Check Number *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter check number"
+                  value={form.check_number || ""}
+                  onChange={(e) => onChange("check_number", e.target.value)}
+                />
+              </div>
+            )}
+
+            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK") && (
+              <div className="col-span-2">
+                <Label>Bank Name *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter bank name"
+                  value={form.bank_name || ""}
+                  onChange={(e) => onChange("bank_name", e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {(form.paymentStatus === "PAID" ||
           form.paymentStatus === "HALF_PAID") && (
@@ -894,7 +956,10 @@ export default function HallBookings() {
       paidAmount: form.paidAmount,
       pendingAmount: form.pendingAmount,
       pricingType: form.pricingType,
-      paymentMode: "CASH",
+      paymentMode: form.paymentMode,
+      card_number: form.card_number,
+      check_number: form.check_number,
+      bank_name: form.bank_name,
       paidBy: form.paidBy,
       guestName: form.guestName,
       guestContact: form.guestContact,
@@ -991,7 +1056,10 @@ export default function HallBookings() {
       paidAmount: editForm.paidAmount,
       pendingAmount: editForm.pendingAmount,
       pricingType: editForm.pricingType,
-      paymentMode: "CASH",
+      paymentMode: editForm.paymentMode,
+      card_number: editForm.card_number,
+      check_number: editForm.check_number,
+      bank_name: editForm.bank_name,
       paidBy: editForm.paidBy,
       guestName: editForm.guestName,
       guestContact: editForm.guestContact,
@@ -1075,8 +1143,10 @@ export default function HallBookings() {
         paidAmount: Number(editBooking.paidAmount) || 0,
         pendingAmount: Number(editBooking.pendingAmount) || 0,
         numberOfDays: editBooking.numberOfDays || (editBooking.endDate && editBooking.bookingDate ? Math.abs(differenceInCalendarDays(parseLocalDate(editBooking.endDate), parseLocalDate(editBooking.bookingDate))) + 1 : 1),
-        paymentMode: "CASH",
-
+        paymentMode: (editBooking as any).paymentMode || "CASH",
+        card_number: (editBooking as any).card_number || "",
+        check_number: (editBooking as any).check_number || "",
+        bank_name: (editBooking as any).bank_name || "",
         paidBy: editBooking.paidBy,
         guestName: editBooking.guestName,
         guestContact: editBooking.guestContact,

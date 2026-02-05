@@ -23,6 +23,10 @@ export interface HallBooking {
   updatedBy?: string;
   numberOfGuests: number;
   paidBy?: "MEMBER" | "GUEST";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   guestName?: "",
   guestContact?: "",
   numberOfDays?: number;
@@ -98,6 +102,9 @@ export interface HallBookingForm {
   paidAmount: number;
   pendingAmount: number;
   paymentMode: string;
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   paidBy?: "MEMBER" | "GUEST";
   guestName?: "",
   guestContact?: ""
@@ -110,4 +117,17 @@ export interface HallBookingForm {
 export type HallVoucher = Voucher;
 
 export type HallDateStatus = DateStatus;
+
+export enum PaymentMode {
+  CASH = "CASH",
+  ONLINE = "ONLINE",
+  CARD = "CARD",
+  CHECK = "CHECK",
+}
+
+export enum Channel {
+  ADMIN_PORTAL = "ADMIN_PORTAL",
+  MOBILE_APP = "MOBILE_APP",
+  KUICKPAY = "KUICKPAY",
+}
 

@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE `hallbooking` MODIFY `paymentStatus` ENUM('UNPAID', 'HALF_PAID', 'PAID', 'TO_BILL', 'ADVANCE_PAYMENT') NOT NULL DEFAULT 'UNPAID';
+
+-- AlterTable
+ALTER TABLE `lawnbooking` MODIFY `paymentStatus` ENUM('UNPAID', 'HALF_PAID', 'PAID', 'TO_BILL', 'ADVANCE_PAYMENT') NOT NULL DEFAULT 'UNPAID';
+
+-- AlterTable
+ALTER TABLE `photoshootbooking` MODIFY `paymentStatus` ENUM('UNPAID', 'HALF_PAID', 'PAID', 'TO_BILL', 'ADVANCE_PAYMENT') NOT NULL DEFAULT 'UNPAID';
+
+-- AlterTable
+ALTER TABLE `roombooking` MODIFY `paymentStatus` ENUM('UNPAID', 'HALF_PAID', 'PAID', 'TO_BILL', 'ADVANCE_PAYMENT') NOT NULL DEFAULT 'UNPAID';

@@ -60,6 +60,10 @@ export interface Booking {
   checkOut: string;
   totalPrice: number;
   paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   pricingType: "member" | "guest" | "forces" | "forces-self" | "forces-guest";
   paidBy: "MEMBER" | "GUEST",
   guestContact: "",
@@ -106,30 +110,40 @@ export interface BookingForm {
   checkIn: string;
   checkOut: string;
   totalPrice: number;
-  paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
+  paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL" | "ADVANCE_PAYMENT";
   paidAmount: number;
   pendingAmount: number;
-  paymentMode: "CASH";
+  paymentMode: "CASH" | "CARD" | "CHECK" | "ONLINE";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   numberOfAdults: number;
   numberOfChildren: number;
   specialRequests?: string;
   remarks?: string;
+  generateAdvanceVoucher?: boolean;
+  advanceVoucherAmount?: number;
 }
 
 export interface Voucher {
   id: number;
-  voucher_no: string;
+  consumer_number: string;
+  voucher_no?: string;
   booking_type: string;
   booking_id: number;
   membership_no: string;
-  amount: string;
-  payment_mode: string;
+  amount: string | number;
+  payment_mode: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   transaction_id: string | null;
   remarks: string;
-  voucher_type: "FULL_PAYMENT" | "HALF_PAYMENT";
+  voucher_type: "FULL_PAYMENT" | "HALF_PAYMENT" | "REFUND" | "ADJUSTMENT" | "ADVANCE_PAYMENT";
   status: "CONFIRMED" | "PENDING" | "CANCELLED";
   issued_at: string;
   issued_by: string;
+  paid_at?: string;
   createdBy?: string;
   updatedBy?: string;
   updatedAt?: string;

@@ -6,3 +6,19 @@ export function generateNumericVoucherNo(): string {
     .padStart(2, '0');
   return timestampPart + randomPart;
 }
+
+export function generateConsumerNumber(voucherId: number): string {
+  const prefix = process.env.KUICKPAY_PREFIX || '25430';
+  const voucherIdStr = voucherId.toString();
+  const totalLength = 18;
+  const paddingLength = totalLength - prefix.length - voucherIdStr.length;
+
+  if (paddingLength < 0) {
+    throw new Error(
+      `Consumer number would exceed 18 digits. Prefix: ${prefix.length}, VoucherId: ${voucherIdStr.length}`,
+    );
+  }
+
+  const padding = '0'.repeat(paddingLength);
+  return `${prefix}${padding}${voucherIdStr}`;
+}

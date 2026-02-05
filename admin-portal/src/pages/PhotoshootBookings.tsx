@@ -38,8 +38,13 @@ export interface PhotoshootBooking {
   pendingAmount: string;
   member: Member;
   paidBy?: string;
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   guestName?: string;
   guestContact?: string;
+  guestCNIC?: string;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
@@ -182,6 +187,67 @@ const PhotoshootPaymentSection = React.memo(
           </div>
         </div>
 
+        {/* Payment Mode Selection */}
+        {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border rounded-lg bg-gray-50">
+            <div className="col-span-2">
+              <Label className="font-semibold text-blue-800">Payment Medium Details</Label>
+            </div>
+            <div>
+              <Label>Payment Mode *</Label>
+              <Select
+                value={(form as any).paymentMode || "CASH"}
+                onValueChange={(val) => onChange("paymentMode" as any, val)}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="CARD">Card</SelectItem>
+                  <SelectItem value="CHECK">Check</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(form as any).paymentMode === "CARD" && (
+              <div>
+                <Label>Card Number (Last 4) *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="e.g. 1234"
+                  value={(form as any).card_number || ""}
+                  onChange={(e) => onChange("card_number" as any, e.target.value)}
+                />
+              </div>
+            )}
+
+            {(form as any).paymentMode === "CHECK" && (
+              <div>
+                <Label>Check Number *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter check number"
+                  value={(form as any).check_number || ""}
+                  onChange={(e) => onChange("check_number" as any, e.target.value)}
+                />
+              </div>
+            )}
+
+            {((form as any).paymentMode === "CARD" || (form as any).paymentMode === "CHECK") && (
+              <div className="col-span-2">
+                <Label>Bank Name *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter bank name"
+                  value={(form as any).bank_name || ""}
+                  onChange={(e) => onChange("bank_name" as any, e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {(form.paymentStatus === "PAID" ||
           form.paymentStatus === "HALF_PAID") && (
             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
@@ -220,6 +286,10 @@ export default function PhotoshootBookings() {
   const [paymentStatus, setPaymentStatus] = useState("UNPAID");
   const [paidAmount, setPaidAmount] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [pPaymentMode, setPPaymentMode] = useState("CASH");
+  const [pCardNumber, setPCardNumber] = useState("");
+  const [pCheckNumber, setPCheckNumber] = useState("");
+  const [pBankName, setPBankName] = useState("");
 
 
   const [detailBooking, setDetailBooking] = useState<PhotoshootBooking | null>(null);
@@ -426,6 +496,10 @@ export default function PhotoshootBookings() {
       guestContact: "",
       guestCNIC: ""
     });
+    setPPaymentMode("CASH");
+    setPCardNumber("");
+    setPCheckNumber("");
+    setPBankName("");
   };
 
   const handleCloseAddModal = () => {
@@ -459,7 +533,10 @@ export default function PhotoshootBookings() {
       pricingType,
       paidAmount: paymentStatus === "HALF_PAID" ? paidAmount : (paymentStatus === "PAID" ? totalPrice : 0),
       pendingAmount: totalPrice - (paymentStatus === "HALF_PAID" ? paidAmount : (paymentStatus === "PAID" ? totalPrice : 0)),
-      paymentMode: "CASH",
+      paymentMode: pPaymentMode,
+      card_number: pCardNumber,
+      check_number: pCheckNumber,
+      bank_name: pBankName,
       paidBy: guestSec.paidBy,
       guestName: guestSec.guestName,
       guestCNIC: guestSec.guestCNIC,
@@ -488,10 +565,13 @@ export default function PhotoshootBookings() {
       pricingType,
       paidAmount: paymentStatus === "HALF_PAID" ? paidAmount : (paymentStatus === "PAID" ? totalPrice : 0),
       pendingAmount: totalPrice - (paymentStatus === "HALF_PAID" ? paidAmount : (paymentStatus === "PAID" ? totalPrice : 0)),
-      paymentMode: "CASH",
+      paymentMode: (editBooking as any).paymentMode || "CASH",
+      card_number: (editBooking as any).card_number,
+      check_number: (editBooking as any).check_number,
+      bank_name: (editBooking as any).bank_name,
       paidBy: guestSec.paidBy,
       guestName: guestSec.guestName,
-      guestContact: guestSec.guestContact?.toString()
+      guestContact: guestSec.guestContact?.toString(),
     };
 
     updateMutation.mutate(payload);
@@ -523,8 +603,13 @@ export default function PhotoshootBookings() {
       setGuestSec({
         paidBy: editBooking.paidBy || "",
         guestName: editBooking.guestName || "",
-        guestContact: editBooking.guestContact || ""
+        guestContact: editBooking.guestContact || "",
+        guestCNIC: editBooking.guestCNIC || ""
       });
+      setPPaymentMode((editBooking as any).paymentMode || "CASH");
+      setPCardNumber((editBooking as any).card_number || "");
+      setPCheckNumber((editBooking as any).check_number || "");
+      setPBankName((editBooking as any).bank_name || "");
     }
   }, [editBooking]);
 
@@ -1222,12 +1307,6 @@ export default function PhotoshootBookings() {
 
             {/* Accounting Summary Section for Edit */}
             <PhotoshootPaymentSection
-              form={{
-                paymentStatus: paymentStatus,
-                totalPrice: totalPrice,
-                paidAmount: paidAmount,
-                pendingAmount: totalPrice - paidAmount
-              }}
               onChange={(field, value) => {
                 if (field === "paymentStatus") {
                   setPaymentStatus(value);
@@ -1242,8 +1321,26 @@ export default function PhotoshootBookings() {
                   }
                 } else if (field === "paidAmount") {
                   setPaidAmount(value);
+                } else if (field === "paymentMode") {
+                  setPPaymentMode(value);
+                } else if (field === "card_number") {
+                  setPCardNumber(value);
+                } else if (field === "check_number") {
+                  setPCheckNumber(value);
+                } else if (field === "bank_name") {
+                  setPBankName(value);
                 }
               }}
+              form={{
+                paymentStatus: paymentStatus,
+                totalPrice: totalPrice,
+                paidAmount: paidAmount,
+                pendingAmount: totalPrice - paidAmount,
+                paymentMode: pPaymentMode,
+                card_number: pCardNumber,
+                check_number: pCheckNumber,
+                bank_name: pBankName
+              } as any}
             />
           </div>
           <DialogFooter>

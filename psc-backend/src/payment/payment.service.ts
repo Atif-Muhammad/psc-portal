@@ -14,6 +14,7 @@ import {
   VoucherStatus,
   VoucherType,
   Channel,
+  PaymentStatus,
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -21,7 +22,7 @@ import {
   getPakistanDate,
   parsePakistanDate,
 } from 'src/utils/time';
-import { generateNumericVoucherNo } from 'src/utils/id';
+import { generateNumericVoucherNo, generateConsumerNumber } from 'src/utils/id';
 import { BookingService } from 'src/booking/booking.service';
 import {
   BillInquiryResponse,
@@ -32,9 +33,13 @@ import { RealtimeGateway } from 'src/realtime/realtime.gateway';
 import { NotificationService } from 'src/notification/notification.service';
 import { MailerService } from 'src/mailer/mailer.service';
 import { v4 as uuidv4 } from 'uuid';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class PaymentService {
+  private paymentPolicies: any = null;
+
   constructor(
     private prismaService: PrismaService,
     private bookingService: BookingService,
@@ -43,11 +48,119 @@ export class PaymentService {
     private mailerService: MailerService,
   ) { }
 
+  // Payment Policy Helpers
+  private loadPaymentPolicies() {
+    if (this.paymentPolicies) {
+      return this.paymentPolicies;
+    }
+
+    try {
+      const configPath = path.join(__dirname, '..', 'common', 'config', 'payment-policies.json');
+      const fileContent = fs.readFileSync(configPath, 'utf-8');
+      this.paymentPolicies = JSON.parse(fileContent);
+      return this.paymentPolicies;
+    } catch (error) {
+      console.error('Failed to load payment policies:', error);
+      // Return default policies if file is not found
+      return {
+        roomBooking: {
+          advancePayment: {
+            '1-2': 0.25,
+            '3-5': 0.50,
+            '6-8': 0.75,
+          },
+          cancellationRefund: {
+            moreThan72Hours: {
+              '1-2': { deduction: 0.05 },
+              '3-5': { deduction: 0.15 },
+              '6-8': { deduction: 0.25 },
+            },
+            '24To72Hours': {
+              '1-2': { deduction: 0.10 },
+              '3-5': { deduction: 0.25 },
+              '6-8': { deduction: 0.50 },
+            },
+            lessThan24Hours: {
+              '1-2': { deduction: 1.00 },
+              '3-5': { deduction: 1.00 },
+              '6-8': { deduction: 1.00 },
+            },
+          },
+        },
+      };
+    }
+  }
+
+  private calculateAdvancePayment(totalPrice: number, numberOfRooms: number): { amount: number; percentage: number } {
+    const policies = this.loadPaymentPolicies();
+    const advancePolicy = policies.roomBooking.advancePayment;
+
+    let percentage = 0.25; // default
+
+    if (numberOfRooms >= 1 && numberOfRooms <= 2) {
+      percentage = advancePolicy['1-2'];
+    } else if (numberOfRooms >= 3 && numberOfRooms <= 5) {
+      percentage = advancePolicy['3-5'];
+    } else if (numberOfRooms >= 6 && numberOfRooms <= 8) {
+      percentage = advancePolicy['6-8'];
+    }
+
+    return {
+      amount: Math.round(totalPrice * percentage),
+      percentage: percentage * 100,
+    };
+  }
+
+  private getHoursUntilCheckIn(checkInDate: Date, currentDate: Date = new Date()): number {
+    const diffMs = checkInDate.getTime() - currentDate.getTime();
+    return diffMs / (1000 * 60 * 60); // Convert milliseconds to hours
+  }
+
+  private calculateRefundAmount(
+    paidAmount: number,
+    totalPrice: number,
+    numberOfRooms: number,
+    checkInDate: Date,
+    cancellationDate: Date = new Date(),
+  ): { refundAmount: number; deductionPercentage: number } {
+    const policies = this.loadPaymentPolicies();
+    const hoursUntilCheckIn = this.getHoursUntilCheckIn(checkInDate, cancellationDate);
+
+    let roomBracket = '1-2';
+    if (numberOfRooms >= 3 && numberOfRooms <= 5) {
+      roomBracket = '3-5';
+    } else if (numberOfRooms >= 6 && numberOfRooms <= 8) {
+      roomBracket = '6-8';
+    }
+
+    let deduction = 1.0; // default: no refund
+
+    if (hoursUntilCheckIn >= 72) {
+      // More than 72 hours before check-in
+      deduction = policies.roomBooking.cancellationRefund.moreThan72Hours[roomBracket].deduction;
+    } else if (hoursUntilCheckIn >= 24 && hoursUntilCheckIn < 72) {
+      // Between 24-72 hours before check-in
+      deduction = policies.roomBooking.cancellationRefund['24To72Hours'][roomBracket].deduction;
+    } else {
+      // Less than 24 hours before check-in
+      deduction = policies.roomBooking.cancellationRefund.lessThan24Hours[roomBracket].deduction;
+    }
+
+    const deductionAmount = Math.round(totalPrice * deduction);
+    const refundAmount = Math.max(0, paidAmount - deductionAmount);
+
+    return {
+      refundAmount,
+      deductionPercentage: deduction * 100,
+    };
+  }
+
   // Kuickpay Integration Logic
 
-  async getBillInquiry(voucherId: number): Promise<BillInquiryResponse> {
+  async getBillInquiry(consumerNumber: string): Promise<BillInquiryResponse> {
+    console.log(consumerNumber)
     const voucher = await this.prismaService.paymentVoucher.findUnique({
-      where: { id: voucherId },
+      where: { consumer_number: consumerNumber },
       include: {
         member: true,
       },
@@ -71,12 +184,70 @@ export class PaymentService {
       } as any;
     }
 
+    // Check if voucher is a REFUND voucher - should not be payable
+    if (voucher.voucher_type === VoucherType.REFUND) {
+      return {
+        response_Code: '01',
+        consumer_Detail: ''.padEnd(30, ' '),
+        bill_status: 'B',
+        due_date: ' ',
+        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        email_address: ' ',
+        contact_number: ' ',
+        billing_month: ' ',
+        date_paid: ' ',
+        amount_paid: ' ',
+        tran_auth_Id: ' ',
+        reserved: 'Refund voucher',
+      } as any;
+    }
+
+    // Check if voucher is cancelled
+    if (voucher.status === VoucherStatus.CANCELLED) {
+      return {
+        response_Code: '01',
+        consumer_Detail: ''.padEnd(30, ' '),
+        bill_status: 'B',
+        due_date: ' ',
+        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        email_address: ' ',
+        contact_number: ' ',
+        billing_month: ' ',
+        date_paid: ' ',
+        amount_paid: ' ',
+        tran_auth_Id: ' ',
+        reserved: 'Cancelled',
+      } as any;
+    }
+
+    // Check if voucher has expired
+    const now = new Date();
+    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      return {
+        response_Code: '01',
+        consumer_Detail: ''.padEnd(30, ' '),
+        bill_status: 'B',
+        due_date: ' ',
+        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+        email_address: ' ',
+        contact_number: ' ',
+        billing_month: ' ',
+        date_paid: ' ',
+        amount_paid: ' ',
+        tran_auth_Id: ' ',
+        reserved: 'Expired',
+      } as any;
+    }
+
     const bookingDate = voucher.issued_at;
     const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
-    else if (voucher.status === VoucherStatus.CANCELLED) billStatus = 'B';
+    else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
 
     const amountStr = this.formatAmountForKuickpay(
       Number(voucher.amount),
@@ -118,15 +289,9 @@ export class PaymentService {
   async processBillPayment(
     paymentData: BillPaymentRequestDto,
   ): Promise<BillPaymentResponse> {
-    const voucherId = parseInt(
-      paymentData.consumer_number.slice(
-        process.env.KUICKPAY_PREFIX?.length || 5,
-      ),
-    );
-
     return await this.prismaService.$transaction(async (prisma) => {
       const voucher = await prisma.paymentVoucher.findUnique({
-        where: { id: voucherId },
+        where: { consumer_number: paymentData.consumer_number },
         include: { member: true },
       });
 
@@ -134,7 +299,26 @@ export class PaymentService {
         return {
           response_Code: '01',
           Identification_parameter: '',
-          reserved: '',
+          reserved: 'Voucher not found',
+        };
+      }
+
+      // Check if voucher is a REFUND voucher - should not be payable
+      if (voucher.voucher_type === VoucherType.REFUND) {
+        return {
+          response_Code: '02',
+          Identification_parameter: '',
+          reserved: 'Refund voucher cannot be paid',
+        };
+      }
+
+      // Check if voucher has expired
+      const now = new Date();
+      if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+        return {
+          response_Code: '02',
+          Identification_parameter: '',
+          reserved: 'Voucher expired',
         };
       }
 
@@ -144,7 +328,7 @@ export class PaymentService {
           return {
             response_Code: '03',
             Identification_parameter:
-              voucher.member?.Email || voucher.voucher_no,
+              voucher.member?.Email || (voucher as any).consumer_number,
             reserved: 'Duplicate ignored',
           };
         }
@@ -165,14 +349,15 @@ export class PaymentService {
 
       // Update voucher
       await prisma.paymentVoucher.update({
-        where: { id: voucherId },
+        where: { consumer_number: paymentData.consumer_number },
         data: {
           status: VoucherStatus.CONFIRMED,
           transaction_id: paymentData.tran_auth_id,
           payment_mode: PaymentMode.ONLINE,
           channel: Channel.KUICKPAY,
           gateway_meta: paymentData as any,
-          invoice_no: paymentData.tran_auth_id, // Using auth id as invoice no for now
+          paid_at: new Date(),
+          // invoice_no: paymentData.tran_auth_id, // Using auth id as invoice no for now
         },
       });
 
@@ -181,20 +366,36 @@ export class PaymentService {
       const bId = voucher.booking_id;
 
       if (bType === 'ROOM') {
-        const booking = await prisma.roomBooking.update({
+        const booking = await prisma.roomBooking.findUnique({
           where: { id: bId },
-          data: {
-            paymentStatus: 'PAID',
-            paidAmount: voucher.amount,
-            pendingAmount: 0,
-            isConfirmed: true,
-          },
           include: { rooms: true },
         });
-        const roomIds = booking.rooms.map((r) => r.roomId);
-        await prisma.roomHoldings.deleteMany({
-          where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
-        });
+
+        if (booking) {
+          const voucherAmount = Number(voucher.amount);
+          const currentPaid = Number(booking.paidAmount);
+          const total = Number(booking.totalPrice);
+          const newPaid = currentPaid + voucherAmount;
+          const newStatus =
+            newPaid >= total ? PaymentStatus.PAID : booking.paymentStatus;
+          const newPending = Math.max(0, total - newPaid);
+
+          const updatedBooking = await prisma.roomBooking.update({
+            where: { id: bId },
+            data: {
+              paymentStatus: newStatus,
+              paidAmount: newPaid,
+              pendingAmount: newPending,
+              isConfirmed: true,
+            },
+            include: { rooms: true },
+          });
+
+          const roomIds = updatedBooking.rooms.map((r) => r.roomId);
+          await prisma.roomHoldings.deleteMany({
+            where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
+          });
+        }
       } else if (bType === 'HALL') {
         const booking = await prisma.hallBooking.update({
           where: { id: bId },
@@ -247,7 +448,7 @@ export class PaymentService {
 
       const response = {
         response_Code: '00',
-        Identification_parameter: voucher.member?.Email || voucher.voucher_no,
+        Identification_parameter: (voucher as any).member?.Email || (voucher as any).consumer_number,
         reserved: '',
       };
 
@@ -264,13 +465,13 @@ export class PaymentService {
     voucher: any,
     paymentData: BillPaymentRequestDto,
   ) {
-    const voucherId = voucher.id;
+    const consumer_number = voucher.consumer_number;
     const email = voucher.member?.Email;
     const name = voucher.member?.Name || 'Member';
     const amount = Number(voucher.amount);
 
     // 1. Real-time update
-    this.realtimeGateway.emitPaymentUpdate(voucherId, 'PAID', {
+    this.realtimeGateway.emitPaymentUpdate(voucher?.id, 'PAID', {
       amount,
       transactionId: paymentData.tran_auth_id,
     });
@@ -305,7 +506,7 @@ export class PaymentService {
           <h3>Dear ${name},</h3>
           <p>This is to confirm that your payment for <b>${voucher.booking_type}</b> booking has been successfully processed.</p>
           <ul>
-            <li><b>Voucher No:</b> ${voucher.voucher_no}</li>
+            <li><b>Consumer No:</b> ${consumer_number}</li>
             <li><b>Amount:</b> Rs. ${amount}</li>
             <li><b>Transaction ID:</b> ${paymentData.tran_auth_id}</li>
             <li><b>Date:</b> ${new Date().toLocaleDateString()}</li>
@@ -350,111 +551,6 @@ export class PaymentService {
     return new Date(year, month, day);
   }
 
-  /**
-   * Generates a consumer number with exactly 18 digits.
-   * Format: prefix + zeros + voucherId
-   * The number of zeros adjusts to ensure total length is always 18.
-   */
-  private generateConsumerNumber(voucherId: number): string {
-    const prefix = process.env.KUICKPAY_PREFIX || '25430';
-    const voucherIdStr = voucherId.toString();
-    const totalLength = 18;
-    const paddingLength = totalLength - prefix.length - voucherIdStr.length;
-
-    // Ensure padding length is non-negative
-    if (paddingLength < 0) {
-      throw new Error(
-        `Consumer number would exceed 18 digits. Prefix: ${prefix.length}, VoucherId: ${voucherIdStr.length}`
-      );
-    }
-
-    const padding = '0'.repeat(paddingLength);
-    return `${prefix}${padding}${voucherIdStr}`;
-  }
-
-  // kuick pay
-  // Mock payment gateway call - replace with actual integration
-  private async callPaymentGateway(paymentData: any) {
-    // Simulate API call to payment gateway
-
-    // This would be your actual payment gateway integration
-    // For example:
-    // const response = await axios.post('https://payment-gateway.com/invoice', paymentData);
-    // return response.data;
-
-    // the kuickpay api will call member booking api once payment is done
-    paymentData.type === 'room' &&
-      (await fetch('http://localhost:3000/booking/member/booking/room', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...paymentData.bookingData,
-          membershipNo: paymentData.consumerInfo.membership_no,
-          paymentMode: 'ONLINE',
-          paymentStatus: 'PAID', // Online payment is successful at this point
-        }),
-      }));
-    const bookHall = async (paymentData) => {
-      const done = await fetch(
-        'http://localhost:3000/booking/member/booking/hall',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...paymentData.bookingData,
-            membershipNo: paymentData.consumerInfo.membership_no,
-            paymentMode: 'ONLINE',
-            paymentStatus: 'PAID',
-          }),
-        },
-      );
-    };
-    paymentData.type === 'hall' && bookHall(paymentData);
-    paymentData.type === 'lawn' &&
-      (await fetch('http://localhost:3000/booking/member/booking/lawn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...paymentData.bookingData,
-          membershipNo: paymentData.consumerInfo.membership_no,
-          paymentMode: 'ONLINE',
-          paymentStatus: 'PAID',
-        }),
-      }));
-
-    const bookPhoto = async (paymentData) => {
-      const done = await fetch(
-        'http://localhost:3000/booking/member/booking/photoshoot',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...paymentData.bookingData,
-            membershipNo: paymentData.consumerInfo.membership_no,
-            paymentMode: 'ONLINE',
-            paymentStatus: 'PAID',
-          }),
-        },
-      );
-      // console.log(done)
-    };
-    paymentData.type === 'photoshoot' && bookPhoto(paymentData);
-
-    // Mock successful response
-    return {
-      success: true,
-      transactionId:
-        'TXN_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-    };
-  }
 
   async confirmBooking(type: string, id: number) {
     const bookingType = type.toUpperCase() as BookingType;
@@ -556,6 +652,7 @@ export class PaymentService {
   }
 
   private async createVoucher(data: {
+    consumer_number: string;
     booking_type: BookingType;
     booking_id: number;
     membership_no: string;
@@ -567,21 +664,23 @@ export class PaymentService {
     remarks: string;
     expiresAt?: Date;
   }) {
-    const voucher_no = generateNumericVoucherNo();
+    // const voucher_no = generateNumericVoucherNo();
     return await this.prismaService.paymentVoucher.create({
       data: {
-        voucher_no,
+        consumer_number: data.consumer_number,
+        // voucher_no,
         booking_type: data.booking_type,
         booking_id: data.booking_id,
         membership_no: data.membership_no,
         amount: data.amount,
         payment_mode: data.payment_mode,
+        channel: data.payment_mode === PaymentMode.ONLINE ? Channel.KUICKPAY : Channel.ADMIN_PORTAL,
         voucher_type: data.voucher_type,
         status: data.status || VoucherStatus.PENDING,
         issued_by: data.issued_by || 'system',
         remarks: data.remarks,
         expiresAt: data.expiresAt,
-      },
+      } as any,
     });
   }
 
@@ -655,6 +754,7 @@ export class PaymentService {
             booking: {
               checkIn: { lt: checkOut },
               checkOut: { gt: checkIn },
+              isCancelled: false,
             },
           },
         },
@@ -757,17 +857,24 @@ export class PaymentService {
       },
     });
 
-    // create voucher as unpaid/pending
+    // Calculate advance payment based on number of rooms
+    const advancePaymentCalc = this.calculateAdvancePayment(totalPrice, bookingData.numberOfRooms);
+    const advanceAmount = advancePaymentCalc.amount;
+    const advancePercentage = advancePaymentCalc.percentage;
+
+    // create voucher as unpaid/pending with advance payment amount
+    const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
+      consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'ROOM',
       booking_id: booking.id,
       membership_no: String(bookingData.membership_no),
-      amount: totalPrice,
+      amount: advanceAmount,
       payment_mode: 'ONLINE',
-      voucher_type: 'FULL_PAYMENT',
+      voucher_type: VoucherType.ADVANCE_PAYMENT,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Room booking: ${selectedRooms.map((room) => room.roomNumber).join(', ')} from ${bookingData.from} to ${bookingData.to}`,
+      remarks: `Advance payment (${advancePercentage}%) for room booking: ${selectedRooms.map((room) => room.roomNumber).join(', ')} from ${bookingData.from} to ${bookingData.to}. Total: Rs. ${totalPrice}`,
       expiresAt: holdExpiry,
     });
 
@@ -784,7 +891,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: this.generateConsumerNumber(voucher.id),
+          consumer_number: voucher.consumer_number,
         },
       };
     }
@@ -1041,7 +1148,9 @@ export class PaymentService {
     });
 
     // create voucher as unpaid/pending
+    const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
+      consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'HALL',
       booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
@@ -1055,6 +1164,7 @@ export class PaymentService {
     });
 
     // return voucher details
+
     if (voucher) {
       return {
         issue_date: voucher.issued_at,
@@ -1067,7 +1177,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: this.generateConsumerNumber(voucher.id),
+          consumer_number: voucher.consumer_number,
         },
       };
     }
@@ -1276,7 +1386,9 @@ export class PaymentService {
     });
 
     // create voucher as unpaid/pending
+    const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
+      consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'LAWN',
       booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
@@ -1302,35 +1414,13 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: this.generateConsumerNumber(voucher.id),
+          consumer_number: voucher.consumer_number,
         },
       };
     }
     throw new HttpException('Failed to create voucher', 500);
   }
 
-  // Helper methods
-  private isCurrentlyOutOfOrder(outOfOrders: any[]): boolean {
-    if (!outOfOrders || outOfOrders.length === 0) return false;
-
-    const now = new Date();
-    return outOfOrders.some((period) => {
-      const start = new Date(period.startDate);
-      const end = new Date(period.endDate);
-      return start <= now && end >= now;
-    });
-  }
-
-  private getCurrentOutOfOrderPeriod(outOfOrders: any[]): any | null {
-    if (!outOfOrders || outOfOrders.length === 0) return null;
-
-    const now = new Date();
-    return outOfOrders.find((period) => {
-      const start = new Date(period.startDate);
-      const end = new Date(period.endDate);
-      return start <= now && end >= now;
-    });
-  }
 
   async genInvoicePhotoshoot(photoshootId: number, bookingData: any) {
     console.log('Photoshoot booking data received:', bookingData);
@@ -1457,7 +1547,9 @@ export class PaymentService {
     });
 
     // create voucher as unpaid/pending
+    const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
+      consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'PHOTOSHOOT',
       booking_id: booking.id,
       membership_no: String(bookingData.membership_no),
@@ -1483,7 +1575,7 @@ export class PaymentService {
         },
         voucher: {
           ...voucher,
-          consumer_number: this.generateConsumerNumber(voucher.id),
+          consumer_number: voucher.consumer_number,
         },
       };
     }
@@ -1539,7 +1631,7 @@ export class PaymentService {
 
         // 2. Delete the voucher itself
         await prisma.paymentVoucher.delete({
-          where: { id: voucher.id },
+          where: { consumer_number: voucher.consumer_number },
         });
       });
     }

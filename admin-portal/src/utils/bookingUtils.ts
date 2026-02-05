@@ -223,18 +223,44 @@ export const calculateAccountingValues = (
   totalPrice: number,
   paidAmount: number
 ) => {
-  let paid = 0;
-  let owed = totalPrice;
+  let paid = paidAmount || 0;
+  let owed = totalPrice - paid;
 
   if (paymentStatus === "PAID") {
     paid = totalPrice;
     owed = 0;
+  } else if (paymentStatus === "UNPAID") {
+    paid = 0;
+    owed = totalPrice;
   } else if (paymentStatus === "HALF_PAID") {
+    paid = paidAmount;
+    owed = totalPrice - paidAmount;
+  } else if (paymentStatus === "ADVANCE_PAYMENT") {
+    paid = paidAmount;
+    owed = totalPrice - paidAmount;
+  } else if (paymentStatus === "TO_BILL") {
     paid = paidAmount;
     owed = totalPrice - paidAmount;
   }
 
+  // Ensure owed is not negative (overpaid cases handled by backend)
+  if (owed < 0) owed = 0;
+
   return { paid, owed, pendingAmount: owed };
+};
+
+export const calculateAdvanceDetails = (roomCount: number, totalPrice: number) => {
+  if (roomCount === 0) return { percentage: 0, requiredAmount: 0 };
+
+  let percentage = 0;
+  if (roomCount >= 1 && roomCount <= 2) percentage = 0.25;
+  else if (roomCount >= 3 && roomCount <= 5) percentage = 0.50;
+  else if (roomCount >= 6) percentage = 0.75;
+
+  return {
+    percentage: percentage * 100,
+    requiredAmount: Math.round(totalPrice * percentage)
+  };
 };
 
 export const initialFormState: BookingForm = {
@@ -256,6 +282,9 @@ export const initialFormState: BookingForm = {
   paidAmount: 0,
   pendingAmount: 0,
   paymentMode: "CASH",
+  card_number: "",
+  check_number: "",
+  bank_name: "",
 
   numberOfAdults: 1,
   numberOfChildren: 0,

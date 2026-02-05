@@ -312,12 +312,16 @@ const OutOfOrderPeriods = ({
   onRemovePeriod,
   newPeriod,
   onNewPeriodChange,
+  onEditPeriod,
+  editingIndex,
 }: {
   periods: LawnOutOfOrder[];
   onAddPeriod: () => void;
   onRemovePeriod: (index: number) => void;
   newPeriod: LawnOutOfOrder;
   onNewPeriodChange: (period: LawnOutOfOrder) => void;
+  onEditPeriod: (index: number) => void;
+  editingIndex: number | null;
 }) => {
   return (
     <div className="space-y-4 p-4 rounded-lg border bg-slate-50/50">
@@ -337,9 +341,14 @@ const OutOfOrderPeriods = ({
                 <span className="font-bold text-orange-800">{formatDate(period.startDate)} - {formatDate(period.endDate)}</span>
                 <p className="text-muted-foreground italic">{period.reason}</p>
               </div>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemovePeriod(index)}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => onEditPeriod(index)}>
+                  <Edit className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemovePeriod(index)}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -406,7 +415,11 @@ const OutOfOrderPeriods = ({
           </Popover>
         </div>
         <Button size="sm" className="col-span-2 h-8" variant="secondary" onClick={onAddPeriod} disabled={!newPeriod.reason || !newPeriod.startDate || !newPeriod.endDate}>
-          <Plus className="h-3 w-3 mr-1" /> Add Period
+          {editingIndex !== null ? (
+            <><Edit className="h-3 w-3 mr-1" /> Update Period</>
+          ) : (
+            <><Plus className="h-3 w-3 mr-1" /> Add Period</>
+          )}
         </Button>
       </div>
     </div>
@@ -797,6 +810,9 @@ export default function Lawns() {
   const [editLawn, setEditLawn] = useState<any>(null);
   const [deleteLawnItem, setDeleteLawnItem] = useState<any>(null);
   const [reserveDialog, setReserveDialog] = useState(false);
+
+  const [editingOOIndex, setEditingOOIndex] = useState<number | null>(null);
+  const [editingEditOOIndex, setEditingEditOOIndex] = useState<number | null>(null);
 
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [selectedLawns, setSelectedLawns] = useState<number[]>([]);
@@ -1353,10 +1369,28 @@ export default function Lawns() {
                 newPeriod={newOutOfOrder}
                 onNewPeriodChange={setNewOutOfOrder}
                 onAddPeriod={() => {
-                  setForm(p => ({ ...p, outOfOrders: [...p.outOfOrders, newOutOfOrder] }));
+                  if (editingOOIndex !== null) {
+                    const updated = [...form.outOfOrders];
+                    updated[editingOOIndex] = newOutOfOrder;
+                    setForm(p => ({ ...p, outOfOrders: updated }));
+                    setEditingOOIndex(null);
+                  } else {
+                    setForm(p => ({ ...p, outOfOrders: [...p.outOfOrders, newOutOfOrder] }));
+                  }
                   setNewOutOfOrder(initialOutOfOrderState);
                 }}
-                onRemovePeriod={(i) => setForm(p => ({ ...p, outOfOrders: p.outOfOrders.filter((_, idx) => idx !== i) }))}
+                onRemovePeriod={(i) => {
+                  setForm(p => ({ ...p, outOfOrders: p.outOfOrders.filter((_, idx) => idx !== i) }));
+                  if (editingOOIndex === i) {
+                    setEditingOOIndex(null);
+                    setNewOutOfOrder(initialOutOfOrderState);
+                  }
+                }}
+                onEditPeriod={(i) => {
+                  setEditingOOIndex(i);
+                  setNewOutOfOrder(form.outOfOrders[i]);
+                }}
+                editingIndex={editingOOIndex}
               />
             </div>
             <div className="flex items-center gap-4">
@@ -1413,10 +1447,28 @@ export default function Lawns() {
                 newPeriod={editNewOutOfOrder}
                 onNewPeriodChange={setEditNewOutOfOrder}
                 onAddPeriod={() => {
-                  setEditForm(p => ({ ...p, outOfOrders: [...p.outOfOrders, editNewOutOfOrder] }));
+                  if (editingEditOOIndex !== null) {
+                    const updated = [...editForm.outOfOrders];
+                    updated[editingEditOOIndex] = editNewOutOfOrder;
+                    setEditForm(p => ({ ...p, outOfOrders: updated }));
+                    setEditingEditOOIndex(null);
+                  } else {
+                    setEditForm(p => ({ ...p, outOfOrders: [...p.outOfOrders, editNewOutOfOrder] }));
+                  }
                   setEditNewOutOfOrder(initialOutOfOrderState);
                 }}
-                onRemovePeriod={(i) => setEditForm(p => ({ ...p, outOfOrders: p.outOfOrders.filter((_, idx) => idx !== i) }))}
+                onRemovePeriod={(i) => {
+                  setEditForm(p => ({ ...p, outOfOrders: p.outOfOrders.filter((_, idx) => idx !== i) }));
+                  if (editingEditOOIndex === i) {
+                    setEditingEditOOIndex(null);
+                    setEditNewOutOfOrder(initialOutOfOrderState);
+                  }
+                }}
+                onEditPeriod={(i) => {
+                  setEditingEditOOIndex(i);
+                  setEditNewOutOfOrder(editForm.outOfOrders[i]);
+                }}
+                editingIndex={editingEditOOIndex}
               />
             </div>
             <div className="flex items-center gap-4">

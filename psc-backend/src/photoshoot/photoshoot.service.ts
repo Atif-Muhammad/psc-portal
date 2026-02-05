@@ -8,7 +8,7 @@ export class PhotoshootService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // ─────────────────────────── PHOTOSHOOT ───────────────────────────
   async createPhotoShoot(
@@ -34,15 +34,31 @@ export class PhotoshootService {
       });
     }
 
-    return await this.prismaService.photoshoot.create({
+    const photoshoot = await this.prismaService.photoshoot.create({
       data: {
-        description: payload.description,
+        description: payload.description || "",
         memberCharges: Number(payload.memberCharges),
         guestCharges: Number(payload.guestCharges),
         images: uploadedImages,
         createdBy,
       },
     });
+
+    if (payload.outOfOrders && payload.outOfOrders.length > 0) {
+      const outOfOrderData = payload.outOfOrders.map((oo) => ({
+        photoshootId: photoshoot.id,
+        reason: oo.reason,
+        startDate: new Date(oo.startDate),
+        endDate: new Date(oo.endDate),
+        createdBy,
+      }));
+
+      await this.prismaService.photoshootOutOfOrder.createMany({
+        data: outOfOrderData,
+      });
+    }
+
+    return photoshoot;
   }
 
   async getPhotoshoots() {
@@ -61,6 +77,9 @@ export class PhotoshootService {
               select: { id: true, name: true, email: true },
             },
           },
+        },
+        outOfOrders: {
+          orderBy: { startDate: 'asc' },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -95,8 +114,8 @@ export class PhotoshootService {
 
     const filteredExistingImages = Array.isArray(photoshoot.images)
       ? (photoshoot.images as any[]).filter((img: any) =>
-          keepImagePublicIds.includes(img.publicId),
-        )
+        keepImagePublicIds.includes(img.publicId),
+      )
       : [];
 
     const newUploadedImages: any[] = [];
@@ -118,7 +137,7 @@ export class PhotoshootService {
       );
     }
 
-    return await this.prismaService.photoshoot.update({
+    const updatedPhotoshoot = await this.prismaService.photoshoot.update({
       where: { id: Number(payload.id) },
       data: {
         description: payload.description,
@@ -131,7 +150,33 @@ export class PhotoshootService {
         images: finalImages,
         updatedBy,
       },
+      include: {
+        outOfOrders: true,
+      },
     });
+
+    if (payload.outOfOrders) {
+      await this.prismaService.photoshootOutOfOrder.deleteMany({
+        where: { photoshootId: Number(payload.id) },
+      });
+
+      if (payload.outOfOrders.length > 0) {
+        const outOfOrderData = payload.outOfOrders.map((oo) => ({
+          photoshootId: Number(payload.id),
+          reason: oo.reason,
+          startDate: new Date(oo.startDate),
+          endDate: new Date(oo.endDate),
+          updatedBy,
+          createdBy: oo.id ? undefined : updatedBy,
+        }));
+
+        await this.prismaService.photoshootOutOfOrder.createMany({
+          data: outOfOrderData,
+        });
+      }
+    }
+
+    return updatedPhotoshoot;
   }
 
   async deletePhotoshoot(id: number) {
@@ -258,7 +303,7 @@ export class PhotoshootService {
     const toDate = new Date(to);
     toDate.setHours(23, 59, 59, 999);
 
-    const [reservations, bookings] = await Promise.all([
+    const [reservations, bookings, outOfOrders] = await Promise.all([
       this.prismaService.photoshootReservation.findMany({
         where: {
           photoshootId,
@@ -286,8 +331,18 @@ export class PhotoshootService {
         },
         orderBy: { bookingDate: 'desc' },
       }),
+      this.prismaService.photoshootOutOfOrder.findMany({
+        where: {
+          photoshootId,
+          OR: [
+            { startDate: { lte: toDate, gte: fromDate } },
+            { endDate: { lte: toDate, gte: fromDate } },
+          ],
+        },
+        orderBy: { startDate: 'desc' },
+      }),
     ]);
 
-    return { reservations, bookings, outOfOrders: [] }; // Photoshoot doesn't have out of orders yet
+    return { reservations, bookings, outOfOrders };
   }
 }

@@ -1,0 +1,44 @@
+{
+  "roomBooking": {
+    "advancePayment": {
+      "1-2": 0.25,
+      "3-5": 0.50,
+      "6-8": 0.75
+    },
+    "cancellationRefund": {
+      "moreThan72Hours": {
+        "1-2": {
+          "deduction": 0.05
+        },
+        "3-5": {
+          "deduction": 0.15
+        },
+        "6-8": {
+          "deduction": 0.25
+        }
+      },
+      "24To72Hours": {
+        "1-2": {
+          "deduction": 0.10
+        },
+        "3-5": {
+          "deduction": 0.25
+        },
+        "6-8": {
+          "deduction": 0.50
+        }
+      },
+      "lessThan24Hours": {
+        "1-2": {
+          "deduction": 1.00
+        },
+        "3-5": {
+          "deduction": 1.00
+        },
+        "6-8": {
+          "deduction": 1.00
+        }
+      }
+    }
+  }
+}

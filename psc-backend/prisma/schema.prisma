@@ -102,6 +102,7 @@ enum PaymentStatus {
   HALF_PAID
   PAID
   TO_BILL
+  ADVANCE_PAYMENT
 }
 
 enum PaidBy {
@@ -286,8 +287,9 @@ model SportSubscription {
 }
 
 model PaymentVoucher {
-  id         Int    @id @default(autoincrement())
-  voucher_no String @unique
+  id              Int    @id @default(autoincrement())
+  consumer_number String @unique
+  voucher_no      String? @unique
 
   booking_type BookingType
   booking_id   Int
@@ -307,7 +309,12 @@ model PaymentVoucher {
   consumer_id    String? // KuickPay ConsumerId
   gateway_meta   Json? // Full webhook data from KuickPay
 
-  remarks String?
+  // New fields for identifying transaction medium
+  card_number     String?
+  check_number    String?
+  bank_name       String?
+
+  remarks String? @db.Text
 
   voucher_type VoucherType
   status       VoucherStatus @default(PENDING)
@@ -315,9 +322,11 @@ model PaymentVoucher {
 
   issued_at DateTime @default(now())
   issued_by String? // admin name OR "system"
+  paid_at   DateTime?
 
   @@index([booking_type, booking_id])
   @@index([membership_no])
+  @@index([consumer_number])
   @@index([voucher_no])
 }
 
@@ -336,6 +345,8 @@ enum BookingType {
 enum PaymentMode {
   CASH
   ONLINE
+  CARD
+  CHECK
 }
 
 enum VoucherType {
@@ -343,6 +354,7 @@ enum VoucherType {
   HALF_PAYMENT
   REFUND
   ADJUSTMENT
+  ADVANCE_PAYMENT
 }
 
 enum VoucherStatus {
@@ -566,7 +578,7 @@ model LawnOutOfOrder {
 }
 model Lawn {
   id             Int          @id @default(autoincrement())
-  description    String       @db.VarChar(200)
+  description    String?       @db.VarChar(200)
   lawnCategoryId Int
   lawnCategory   LawnCategory @relation(fields: [lawnCategoryId], references: [id])
   minGuests      Int?         @default(0)
@@ -661,12 +673,13 @@ model PhotoshootReservation {
 // photoshoot
 model Photoshoot {
   id          Int    @id @unique @default(autoincrement())
-  description String @db.VarChar(200)
+  description String? @db.VarChar(200)
 
   memberCharges Decimal @default(0.00) @db.Decimal(30, 2)
   guestCharges  Decimal @default(0.00) @db.Decimal(30, 2)
   images        Json    @default("[]")
   isActive Boolean @default(true)
+  outOfOrders PhotoshootOutOfOrder[]
   isBooked   Boolean             @default(false)
   bookings   PhotoshootBooking[]
   reservations PhotoshootReservation[]
@@ -677,6 +690,26 @@ model Photoshoot {
 
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
+}
+
+model PhotoshootOutOfOrder {
+  id           Int        @id @unique @default(autoincrement())
+  photoshootId Int
+  photoshoot   Photoshoot @relation(fields: [photoshootId], references: [id], onDelete: Cascade)
+
+  reason    String   @db.VarChar(300)
+  startDate DateTime
+  endDate   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy String @default("")
+  updatedBy String @default("")
+
+  @@index([photoshootId])
+  @@index([startDate])
+  @@index([endDate])
 }
 
 // sports

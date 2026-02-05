@@ -3,8 +3,8 @@ import { IsNotEmpty, IsOptional } from 'class-validator';
 export class PhotoShootDto {
   @IsOptional()
   id?: string;
-  @IsNotEmpty({ message: 'Description should be provided' })
-  description: string;
+  @IsOptional()
+  description?: string;
   @IsNotEmpty({ message: 'Member Charges should be provided' })
   memberCharges: string;
   @IsNotEmpty({ message: 'Guest Charges should be provided' })
@@ -13,4 +13,17 @@ export class PhotoShootDto {
   images?: string[];
   @IsOptional()
   existingimgs?: string[];
+  @IsOptional()
+  outOfOrders?: PhotoshootOutOfOrderDto[];
+}
+
+export class PhotoshootOutOfOrderDto {
+  @IsOptional()
+  id?: number;
+  @IsNotEmpty({ message: 'reason must be provided' })
+  reason: string;
+  @IsNotEmpty({ message: 'start date must be provided' })
+  startDate: string;
+  @IsNotEmpty({ message: 'end date must be provided' })
+  endDate: string;
 }

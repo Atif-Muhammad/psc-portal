@@ -5,8 +5,8 @@ export class HallDto {
   id?: string;
   @IsNotEmpty({ message: 'hall name must be provided' })
   name: string;
-  @IsNotEmpty({ message: 'description must be provided' })
-  description: string;
+  @IsOptional()
+  description?: string;
 
   @IsNotEmpty({ message: 'hall capacity must be provided' })
   capacity: string;

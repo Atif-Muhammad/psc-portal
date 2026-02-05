@@ -6,7 +6,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class SchedularService {
   private readonly logger = new Logger(SchedularService.name);
 
-  constructor(private prismaService: PrismaService) {}
+  constructor(private prismaService: PrismaService) { }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async checkScheduledOutOfOrder() {
@@ -315,6 +315,26 @@ export class SchedularService {
       this.logger.log(`Updated ${activeRoomIds.length} rooms as reserved`);
     } catch (error) {
       this.logger.error('Error updating room reservation status:', error);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async checkVoucherExpiry() {
+    const now = new Date();
+
+    const result = await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        status: 'PENDING',
+        payment_mode: 'ONLINE',
+        expiresAt: { lt: now },
+      },
+      data: {
+        status: 'CANCELLED',
+      },
+    });
+
+    if (result.count > 0) {
+      this.logger.log(`Cancelled ${result.count} expired online vouchers.`);
     }
   }
 }

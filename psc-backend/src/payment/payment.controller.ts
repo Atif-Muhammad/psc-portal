@@ -145,8 +145,7 @@ export class PaymentController {
       };
     }
 
-    const voucherId = parseInt(payload.consumer_number.slice(prefix.length));
-    if (isNaN(voucherId)) {
+    if (isNaN(Number(payload.consumer_number))) {
       return {
         response_Code: '01',
         consumer_Detail: 'Invalid voucher ID'.padEnd(30, ' '),
@@ -155,8 +154,8 @@ export class PaymentController {
     }
 
     try {
-      await this.payment.cleanupExpiredVouchers();
-      return await this.payment.getBillInquiry(voucherId);
+      // await this.payment.cleanupExpiredVouchers();
+      return await this.payment.getBillInquiry(payload.consumer_number);
     } catch (error) {
       console.error('Kuickpay Inquiry Error:', error);
       return {

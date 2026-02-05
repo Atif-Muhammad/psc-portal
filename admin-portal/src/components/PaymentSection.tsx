@@ -5,17 +5,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Receipt } from "lucide-react";
 import { BookingForm } from "@/types/room-booking.type";
 import { PaidAmountInput } from "./FormInputs";
+import { calculateAdvanceDetails } from "@/utils/bookingUtils";
 
 interface PaymentSectionProps {
   form: BookingForm;
   onChange: (field: keyof BookingForm, value: any) => void;
   isEdit?: boolean;
+  roomCount?: number;
 }
 
 export const PaymentSection = React.memo(({
   form,
   onChange,
   isEdit = false,
+  roomCount = 0,
 }: PaymentSectionProps) => {
   // Calculate accounting values in real-time
   const calculateRealTimeAccounting = () => {
@@ -55,6 +58,57 @@ export const PaymentSection = React.memo(({
     <div className="md:col-span-2 border-t pt-4">
       <Label className="text-lg font-semibold">Payment Details</Label>
 
+      {/* Advance Payment Policy Section */}
+      <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+        <Label className="text-sm font-semibold text-purple-800 mb-2 block flex items-center gap-2">
+          Advance Payment Policy ({roomCount} {roomCount === 1 ? 'Room' : 'Rooms'})
+        </Label>
+
+        {(() => {
+          const adv = calculateAdvanceDetails(roomCount, accounting.total);
+          const remainingAdv = adv.requiredAmount - accounting.paid;
+
+          return (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="text-purple-700">Policy:</span>
+                  <span className="font-bold text-purple-700">
+                    {adv.percentage}% Advance
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-purple-700">Required:</span>
+                  <span className="font-bold text-purple-700">
+                    PKR {adv.requiredAmount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-purple-700">Paid:</span>
+                  <span
+                    className={`font-bold ${accounting.paid >= adv.requiredAmount ? "text-green-700" : "text-purple-700"}`}
+                  >
+                    PKR {accounting.paid.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {remainingAdv > 0 ? (
+                <div className="text-[10px] text-red-600 font-medium bg-red-50 p-1 px-2 rounded-sm inline-block">
+                  Remaining Advance Needed: PKR {remainingAdv.toLocaleString()}
+                </div>
+              ) : (
+                accounting.total > 0 && (
+                  <div className="text-[10px] text-green-600 font-medium bg-green-50 p-1 px-2 rounded-sm inline-block">
+                    Advance Requirement Met
+                  </div>
+                )
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
       <div className="mt-4">
         <Label>Total Amount</Label>
         <Input
@@ -79,6 +133,7 @@ export const PaymentSection = React.memo(({
             <SelectItem value="HALF_PAID">Half Paid</SelectItem>
             <SelectItem value="PAID">Paid</SelectItem>
             <SelectItem value="TO_BILL">To Bill</SelectItem>
+            <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -117,26 +172,95 @@ export const PaymentSection = React.memo(({
           </div>
         </div>
       </div>
+      {/* Payment Mode Selection */}
+      {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border rounded-lg bg-gray-50">
+          <div className="col-span-2">
+            <Label className="font-semibold text-blue-800">Payment Medium Details</Label>
+          </div>
+          <div>
+            <Label>Payment Mode *</Label>
+            <Select
+              value={form.paymentMode}
+              onValueChange={(val) => onChange("paymentMode", val)}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CASH">Cash</SelectItem>
+                <SelectItem value="CARD">Card</SelectItem>
+                <SelectItem value="CHECK">Cheque</SelectItem>
+                <SelectItem value="ONLINE">Online</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {form.paymentMode === "CARD" && (
+            <div>
+              <Label>Card Number (Last 4) *</Label>
+              <Input
+                className="mt-2"
+                placeholder="e.g. 1234"
+                value={form.card_number || ""}
+                onChange={(e) => onChange("card_number", e.target.value)}
+              />
+            </div>
+          )}
+
+          {form.paymentMode === "CHECK" && (
+            <div>
+              <Label>Check Number *</Label>
+              <Input
+                className="mt-2"
+                placeholder="Enter check number"
+                value={form.check_number || ""}
+                onChange={(e) => onChange("check_number", e.target.value)}
+              />
+            </div>
+          )}
+
+          {(form.paymentMode === "CARD" || form.paymentMode === "CHECK") && (
+            <div className="col-span-2">
+              <Label>Bank Name *</Label>
+              <Input
+                className="mt-2"
+                placeholder="Enter bank name"
+                value={form.bank_name || ""}
+                onChange={(e) => onChange("bank_name", e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+
 
       {/* Real-time Accounting Summary */}
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <Label className="text-lg font-semibold text-blue-800">
+        <Label className="text-sm font-semibold text-blue-800 mb-2 block">
           Live Accounting Summary
         </Label>
-        <div className="grid grid-cols-2 gap-2 text-sm mt-2">
-          <div className="text-blue-700">Total Amount:</div>
-          <div className="font-semibold text-right text-blue-700">
-            PKR {accounting.total.toLocaleString()}
+        <div className="flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-blue-700">Total:</span>
+            <span className="font-semibold text-blue-700">
+              PKR {accounting.total.toLocaleString()}
+            </span>
           </div>
 
-          <div className="text-green-700">Paid Amount (DR):</div>
-          <div className="font-semibold text-right text-green-700">
-            PKR {accounting.paid.toLocaleString()}
+          <div className="flex items-center gap-2">
+            <span className="text-green-700">Paid (DR):</span>
+            <span className="font-semibold text-green-700">
+              PKR {accounting.paid.toLocaleString()}
+            </span>
           </div>
 
-          <div className="text-red-700">Pending Amount (CR):</div>
-          <div className="font-semibold text-right text-red-700">
-            PKR {accounting.pending.toLocaleString()}
+          <div className="flex items-center gap-2">
+            <span className="text-red-700">Pending (CR):</span>
+            <span className="font-semibold text-red-700">
+              PKR {accounting.pending.toLocaleString()}
+            </span>
           </div>
         </div>
         <div className="mt-2 text-xs text-blue-600">

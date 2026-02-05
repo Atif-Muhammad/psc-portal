@@ -1,6 +1,7 @@
 export enum VoucherType {
   FULL_PAYMENT,
   HALF_PAYMENT,
+  ADVANCE_PAYMENT,
   REFUND,
   ADJUSTMENT,
 }
