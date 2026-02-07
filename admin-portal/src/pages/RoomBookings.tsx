@@ -14,15 +14,24 @@ import {
   getBookings,
   createBooking,
   updateBooking,
-  deleteBooking,
+  cancelReqBooking,
+  updateCancellationReq,
   getRoomTypes,
   getAvailRooms,
   getRooms,
   searchMembers,
   getVouchers,
   getRoomDateStatuses,
+  getCancelledBookings,
+  getCancellationRequests,
 } from "../../config/apis";
 import { Plus, Loader2, X } from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +39,10 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -69,10 +81,8 @@ import { BookingDetailsCard } from "@/components/details/RoomBookingDets";
 
 // ShadCN components for inlined form
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 export default function RoomBookings() {
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -80,6 +90,7 @@ export default function RoomBookings() {
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [viewVouchers, setViewVouchers] = useState<Booking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [activeTab, setActiveTab] = useState("active");
   const [form, setForm] = useState<BookingForm>(initialFormState);
   const [editForm, setEditForm] = useState<BookingForm>(initialFormState);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
@@ -128,6 +139,15 @@ export default function RoomBookings() {
     }
   }, [location.state]);
 
+  const [updateReqBooking, setUpdateReqBooking] = useState<Booking | null>(
+    null
+  );
+  const [updateStatus, setUpdateStatus] = useState<"APPROVED" | "REJECTED">(
+    "APPROVED"
+  );
+  const [adminRemarks, setAdminRemarks] = useState("");
+  const [reasonToView, setReasonToView] = useState<{ reason: string; requestedBy: string } | null>(null);
+
   // API Queries
   // Infinite Query for Bookings
   const {
@@ -137,7 +157,7 @@ export default function RoomBookings() {
     isFetchingNextPage,
     isLoading: isLoadingBookings,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "rooms"],
+    queryKey: ["bookings", "rooms", "active"],
     queryFn: async ({ pageParam = 1 }) => {
       const res = await getBookings({ bookingsFor: "rooms", pageParam });
       return res as Booking[];
@@ -146,23 +166,72 @@ export default function RoomBookings() {
     getNextPageParam: (lastPage, allPages) => {
       return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
     },
+    enabled: activeTab === "active",
   });
 
-  const bookings = useMemo(() => data?.pages.flat() || [], [data]);
+  const {
+    data: cancelledData,
+    fetchNextPage: fetchNextCancelled,
+    hasNextPage: hasNextCancelled,
+    isFetchingNextPage: isFetchingNextCancelled,
+    isLoading: isLoadingCancelled,
+  } = useInfiniteQuery({
+    queryKey: ["bookings", "rooms", "cancelled"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getCancelledBookings({ bookingsFor: "rooms", pageParam });
+      return res as Booking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "cancelled",
+  });
+
+  const {
+    data: requestData,
+    fetchNextPage: fetchNextRequests,
+    hasNextPage: hasNextRequests,
+    isFetchingNextPage: isFetchingNextRequests,
+    isLoading: isLoadingRequests,
+  } = useInfiniteQuery({
+    queryKey: ["bookings", "rooms", "requests"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getCancellationRequests({ bookingsFor: "rooms", pageParam });
+      return res as Booking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "requests",
+  });
+
+  const bookings = useMemo(() => {
+    if (activeTab === "active") return data?.pages.flat() || [];
+    if (activeTab === "cancelled") return cancelledData?.pages.flat() || [];
+    if (activeTab === "requests") return requestData?.pages.flat() || [];
+    return [];
+  }, [data, cancelledData, requestData, activeTab]);
+
+  const isLoading = isLoadingBookings || isLoadingCancelled || isLoadingRequests;
+  const isFetchingNext = isFetchingNextPage || isFetchingNextCancelled || isFetchingNextRequests;
+  const hasNext = hasNextPage || hasNextCancelled || hasNextRequests;
+  const fetchNext = activeTab === "active" ? fetchNextPage : activeTab === "cancelled" ? fetchNextCancelled : fetchNextRequests;
 
   const observer = useRef<IntersectionObserver>();
   const lastElementRef = useCallback(
     (node: HTMLDivElement) => {
-      if (isLoadingBookings || isFetchingNextPage) return;
+      if (isLoading || isFetchingNext) return;
       if (observer.current) observer.current.disconnect();
       observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasNextPage) {
-          fetchNextPage();
+        if (entries[0].isIntersecting && hasNext) {
+          fetchNext();
         }
       });
       if (node) observer.current.observe(node);
     },
-    [isLoadingBookings, isFetchingNextPage, hasNextPage, fetchNextPage]
+    [isLoading, isFetchingNext, hasNext, fetchNext]
   );
 
   const { data: roomTypes = [], isLoading: isLoadingRoomTypes } = useQuery<
@@ -392,17 +461,46 @@ export default function RoomBookings() {
   const deleteMutation = useMutation<
     any,
     Error,
-    { bookingFor: string; bookID: string }
+    { bookingFor: string; bookID: string; reason: string }
   >({
-    mutationFn: ({ bookingFor, bookID }) => deleteBooking(bookingFor, bookID),
+    mutationFn: ({ bookingFor, bookID, reason }) =>
+      cancelReqBooking(bookingFor, bookID, reason),
     onSuccess: () => {
-      toast({ title: "Booking cancelled successfully" });
+      toast({ title: "Cancellation request sent" });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
       setCancelBooking(null);
     },
     onError: (error: any) => {
       toast({
         title: "Failed to cancel booking",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCancellationReqMutation = useMutation<
+    any,
+    Error,
+    {
+      bookingFor: string;
+      bookID: string;
+      status: "APPROVED" | "REJECTED";
+      remarks?: string;
+    }
+  >({
+    mutationFn: ({ bookingFor, bookID, status, remarks }) =>
+      updateCancellationReq(bookingFor, bookID, status, remarks),
+    onSuccess: () => {
+      toast({ title: "Cancellation request updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["cancellation-requests"] });
+      setUpdateReqBooking(null);
+      setAdminRemarks("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update cancellation request",
         description: error?.message || "Please try again",
         variant: "destructive",
       });
@@ -464,6 +562,7 @@ export default function RoomBookings() {
         numberOfChildren: editBooking.numberOfChildren || 0,
         specialRequests: editBooking.specialRequests || "",
         remarks: editBooking.remarks || "",
+        heads: editBooking.extraCharges || [],
       };
 
       setEditForm(newEditForm);
@@ -484,6 +583,25 @@ export default function RoomBookings() {
       }
     }
   }, [editBooking, allRooms]);
+
+  const handleApproveReq = useCallback((booking: Booking) => {
+    setUpdateReqBooking(booking);
+    setUpdateStatus("APPROVED");
+    setAdminRemarks("");
+  }, []);
+
+  const handleRejectReq = useCallback((booking: Booking) => {
+    setUpdateReqBooking(booking);
+    setUpdateStatus("REJECTED");
+    setAdminRemarks("");
+  }, []);
+
+  const handleViewReason = useCallback((booking: Booking) => {
+    setReasonToView({
+      reason: booking.cancellationRequest?.reason || "No reason provided.",
+      requestedBy: booking.cancellationRequest?.requestedBy || "Unknown"
+    });
+  }, []);
 
   // Updated Conflict Check
   const checkConflicts = (roomIds: string[], checkIn: string, checkOut: string, excludeBookingId?: number) => {
@@ -533,7 +651,7 @@ export default function RoomBookings() {
   };
 
   // Updated Price Calculation
-  const calculateTotal = (roomTypeId: string, pricingType: string, checkIn: string, checkOut: string, roomCount: number) => {
+  const calculateTotal = (roomTypeId: string, pricingType: string, checkIn: string, checkOut: string, roomCount: number, heads: any[] = []) => {
     if (!roomTypeId || !checkIn || !checkOut || roomCount === 0) return 0;
 
     // If pricing type is "member" and selected member is Armed Forces, use "forces" pricing instead
@@ -543,7 +661,8 @@ export default function RoomBookings() {
     }
 
     const basePrice = calculatePrice(roomTypeId, effectivePricingType, checkIn, checkOut, roomTypes);
-    return basePrice * roomCount;
+    const headsTotal = heads.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+    return (basePrice * roomCount) + headsTotal;
   };
 
   const calculateAdvance = (roomCount: number, totalPrice: number, paidAmount: number = 0) => {
@@ -579,7 +698,8 @@ export default function RoomBookings() {
             field === "pricingType" ? value : newForm.pricingType,
             field === "checkIn" ? value : newForm.checkIn,
             field === "checkOut" ? value : newForm.checkOut,
-            field === "roomTypeId" ? 0 : currentSelectedRoomIds.length
+            field === "roomTypeId" ? 0 : currentSelectedRoomIds.length,
+            newForm.heads
           );
           newForm.totalPrice = newPrice;
           newForm.advanceVoucherAmount = calculateAdvance(currentSelectedRoomIds.length, newPrice, newForm.paidAmount);
@@ -673,7 +793,7 @@ export default function RoomBookings() {
     setIds(newIds);
 
     // Recalculate Price
-    const newTotal = calculateTotal(currentForm.roomTypeId, currentForm.pricingType, currentForm.checkIn, currentForm.checkOut, newIds.length);
+    const newTotal = calculateTotal(currentForm.roomTypeId, currentForm.pricingType, currentForm.checkIn, currentForm.checkOut, newIds.length, currentForm.heads);
 
     setFormFn(prev => {
       // Determine new payment values
@@ -789,6 +909,7 @@ export default function RoomBookings() {
       guestCNIC: form.guestCNIC,
       remarks: form.remarks,
       reservationId: form.reservationId,
+      heads: form.heads,
     };
 
     createMutation.mutate(payload);
@@ -843,16 +964,18 @@ export default function RoomBookings() {
       numberOfChildren: editForm.numberOfChildren,
       specialRequests: editForm.specialRequests,
       remarks: editForm.remarks,
+      heads: editForm.heads,
     };
 
     updateMutation.mutate(payload);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (reason: string) => {
     if (cancelBooking) {
       deleteMutation.mutate({
         bookingFor: "rooms",
         bookID: cancelBooking.id.toString(),
+        reason,
       });
     }
   };
@@ -988,22 +1111,64 @@ export default function RoomBookings() {
         </div>
       </div>
 
-      <BookingsTable
-        bookings={filteredBookings}
-        isLoading={isLoadingBookings}
-        onEdit={setEditBooking}
-        onDetail={(booking: Booking) => {
-          setOpenDetails(true);
-          setDetailBooking(booking);
-        }}
-        onViewVouchers={handleViewVouchers}
-        onCancel={setCancelBooking}
-        getPaymentBadge={getPaymentBadge}
-      />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="active">Active Bookings</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
+          <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active" className="m-0">
+          <BookingsTable
+            bookings={filteredBookings}
+            isLoading={isLoading}
+            onEdit={setEditBooking}
+            onDetail={(booking: Booking) => {
+              setOpenDetails(true);
+              setDetailBooking(booking);
+            }}
+            onViewVouchers={handleViewVouchers}
+            onCancel={setCancelBooking}
+            getPaymentBadge={getPaymentBadge}
+          />
+        </TabsContent>
+
+        <TabsContent value="cancelled" className="m-0">
+          <BookingsTable
+            bookings={filteredBookings}
+            isLoading={isLoading}
+            onEdit={setEditBooking}
+            onDetail={(booking: Booking) => {
+              setOpenDetails(true);
+              setDetailBooking(booking);
+            }}
+            onViewVouchers={handleViewVouchers}
+            getPaymentBadge={getPaymentBadge}
+          />
+        </TabsContent>
+
+        <TabsContent value="requests" className="m-0">
+          <BookingsTable
+            bookings={filteredBookings}
+            isLoading={isLoading}
+            onEdit={setEditBooking}
+            onDetail={(booking: Booking) => {
+              setOpenDetails(true);
+              setDetailBooking(booking);
+            }}
+            onViewVouchers={handleViewVouchers}
+            getPaymentBadge={getPaymentBadge}
+            onApprove={handleApproveReq}
+            onReject={handleRejectReq}
+            onViewReason={handleViewReason}
+          />
+        </TabsContent>
+      </Tabs>
+
       {/* Scroll Trigger & Loader */}
       <div ref={lastElementRef} className="h-10 w-full flex items-center justify-center">
-        {isFetchingNextPage && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
-        {!hasNextPage && bookings.length > 0 && (
+        {isFetchingNext && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+        {!hasNext && bookings.length > 0 && (
           <span className="text-xs text-muted-foreground">No more bookings</span>
         )}
       </div>
@@ -1044,6 +1209,95 @@ export default function RoomBookings() {
         onConfirm={handleDelete}
         isDeleting={deleteMutation.isPending}
       />
+
+      <Dialog
+        open={!!updateReqBooking}
+        onOpenChange={(open) => !open && setUpdateReqBooking(null)}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {updateStatus === "APPROVED"
+                ? "Approve Cancellation"
+                : "Reject Cancellation"}
+            </DialogTitle>
+            <DialogDescription>
+              {updateStatus === "APPROVED"
+                ? "Please provide any administrative remarks before approving this cancellation. This will release the rooms."
+                : "Please provide the reason for rejecting this cancellation request."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="remarks">Administrative Remarks</Label>
+              <Textarea
+                id="remarks"
+                placeholder="Enter remarks here..."
+                value={adminRemarks}
+                onChange={(e) => setAdminRemarks(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUpdateReqBooking(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={updateStatus === "APPROVED" ? "default" : "destructive"}
+              onClick={() => {
+                if (updateReqBooking) {
+                  updateCancellationReqMutation.mutate({
+                    bookingFor: "rooms",
+                    bookID: updateReqBooking.id.toString(),
+                    status: updateStatus,
+                    remarks: adminRemarks,
+                  });
+                }
+              }}
+              disabled={updateCancellationReqMutation.isPending}
+            >
+              {updateCancellationReqMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Confirm {updateStatus === "APPROVED" ? "Approval" : "Rejection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!reasonToView}
+        onOpenChange={(open) => !open && setReasonToView(null)}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Cancellation Request Details</DialogTitle>
+            <DialogDescription>
+              Information about this cancellation request
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Requested By</label>
+              <p className="text-sm text-gray-900 mt-1 p-2 bg-gray-50 rounded">
+                {reasonToView?.requestedBy || "Unknown"}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Reason</label>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap mt-1 p-2 bg-gray-50 rounded">
+                {reasonToView?.reason || "No reason provided."}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setReasonToView(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

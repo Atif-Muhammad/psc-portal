@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { getBookings, createBooking, updateBooking, deleteBooking as delBooking, getPhotoshoots, searchMembers, getVouchers } from "../../config/apis";
+import { getBookings, createBooking, updateBooking, cancelReqBooking as delBooking, getPhotoshoots, searchMembers, getVouchers } from "../../config/apis";
 import { MemberSearchComponent } from "@/components/MemberSearch";
 import { Member, Voucher } from "@/types/room-booking.type";
 import { cn } from "@/lib/utils";
@@ -419,14 +419,19 @@ export default function PhotoshootBookings() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => delBooking("photoshoots", id),
+    mutationFn: ({ bookID, reason }: { bookID: number; reason: string }) =>
+      delBooking("photoshoots", bookID, reason),
     onSuccess: () => {
-      toast({ title: "Booking deleted successfully" });
+      toast({ title: "Cancellation request sent" });
       queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots"] });
       setDeleteBooking(null);
     },
     onError: (error: any) => {
-      toast({ title: "Failed to delete booking", description: error.message, variant: "destructive" });
+      toast({
+        title: "Failed to request cancellation",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -1380,7 +1385,7 @@ export default function PhotoshootBookings() {
           <p className="py-4">Are you sure you want to delete this booking?</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteBooking(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteBooking && deleteMutation.mutate(deleteBooking.id)} disabled={deleteMutation.isPending}>
+            <Button variant="destructive" onClick={() => deleteBooking && deleteMutation.mutate({ bookID: deleteBooking.id, reason: "Cancelled by Admin" })} disabled={deleteMutation.isPending}>
               {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Delete"}
             </Button>
           </DialogFooter>

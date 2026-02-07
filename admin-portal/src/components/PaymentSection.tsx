@@ -65,7 +65,11 @@ export const PaymentSection = React.memo(({
         </Label>
 
         {(() => {
-          const adv = calculateAdvanceDetails(roomCount, accounting.total);
+          // Calculate base rent (Total Price - Sum of all Heads)
+          const headsTotal = (form.heads || []).reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+          const roomRentOnly = Math.max(0, accounting.total - headsTotal);
+
+          const adv = calculateAdvanceDetails(roomCount, roomRentOnly);
           const remainingAdv = adv.requiredAmount - accounting.paid;
 
           return (

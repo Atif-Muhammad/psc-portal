@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Receipt, XCircle, Loader2, NotepadText } from "lucide-react";
+import { Edit, Receipt, XCircle, Loader2, NotepadText, CheckCircle } from "lucide-react";
 import { Booking } from "@/types/room-booking.type";
 
 interface BookingsTableProps {
@@ -12,8 +12,11 @@ interface BookingsTableProps {
   onEdit: (booking: Booking) => void;
   onDetail: (booking: Booking) => void;
   onViewVouchers: (booking: Booking) => void;
-  onCancel: (booking: Booking) => void;
+  onCancel?: (booking: Booking) => void;
   getPaymentBadge: (status: string) => React.ReactNode;
+  onApprove?: (booking: Booking) => void;
+  onReject?: (booking: Booking) => void;
+  onViewReason?: (booking: Booking) => void;
 }
 
 export const BookingsTable = React.memo(({
@@ -24,6 +27,9 @@ export const BookingsTable = React.memo(({
   onViewVouchers,
   onCancel,
   getPaymentBadge,
+  onApprove,
+  onReject,
+  onViewReason,
 }: BookingsTableProps) => {
   if (isLoading) {
     return (
@@ -116,15 +122,50 @@ export const BookingsTable = React.memo(({
                     >
                       <Receipt className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive"
-                      onClick={() => onCancel(booking)}
-                      title="Cancel Booking"
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </Button>
+                    {onCancel && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() => onCancel(booking)}
+                        title="Cancel Booking"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onApprove && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-green-600"
+                        onClick={() => onApprove(booking)}
+                        title="Approve Cancellation"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onReject && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-600"
+                        onClick={() => onReject(booking)}
+                        title="Reject Cancellation"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onViewReason && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-blue-600"
+                        onClick={() => onViewReason(booking)}
+                        title="View Reason"
+                      >
+                        <NotepadText className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

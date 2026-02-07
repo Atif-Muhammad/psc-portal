@@ -290,4 +290,5 @@ export const initialFormState: BookingForm = {
   numberOfChildren: 0,
   specialRequests: "",
   remarks: "",
+  heads: [],
 };

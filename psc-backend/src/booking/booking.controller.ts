@@ -166,20 +166,73 @@ export class BookingController {
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
-  @Roles(RolesEnum.SUPER_ADMIN)
-  @Delete('delete/booking')
-  async deleteBooking(
-    @Query('bookingFor') bookingFor: string,
-    @Query() bookID: { bookID: string },
+  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @Get('get/bookings/cancelled')
+  async getCancelledBookings(
+    @Query('bookingsFor') bookingFor: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
     if (bookingFor === 'rooms')
-      return this.bookingService.dBookingRoom(Number(bookID.bookID));
+      return this.bookingService.gCancelledBookingsRoom(page, limit);
     if (bookingFor === 'halls')
-      return this.bookingService.dBookingHall(Number(bookID.bookID));
+      return this.bookingService.gCancelledBookingsHall(page, limit);
     if (bookingFor === 'lawns')
-      return this.bookingService.dBookingLawn(Number(bookID.bookID));
+      return this.bookingService.gCancelledBookingsLawn(page, limit);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @Get('get/bookings/cancellation-requests')
+  async getCancellationRequests(
+    @Query('bookingsFor') bookingFor: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    if (bookingFor === 'rooms')
+      return this.bookingService.gCancellationRequestsRoom(page, limit);
+    if (bookingFor === 'halls')
+      return this.bookingService.gCancellationRequestsHall(page, limit);
+    if (bookingFor === 'lawns')
+      return this.bookingService.gCancellationRequestsLawn(page, limit);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Delete('cancelReqBooking')
+  async cancelReqBooking(
+    @Query('bookingFor') bookingFor: string,
+    @Query('bookID') bookID: string,
+    @Query('reason') reason: string,
+    @Req() req: any,
+  ) {
+    const requestedBy = req.user?.name || 'Admin';
+
+    if (bookingFor === 'rooms')
+      return this.bookingService.cCancellationRequestRoom(Number(bookID), reason, requestedBy);
+    if (bookingFor === 'halls')
+      return this.bookingService.cCancellationRequestHall(Number(bookID), reason, requestedBy);
+    if (bookingFor === 'lawns')
+      return this.bookingService.cCancellationRequestLawn(Number(bookID), reason, requestedBy);
     if (bookingFor === 'photoshoots')
-      return this.bookingService.dBookingPhotoshoot(Number(bookID.bookID));
+      return this.bookingService.cCancellationRequestPhotoshoot(Number(bookID), reason, requestedBy);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN)
+  @Patch('updateCancellationReq')
+  async updateCancellationReq(
+    @Query('bookingFor') bookingFor: string,
+    @Query('bookID') bookID: string,
+    @Query('status') status: 'APPROVED' | 'REJECTED',
+    @Query('remarks') remarks?: string,
+  ) {
+    return this.bookingService.updateCancellationReq(
+      bookingFor,
+      Number(bookID),
+      status,
+      remarks,
+    );
   }
 
   @Get('member/bookings')

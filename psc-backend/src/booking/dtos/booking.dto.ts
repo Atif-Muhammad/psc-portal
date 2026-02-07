@@ -88,4 +88,6 @@ export class BookingDto {
   generateAdvanceVoucher?: boolean;
   @IsOptional()
   advanceVoucherAmount?: string | number;
+  @IsOptional()
+  heads?: { head: string; amount: number }[];
 }

@@ -73,6 +73,23 @@ export interface Booking {
   pendingAmount: number;
   member?: Member;
   rooms?: any[];
+  extraCharges?: { head: string; amount: number }[];
+  cancellationRequest?: {
+    reason: string;
+    status: string;
+    adminRemarks?: string;
+    requestedBy?: string;
+    createdAt: string;
+    updatedAt: string
+  };
+  cancellationRequests?: Array<{
+    reason: string;
+    status: string;
+    adminRemarks?: string;
+    requestedBy?: string;
+    createdAt: string;
+    updatedAt: string
+  }>;
   room?: {
     id: number;
     roomNumber: string;
@@ -123,6 +140,7 @@ export interface BookingForm {
   remarks?: string;
   generateAdvanceVoucher?: boolean;
   advanceVoucherAmount?: number;
+  heads?: { head: string; amount: number }[];
 }
 
 export interface Voucher {

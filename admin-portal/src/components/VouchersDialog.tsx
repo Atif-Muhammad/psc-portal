@@ -106,10 +106,10 @@ export const VouchersDialog = React.memo(({
                       </div>
                       <div>
                         <div className={`text-lg font-bold ${voucher.voucher_type === 'REFUND' || voucher.voucher_type === 'ADJUSTMENT' ? 'text-red-600' : 'text-green-600'}`}>
-                          PKR {parseFloat(voucher.amount).toLocaleString()}
+                          PKR {parseFloat(voucher.amount.toString()).toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground capitalize">
-                          {voucher.payment_mode.toLowerCase()}
+                          {voucher.payment_mode.toLowerCase() === "check" ? "cheque" : voucher.payment_mode.toLowerCase()}
                         </div>
                       </div>
                     </div>

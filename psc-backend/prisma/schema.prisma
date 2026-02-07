@@ -140,6 +140,8 @@ model RoomBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
+  cancellationRequests RoomCancellationRequest[]
 
   member Member @relation(fields: [Membership_No], references: [Membership_No])
   // room   Room   @relation(fields: [roomId], references: [id]) // Removed direct single relation mapping validation, logic handled in service
@@ -184,6 +186,7 @@ model HallBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  cancellationRequests HallCancellationRequest[]
 
   member Member @relation(fields: [memberId], references: [Sno])
   hall   Hall   @relation(fields: [hallId], references: [id])
@@ -222,6 +225,7 @@ model LawnBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  cancellationRequests LawnCancellationRequest[]
 
   member Member @relation(fields: [memberId], references: [Sno])
   lawn   Lawn   @relation(fields: [lawnId], references: [id])
@@ -257,6 +261,7 @@ model PhotoshootBooking {
   bookingDetails Json?   @default("[]") // Array of { date: string, timeSlot: string }
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  cancellationRequests PhotoshootCancellationRequest[]
 
 
   member     Member     @relation(fields: [memberId], references: [Sno])
@@ -956,6 +961,51 @@ model deliveredNotis{
   updatedAt DateTime @updatedAt
 }
 
+model RoomCancellationRequest {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  booking   RoomBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason    String?  @db.Text
+  requestedBy String?  @db.Text
+  status    RequestStatus @default(PENDING)
+  adminRemarks String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model HallCancellationRequest {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  booking   HallBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason    String?  @db.Text
+  requestedBy String?  @db.Text
+  status    RequestStatus @default(PENDING)
+  adminRemarks String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model LawnCancellationRequest {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  booking   LawnBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason    String?  @db.Text
+  requestedBy String?  @db.Text
+  status    RequestStatus @default(PENDING)
+  adminRemarks String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
 
 model Notification {
   id          Int      @id @default(autoincrement())
@@ -1026,4 +1076,19 @@ model FeedbackRemark {
   createdAt  DateTime @default(now())
 
   @@index([feedbackId])
+}
+
+model PhotoshootCancellationRequest {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  booking   PhotoshootBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason    String?  @db.Text
+  requestedBy String?  @db.Text
+  status    RequestStatus @default(PENDING)
+  adminRemarks String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
 }

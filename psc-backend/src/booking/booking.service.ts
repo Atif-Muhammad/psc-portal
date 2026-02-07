@@ -26,6 +26,7 @@ import {
   parsePakistanDate,
 } from 'src/utils/time';
 import { generateNumericVoucherNo, generateConsumerNumber } from 'src/utils/id';
+import * as paymentPolicies from 'src/common/config/payment-policies.json';
 
 @Injectable()
 export class BookingService {
@@ -124,6 +125,7 @@ export class BookingService {
       reservationId,
       generateAdvanceVoucher,
       advanceVoucherAmount,
+      heads,
     } = payload;
 
     // ── VALIDATION ───────────────────────────────────────────
@@ -317,6 +319,7 @@ export class BookingService {
         guestName,
         guestContact: guestContact?.toString(),
         guestCNIC,
+        extraCharges: heads || [],
         createdBy,
         updatedBy: '-',
       },
@@ -454,6 +457,7 @@ export class BookingService {
       bank_name,
       generateAdvanceVoucher,
       advanceVoucherAmount,
+      heads,
     } = payload;
 
     if (!id) throw new BadRequestException('Booking ID required');
@@ -714,6 +718,7 @@ export class BookingService {
         guestName,
         guestContact: guestContact?.toString(),
         guestCNIC,
+        extraCharges: heads || booking.extraCharges || [],
         refundAmount,
         refundReturned: false,
         updatedBy,
@@ -774,9 +779,15 @@ export class BookingService {
 
   async gBookingsRoom(page?: number, limit?: number) {
     const args: any = {
-      where: { isCancelled: false },
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          none: { status: 'PENDING' }
+        }
+      },
       orderBy: { createdAt: 'desc' },
       include: {
+        cancellationRequests: true,
         rooms: {
           include: {
             room: {
@@ -800,12 +811,219 @@ export class BookingService {
       },
     };
 
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
     }
 
-    return await this.prismaService.roomBooking.findMany(args);
+    const bookings = await this.prismaService.roomBooking.findMany(args);
+    return bookings.map(b => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancelledBookingsRoom(page?: number, limit?: number) {
+    const args: any = {
+      where: { isCancelled: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        rooms: {
+          include: {
+            room: {
+              select: {
+                id: true,
+                roomNumber: true,
+                roomType: {
+                  select: { type: true, id: true },
+                },
+              },
+            },
+          },
+        },
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.roomBooking.findMany(args);
+    return bookings.map(b => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancellationRequestsRoom(page?: number, limit?: number) {
+    const args: any = {
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          some: {
+            status: 'PENDING',
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        rooms: {
+          include: {
+            room: {
+              select: {
+                id: true,
+                roomNumber: true,
+                roomType: {
+                  select: { type: true, id: true },
+                },
+              },
+            },
+          },
+        },
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.roomBooking.findMany(args);
+    return bookings.map(b => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancelledBookingsHall(page?: number, limit?: number) {
+    const args: any = {
+      where: { isCancelled: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        hall: true,
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.hallBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancellationRequestsHall(page?: number, limit?: number) {
+    const args: any = {
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          some: {
+            status: 'PENDING',
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        hall: true,
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.hallBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancelledBookingsLawn(page?: number, limit?: number) {
+    const args: any = {
+      where: { isCancelled: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        lawn: {
+          include: { lawnCategory: true },
+        },
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.lawnBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancellationRequestsLawn(page?: number, limit?: number) {
+    const args: any = {
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          some: {
+            status: 'PENDING',
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        lawn: {
+          include: { lawnCategory: true },
+        },
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.lawnBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
 
@@ -1834,33 +2052,292 @@ export class BookingService {
     };
   }
 
-  async dBookingRoom(bookingId: number) {
-    // find booking with rooms before deleting
+  async cCancellationRequestRoom(bookingId: number, reason: string, requestedBy?: string) {
+    // find booking with rooms before requesting
     const booking = await this.prismaService.roomBooking.findUnique({
       where: { id: bookingId },
-      include: { rooms: true },
+      include: {
+        rooms: true,
+        cancellationRequests: {
+          where: { OR: [{ status: 'PENDING' }, { status: "APPROVED" }] },
+        }
+      },
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    // delete booking -> Soft Delete
-    const deleted = await this.prismaService.roomBooking.update({
-      where: { id: bookingId },
-      data: { isCancelled: true },
-    });
+    // Check if there's already a pending cancellation request
+    if (booking.cancellationRequests && booking.cancellationRequests.length > 0) {
+      throw new BadRequestException('A cancellation request is already pending for this booking');
+    }
 
-    if (!deleted)
-      throw new InternalServerErrorException('Failed to cancel booking');
-
-    // find rooms and deactivate isBooked flag
-    // FIX: Use r.roomId instead of r.id (which is RoomOnBooking id)
-    await this.prismaService.room.updateMany({
-      where: { id: { in: booking.rooms.map((r) => r.roomId) } },
+    return await this.prismaService.roomCancellationRequest.create({
       data: {
-        isBooked: false,
+        bookingId: booking.id,
+        reason: reason || 'Booking cancellation requested by admin',
+        requestedBy: requestedBy || 'Admin',
+        status: 'PENDING',
       },
     });
-    return deleted;
+  }
+
+  async updateCancellationReq(
+    bookingFor: string,
+    bookingId: number,
+    status: 'APPROVED' | 'REJECTED',
+    remarks?: string,
+  ) {
+    if (bookingFor === 'rooms') {
+      const pendingRequest = await this.prismaService.roomCancellationRequest.findFirst({
+        where: { bookingId: bookingId, status: 'PENDING' },
+      });
+
+      await this.prismaService.roomCancellationRequest.updateMany({
+        where: { bookingId: bookingId, status: 'PENDING' },
+        data: {
+          status: status,
+          adminRemarks: remarks || 'Action taken by admin',
+        },
+      });
+
+      if (status === 'APPROVED' && pendingRequest) {
+        return await this.cancelRoomBookingInternal(bookingId, pendingRequest.createdAt);
+      }
+      return { success: true, message: 'Cancellation request rejected' };
+    }
+    if (bookingFor === 'halls') {
+      const pendingRequest = await this.prismaService.hallCancellationRequest.findFirst({
+        where: { bookingId: bookingId, status: 'PENDING' },
+      });
+
+      await this.prismaService.hallCancellationRequest.updateMany({
+        where: { bookingId: bookingId, status: 'PENDING' },
+        data: {
+          status: status,
+          adminRemarks: remarks || 'Action taken by admin',
+        },
+      });
+
+      if (status === 'APPROVED' && pendingRequest) {
+        return await this.cancelHallBookingInternal(bookingId, pendingRequest.createdAt);
+      }
+      return { success: true, message: 'Cancellation request rejected' };
+    }
+    if (bookingFor === 'lawns') {
+      const pendingRequest = await this.prismaService.lawnCancellationRequest.findFirst({
+        where: { bookingId: bookingId, status: 'PENDING' },
+      });
+
+      await this.prismaService.lawnCancellationRequest.updateMany({
+        where: { bookingId: bookingId, status: 'PENDING' },
+        data: {
+          status: status,
+          adminRemarks: remarks || 'Action taken by admin',
+        },
+      });
+
+      if (status === 'APPROVED' && pendingRequest) {
+        return await this.cancelLawnBookingInternal(bookingId, pendingRequest.createdAt);
+      }
+      return { success: true, message: 'Cancellation request rejected' };
+    }
+    if (bookingFor === 'photoshoots') {
+      const pendingRequest = await this.prismaService.photoshootCancellationRequest.findFirst({
+        where: { bookingId: bookingId, status: 'PENDING' },
+      });
+
+      await this.prismaService.photoshootCancellationRequest.updateMany({
+        where: { bookingId: bookingId, status: 'PENDING' },
+        data: {
+          status: status,
+          adminRemarks: remarks || 'Action taken by admin',
+        },
+      });
+
+      if (status === 'APPROVED' && pendingRequest) {
+        return await this.cancelPhotoshootBookingInternal(bookingId, pendingRequest.createdAt);
+      }
+      return { success: true, message: 'Cancellation request rejected' };
+    }
+  }
+
+  private async cancelRoomBookingInternal(bookingId: number, requestCreatedAt?: Date) {
+    const booking = await this.prismaService.roomBooking.findUnique({
+      where: { id: bookingId },
+      include: { rooms: { include: { room: true } } },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    let refundAmount = 0;
+    let deductionAmount = 0;
+
+    if (requestCreatedAt) {
+      const result = this.calculateRefund(
+        'ROOM',
+        Number(booking.totalPrice),
+        Number(booking.paidAmount),
+        booking.checkIn,
+        requestCreatedAt,
+        booking.rooms.length,
+      );
+      refundAmount = result.refundAmount;
+      deductionAmount = result.deductionAmount;
+    }
+
+    await Promise.all(
+      booking.rooms.map((rob) =>
+        this.prismaService.room.update({
+          where: { id: rob.room.id },
+          data: { isBooked: false },
+        }),
+      ),
+    );
+
+    if (refundAmount > 0) {
+      await this.createRefundVoucher(
+        bookingId,
+        BookingType.ROOM,
+        booking.Membership_No,
+        refundAmount,
+        `Refund for room booking #${bookingId} cancellation. Total: ${booking.totalPrice}, Paid: ${booking.paidAmount}, Deduction: ${deductionAmount}`,
+      );
+    }
+
+    return await this.prismaService.roomBooking.update({
+      where: { id: bookingId },
+      data: {
+        isCancelled: true,
+        refundAmount: refundAmount,
+      },
+    });
+  }
+
+  private async cancelHallBookingInternal(bookingId: number, requestCreatedAt?: Date) {
+    const booking = await this.prismaService.hallBooking.findUnique({
+      where: { id: bookingId },
+      include: { member: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    let refundAmount = 0;
+    let deductionAmount = 0;
+
+    if (requestCreatedAt) {
+      const result = this.calculateRefund(
+        'HALL',
+        Number(booking.totalPrice),
+        Number(booking.paidAmount),
+        booking.bookingDate,
+        requestCreatedAt,
+      );
+      refundAmount = result.refundAmount;
+      deductionAmount = result.deductionAmount;
+    }
+
+    if (refundAmount > 0) {
+      await this.createRefundVoucher(
+        bookingId,
+        BookingType.HALL,
+        booking.member.Membership_No,
+        refundAmount,
+        `Refund for hall booking #${bookingId} cancellation. Total: ${booking.totalPrice}, Paid: ${booking.paidAmount}, Deduction: ${deductionAmount}`,
+      );
+    }
+
+    return await this.prismaService.hallBooking.update({
+      where: { id: bookingId },
+      data: {
+        isCancelled: true,
+        refundAmount: refundAmount,
+      },
+    });
+  }
+
+  private async cancelLawnBookingInternal(bookingId: number, requestCreatedAt?: Date) {
+    const booking = await this.prismaService.lawnBooking.findUnique({
+      where: { id: bookingId },
+      include: { member: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    // Free lawn holdings if any
+    await this.prismaService.lawnHoldings.deleteMany({
+      where: { lawnId: booking.lawnId, holdBy: booking.memberId.toString() }, // holdBy is String, memberId is Int
+    });
+
+    let refundAmount = 0;
+    let deductionAmount = 0;
+
+    if (requestCreatedAt) {
+      const result = this.calculateRefund(
+        'LAWN',
+        Number(booking.totalPrice),
+        Number(booking.paidAmount),
+        booking.bookingDate,
+        requestCreatedAt,
+      );
+      refundAmount = result.refundAmount;
+      deductionAmount = result.deductionAmount;
+    }
+
+    if (refundAmount > 0) {
+      await this.createRefundVoucher(
+        bookingId,
+        BookingType.LAWN,
+        booking.member.Membership_No,
+        refundAmount,
+        `Refund for lawn booking #${bookingId} cancellation. Total: ${booking.totalPrice}, Paid: ${booking.paidAmount}, Deduction: ${deductionAmount}`,
+      );
+    }
+
+    return await this.prismaService.lawnBooking.update({
+      where: { id: bookingId },
+      data: {
+        isCancelled: true,
+        refundAmount: refundAmount,
+      },
+    });
+  }
+
+  private async cancelPhotoshootBookingInternal(bookingId: number, requestCreatedAt?: Date) {
+    const booking = await this.prismaService.photoshootBooking.findUnique({
+      where: { id: bookingId },
+      include: { member: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    let refundAmount = 0;
+    let deductionAmount = 0;
+
+    if (requestCreatedAt) {
+      const result = this.calculateRefund(
+        'PHOTOSHOOT',
+        Number(booking.totalPrice),
+        Number(booking.paidAmount),
+        booking.bookingDate,
+        requestCreatedAt,
+      );
+      refundAmount = result.refundAmount;
+      deductionAmount = result.deductionAmount;
+    }
+
+    if (refundAmount > 0) {
+      await this.createRefundVoucher(
+        bookingId,
+        BookingType.PHOTOSHOOT,
+        booking.member.Membership_No,
+        refundAmount,
+        `Refund for photoshoot booking #${bookingId} cancellation. Total: ${booking.totalPrice}, Paid: ${booking.paidAmount}, Deduction: ${deductionAmount}`,
+      );
+    }
+
+    return await this.prismaService.photoshootBooking.update({
+      where: { id: bookingId },
+      data: {
+        isCancelled: true,
+        refundAmount: refundAmount,
+      },
+    });
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1869,11 +2346,15 @@ export class BookingService {
     const args: any = {
       where: {
         isCancelled: false,
+        cancellationRequests: {
+          none: { status: 'PENDING' }
+        }
       },
       orderBy: {
         bookingDate: 'desc',
       },
       include: {
+        cancellationRequests: true,
         hall: {
           select: {
             name: true,
@@ -3396,18 +3877,44 @@ export class BookingService {
     });
   }
 
-  async dBookingHall(bookingId: number) {
-    return await this.prismaService.hallBooking.update({
+  async cCancellationRequestHall(bookingId: number, reason: string, requestedBy?: string) {
+    const booking = await this.prismaService.hallBooking.findUnique({
       where: { id: bookingId },
-      data: { isCancelled: true },
+      include: {
+        cancellationRequests: {
+          where: { OR: [{ status: 'PENDING' }, { status: 'APPROVED' }] }
+        }
+      }
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (booking.cancellationRequests && booking.cancellationRequests.length > 0) {
+      throw new BadRequestException('A cancellation request is already pending or approved for this booking');
+    }
+
+    return await this.prismaService.hallCancellationRequest.create({
+      data: {
+        bookingId: booking.id,
+        reason: reason || 'Booking cancellation requested by admin',
+        requestedBy: requestedBy || 'Admin',
+        status: 'PENDING',
+      },
     });
   }
 
   // lawn booking
   async gBookingsLawn(page?: number, limit?: number) {
     const args: any = {
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          none: { status: 'PENDING' }
+        }
+      },
       orderBy: { bookingDate: 'desc' },
       include: {
+        cancellationRequests: true,
         lawn: { include: { lawnCategory: true } },
         member: {
           select: { Membership_No: true, Name: true },
@@ -4025,18 +4532,29 @@ export class BookingService {
     });
   }
 
-  async dBookingLawn(bookingId: number) {
+  async cCancellationRequestLawn(bookingId: number, reason: string, requestedBy?: string) {
     const booking = await this.prismaService.lawnBooking.findUnique({
       where: { id: bookingId },
-      include: { member: true },
+      include: {
+        cancellationRequests: {
+          where: { OR: [{ status: 'PENDING' }, { status: 'APPROVED' }] }
+        }
+      }
     });
-    if (!booking) return;
-    await this.prismaService.lawnHoldings.deleteMany({
-      where: { lawnId: booking.lawnId, holdBy: booking.member.Membership_No },
-    });
-    return await this.prismaService.lawnBooking.update({
-      where: { id: bookingId },
-      data: { isCancelled: true },
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (booking.cancellationRequests && booking.cancellationRequests.length > 0) {
+      throw new BadRequestException('A cancellation request is already pending or approved for this booking');
+    }
+
+    return await this.prismaService.lawnCancellationRequest.create({
+      data: {
+        bookingId: booking.id,
+        reason: reason || 'Booking cancellation requested by admin',
+        requestedBy: requestedBy || 'Admin',
+        status: 'PENDING',
+      },
     });
   }
 
@@ -5165,7 +5683,12 @@ export class BookingService {
   }
   async gBookingPhotoshoot(page?: number, limit?: number) {
     const args: any = {
-      where: { isCancelled: false },
+      where: {
+        isCancelled: false,
+        cancellationRequests: {
+          none: { status: 'PENDING' }
+        }
+      },
       orderBy: { bookingDate: 'asc' }, // The original was asc? usually desc for recent.. keeping as original
       include: {
         member: {
@@ -5176,6 +5699,7 @@ export class BookingService {
           },
         },
         photoshoot: true,
+        cancellationRequests: true,
       },
     };
 
@@ -5184,7 +5708,8 @@ export class BookingService {
       args.take = Number(limit);
     }
 
-    return await this.prismaService.photoshootBooking.findMany(args);
+    const bookings = await this.prismaService.photoshootBooking.findMany(args);
+    return bookings.map(b => this.attachActiveCancellationRequest(b));
   }
 
   // member photoshoot booking
@@ -5607,10 +6132,29 @@ export class BookingService {
     };
   }
 
-  async dBookingPhotoshoot(bookingId: number) {
-    return await this.prismaService.photoshootBooking.update({
+  async cCancellationRequestPhotoshoot(bookingId: number, reason: string, requestedBy?: string) {
+    const booking = await this.prismaService.photoshootBooking.findUnique({
       where: { id: bookingId },
-      data: { isCancelled: true },
+      include: {
+        cancellationRequests: {
+          where: { OR: [{ status: 'PENDING' }, { status: 'APPROVED' }] }
+        }
+      }
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (booking.cancellationRequests && booking.cancellationRequests.length > 0) {
+      throw new BadRequestException('A cancellation request is already pending or approved for this booking');
+    }
+
+    return await this.prismaService.photoshootCancellationRequest.create({
+      data: {
+        bookingId: booking.id,
+        reason: reason || 'Booking cancellation requested by admin',
+        requestedBy: requestedBy || 'Admin',
+        status: 'PENDING',
+      },
     });
   }
 
@@ -5970,6 +6514,96 @@ export class BookingService {
         success: true,
         message: 'Unpaid booking and voucher deleted successfully',
       };
+    });
+  }
+
+  private attachActiveCancellationRequest(booking: any) {
+    if (!booking.cancellationRequests || booking.cancellationRequests.length === 0) {
+      return { ...booking, cancellationRequest: null };
+    }
+
+    // Sort by createdAt descending to get the latest
+    const requests = [...booking.cancellationRequests].sort((a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    // Prefer PENDING request if exists
+    const activeRequest = requests.find(r => r.status === 'PENDING') || requests[0];
+
+    return {
+      ...booking,
+      cancellationRequest: activeRequest,
+    };
+  }
+
+  private calculateRefund(
+    bookingType: 'ROOM' | 'HALL' | 'LAWN' | 'PHOTOSHOOT',
+    totalPrice: number,
+    paidAmount: number,
+    checkIn: Date, // or bookingDate
+    requestCreatedAt: Date,
+    roomCount: number = 1,
+  ): { refundAmount: number; deductionAmount: number } {
+    const policyKey =
+      bookingType === 'ROOM'
+        ? 'roomBooking'
+        : bookingType === 'HALL'
+          ? 'hallBooking'
+          : bookingType === 'LAWN'
+            ? 'lawnBooking'
+            : 'photoshootBooking';
+
+    const policySection = (paymentPolicies as any)[policyKey];
+    if (!policySection || !policySection.cancellationRefund) {
+      // Default: no deduction if no policy defined, refund everything paid
+      return { refundAmount: paidAmount, deductionAmount: 0 };
+    }
+
+    const diffMs = checkIn.getTime() - requestCreatedAt.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    let bracket = '1-2';
+    if (bookingType === 'ROOM') {
+      if (roomCount >= 3 && roomCount <= 5) bracket = '3-5';
+      else if (roomCount >= 6) bracket = '6-8';
+    }
+
+    let timeBracket: 'moreThan72Hours' | '24To72Hours' | 'lessThan24Hours' =
+      'lessThan24Hours';
+    if (diffHours > 72) timeBracket = 'moreThan72Hours';
+    else if (diffHours >= 24) timeBracket = '24To72Hours';
+
+    const policy = policySection.cancellationRefund[timeBracket][bracket];
+    const deductionRate = policy?.deduction ?? 1.0;
+
+    const deductionAmount = totalPrice * deductionRate;
+    const refundAmount = Math.max(0, paidAmount - deductionAmount);
+
+    return { refundAmount, deductionAmount };
+  }
+
+  private async createRefundVoucher(
+    bookingId: number,
+    bookingType: BookingType,
+    membershipNo: string,
+    amount: number,
+    remarks: string,
+  ) {
+    const vno = generateNumericVoucherNo();
+    return await this.prismaService.paymentVoucher.create({
+      data: {
+        consumer_number: generateConsumerNumber(Number(vno)),
+        voucher_no: vno,
+        booking_id: bookingId,
+        booking_type: bookingType,
+        membership_no: membershipNo,
+        amount: amount,
+        voucher_type: VoucherType.REFUND,
+        status: VoucherStatus.CONFIRMED,
+        issued_by: 'System',
+        paid_at: new Date(),
+        remarks: remarks,
+      } as any,
     });
   }
 }

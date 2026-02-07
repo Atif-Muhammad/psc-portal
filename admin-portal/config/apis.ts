@@ -1,6 +1,6 @@
 import axios from "axios";
-const base_url = "http://localhost:3000/api";
-// const base_url = "https://admin.peshawarservicesclub.com/api";
+// const base_url = "http://localhost:3000/api";
+const base_url = "https://admin.peshawarservicesclub.com/api";
 
 export const authAdmin = async (data: any): Promise<any> => {
   try {
@@ -348,16 +348,88 @@ export const updateBooking = async (data: any): Promise<any> => {
     throw { message, status: error.response?.status || 500 };
   }
 };
-export const deleteBooking = async (
+export const cancelReqBooking = async (
   bookingFor: string,
-  bookID: any
+  bookID: any,
+  reason?: string
 ): Promise<any> => {
   try {
     const response = await axios.delete(
-      `${base_url}/booking/delete/booking?bookingFor=${bookingFor}&bookID=${bookID}`,
+      `${base_url}/booking/cancelReqBooking?bookingFor=${bookingFor}&bookID=${bookID}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`,
       { withCredentials: true }
     );
     return response;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+}
+export const updateCancellationReq = async (
+  bookingFor: string,
+  bookID: any,
+  status: "APPROVED" | "REJECTED",
+  remarks?: string
+): Promise<any> => {
+  try {
+    const response = await axios.patch(
+      `${base_url}/booking/updateCancellationReq?bookingFor=${bookingFor}&bookID=${bookID}&status=${status}${remarks ? `&remarks=${encodeURIComponent(remarks)}` : ""}`,
+      {},
+      { withCredentials: true }
+    );
+    return response;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getCancelledBookings = async ({
+  bookingsFor,
+  pageParam = 1,
+}: {
+  bookingsFor: string;
+  pageParam?: number;
+}): Promise<any> => {
+  try {
+    const response = await axios.get(
+      `${base_url}/booking/get/bookings/cancelled?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getCancellationRequests = async ({
+  bookingsFor,
+  pageParam = 1,
+}: {
+  bookingsFor: string;
+  pageParam?: number;
+}): Promise<any> => {
+  try {
+    const response = await axios.get(
+      `${base_url}/booking/get/bookings/cancellation-requests?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      { withCredentials: true }
+    );
+    return response.data;
   } catch (error: any) {
     const message =
       error.response?.data?.message ||

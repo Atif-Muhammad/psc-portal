@@ -39,7 +39,7 @@ import {
   getBookings,
   createBooking,
   updateBooking,
-  deleteBooking,
+  cancelReqBooking,
   getHalls,
   searchMembers,
   getVouchers,
@@ -727,7 +727,7 @@ export default function HallBookings() {
   });
 
   const deleteMutation = useMutation<any, Error, { bookingFor: string; bookID: string }>({
-    mutationFn: ({ bookingFor, bookID }) => deleteBooking(bookingFor, bookID),
+    mutationFn: ({ bookingFor, bookID }) => cancelReqBooking(bookingFor, bookID, "Cancelled by Admin"),
     onSuccess: () => {
       toast({ title: "Hall booking cancelled successfully" });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });

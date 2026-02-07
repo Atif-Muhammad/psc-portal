@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getLawnCategories, getBookings, createBooking, updateBooking, deleteBooking, searchMembers, getVouchers, getLawnDateStatuses } from "../../config/apis";
+import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses } from "../../config/apis";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, addYears, startOfDay } from "date-fns";
@@ -795,7 +795,7 @@ export default function LawnBookings() {
 
   const deleteMutation = useMutation({
     mutationFn: ({ bookingFor, bookID }: { bookingFor: string; bookID: string }) =>
-      deleteBooking(bookingFor, bookID),
+      cancelReqBooking(bookingFor, bookID, "Cancelled by Admin"),
     onSuccess: () => {
       toast({ title: "Lawn booking cancelled successfully" });
       queryClient.invalidateQueries({ queryKey: ["lawn-bookings"] });
@@ -1388,12 +1388,6 @@ export default function LawnBookings() {
                 </div>}
 
                 <LawnPaymentSection
-                  form={{
-                    paymentStatus: paymentStatus,
-                    totalPrice: calculatedPrice,
-                    paidAmount: paidAmount,
-                    pendingAmount: calculatedPrice - paidAmount
-                  }}
                   onChange={(field, value) => {
                     if (field === "paymentStatus") {
                       setPaymentStatus(value);
@@ -2014,12 +2008,7 @@ export default function LawnBookings() {
 
             {/* Payment Section with Accounting Summary */}
             <LawnPaymentSection
-              form={{
-                paymentStatus: editBooking?.paymentStatus || "UNPAID",
-                totalPrice: editBooking?.totalPrice || 0,
-                paidAmount: editBooking?.paidAmount || 0,
-                pendingAmount: editBooking?.pendingAmount || 0
-              }}
+              
               onChange={(field, value) => {
                 setEditBooking(prev => {
                   if (!prev) return null;
