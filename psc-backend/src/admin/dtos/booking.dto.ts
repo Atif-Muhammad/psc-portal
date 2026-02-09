@@ -54,4 +54,10 @@ export class BookingDto {
   paymentMode: PaymentMode;
   @IsOptional()
   prevRoomId?: string | null;
+  @IsOptional()
+  card_number?: string;
+  @IsOptional()
+  check_number?: string;
+  @IsOptional()
+  bank_name?: string;
 }

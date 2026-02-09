@@ -360,6 +360,7 @@ enum VoucherType {
   REFUND
   ADJUSTMENT
   ADVANCE_PAYMENT
+  TO_BILL
 }
 
 enum VoucherStatus {

@@ -162,7 +162,8 @@ export const exportVoucherPDF = (voucher: any) => {
   doc.setFont('helvetica', 'bold');
   doc.text("Payment Mode:", leftCol, yPos);
   doc.setFont('helvetica', 'normal');
-  doc.text(voucher.payment_mode || 'N/A', leftCol + 30, yPos);
+  const paymentModeLabel = (voucher.payment_mode || 'N/A').toUpperCase() === 'CHECK' ? 'Cheque' : voucher.payment_mode;
+  doc.text(paymentModeLabel, leftCol + 30, yPos);
 
   // Right column - Booking ID
   if (voucher.booking_id) {
@@ -185,6 +186,32 @@ export const exportVoucherPDF = (voucher: any) => {
     const remarksLines = doc.splitTextToSize(remarks, maxWidth);
     doc.text(remarksLines, leftCol + 20, yPos);
     yPos += (remarksLines.length * 5);
+  }
+
+  // Payment Details (Card/Cheque)
+  if (voucher.card_number || voucher.check_number || voucher.bank_name) {
+    yPos += 8;
+    if (voucher.card_number) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Card Number:", leftCol, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(voucher.card_number, leftCol + 30, yPos);
+      yPos += 8;
+    }
+    if (voucher.check_number) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Cheque No:", leftCol, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(voucher.check_number, leftCol + 25, yPos);
+      yPos += 8;
+    }
+    if (voucher.bank_name) {
+      doc.setFont('helvetica', 'bold');
+      doc.text("Bank Name:", leftCol, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(voucher.bank_name, leftCol + 25, yPos);
+      yPos += 8;
+    }
   }
 
   // Transaction ID for online payments

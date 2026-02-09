@@ -557,7 +557,10 @@ export default function RoomBookings() {
         paymentStatus: editBooking.paymentStatus || "UNPAID",
         paidAmount: editBooking.paidAmount || 0,
         pendingAmount: editBooking.pendingAmount || 0,
-        paymentMode: "CASH",
+        paymentMode: editBooking.paymentMode || "CASH",
+        card_number: editBooking.card_number || "",
+        check_number: editBooking.check_number || "",
+        bank_name: editBooking.bank_name || "",
         numberOfAdults: editBooking.numberOfAdults || 1,
         numberOfChildren: editBooking.numberOfChildren || 0,
         specialRequests: editBooking.specialRequests || "",
@@ -910,6 +913,9 @@ export default function RoomBookings() {
       remarks: form.remarks,
       reservationId: form.reservationId,
       heads: form.heads,
+      card_number: form.card_number,
+      check_number: form.check_number,
+      bank_name: form.bank_name,
     };
 
     createMutation.mutate(payload);
@@ -965,6 +971,9 @@ export default function RoomBookings() {
       specialRequests: editForm.specialRequests,
       remarks: editForm.remarks,
       heads: editForm.heads,
+      card_number: editForm.card_number,
+      check_number: editForm.check_number,
+      bank_name: editForm.bank_name,
     };
 
     updateMutation.mutate(payload);

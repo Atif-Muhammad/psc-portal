@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `paymentvoucher` MODIFY `voucher_type` ENUM('FULL_PAYMENT', 'HALF_PAYMENT', 'REFUND', 'ADJUSTMENT', 'ADVANCE_PAYMENT', 'TO_BILL') NOT NULL;

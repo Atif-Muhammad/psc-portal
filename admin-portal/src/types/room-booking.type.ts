@@ -157,7 +157,7 @@ export interface Voucher {
   bank_name?: string;
   transaction_id: string | null;
   remarks: string;
-  voucher_type: "FULL_PAYMENT" | "HALF_PAYMENT" | "REFUND" | "ADJUSTMENT" | "ADVANCE_PAYMENT";
+  voucher_type: "FULL_PAYMENT" | "HALF_PAYMENT" | "REFUND" | "ADJUSTMENT" | "ADVANCE_PAYMENT" | "TO_BILL";
   status: "CONFIRMED" | "PENDING" | "CANCELLED";
   issued_at: string;
   issued_by: string;

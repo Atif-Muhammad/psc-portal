@@ -109,7 +109,7 @@ export const VouchersDialog = React.memo(({
                           PKR {parseFloat(voucher.amount.toString()).toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground capitalize">
-                          {voucher.payment_mode.toLowerCase() === "check" ? "cheque" : voucher.payment_mode.toLowerCase()}
+                          {voucher.payment_mode.toLowerCase() === "check" ? "Cheque" : voucher.payment_mode.toLowerCase()}
                         </div>
                       </div>
                     </div>
@@ -148,22 +148,28 @@ export const VouchersDialog = React.memo(({
 
                   {/* Payment Details */}
                   {(voucher.card_number || voucher.check_number || voucher.bank_name) && (
-                    <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
-                      <div className="font-medium mb-2">Payment Details</div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="mt-3 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm">
+                      <div className="font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
+                        <Receipt className="h-3.5 w-3.5" />
+                        Payment Details
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                         {voucher.card_number && (
-                          <div>
-                            <span className="font-medium">Card (Last 4):</span> {voucher.card_number}
+                          <div className="flex justify-between border-b border-blue-100 pb-1">
+                            <span className="text-blue-700 font-medium">Card Number:</span>
+                            <span className="font-mono">{voucher.card_number}</span>
                           </div>
                         )}
                         {voucher.check_number && (
-                          <div>
-                            <span className="font-medium">Cheque No:</span> {voucher.check_number}
+                          <div className="flex justify-between border-b border-blue-100 pb-1">
+                            <span className="text-blue-700 font-medium">Cheque No:</span>
+                            <span className="font-mono">{voucher.check_number}</span>
                           </div>
                         )}
                         {voucher.bank_name && (
-                          <div className="col-span-2">
-                            <span className="font-medium">Bank:</span> {voucher.bank_name}
+                          <div className="col-span-2 flex justify-between border-b border-blue-100 pb-1">
+                            <span className="text-blue-700 font-medium">Bank Name:</span>
+                            <span>{voucher.bank_name}</span>
                           </div>
                         )}
                       </div>
