@@ -166,23 +166,7 @@ export class PaymentService {
       },
     });
 
-    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
-    // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
-      // return {
-      //   response_Code: '01',
-      //   consumer_Detail: ''.padEnd(30, ' '),
-      //   bill_status: 'B',
-      //   due_date: ' ',
-      //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-      //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-      //   email_address: ' ',
-      //   contact_number: ' ',
-      //   billing_month: ' ',
-      //   date_paid: ' ',
-      //   amount_paid: ' ',
-      //   tran_auth_Id: ' ',
-      //   reserved: ' ',
-      // } as any;
+    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
@@ -192,58 +176,23 @@ export class PaymentService {
     // Check if voucher is a REFUND voucher - should not be payable
     
     // Check if voucher has expired
-    // const now = new Date();
-    // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-    //   return {
-    //     response_Code: '02',
-    //     consumer_Detail: 'Voucher has been expired/blocked',
-    //     bill_status: 'B',
-    //   } as any;
-    //   // return {
-    //   //   response_Code: '01',
-    //   //   consumer_Detail: ''.padEnd(30, ' '),
-    //   //   bill_status: 'B',
-    //   //   due_date: ' ',
-    //   //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-    //   //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-    //   //   email_address: ' ',
-    //   //   contact_number: ' ',
-    //   //   billing_month: ' ',
-    //   //   date_paid: ' ',
-    //   //   amount_paid: ' ',
-    //   //   tran_auth_Id: ' ',
-    //   //   reserved: 'Expired',
-    //   // } as any;
-    // }
-    // if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
-      // return {
-      //   response_Code: '01',
-      //   consumer_Detail: 'Voucher not found',
-      //   bill_status: 'B',
-      // } as any;
-      // return {
-        //   response_Code: '01',
-        //   consumer_Detail: ''.padEnd(30, ' '),
-      //   bill_status: 'B',
-      //   due_date: ' ',
-      //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-      //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-      //   email_address: ' ',
-      //   contact_number: ' ',
-      //   billing_month: ' ',
-      //   date_paid: ' ',
-      //   amount_paid: ' ',
-      //   tran_auth_Id: ' ',
-      //   reserved: 'Refund voucher',
-      // } as any;
-    // }
+    const now = new Date();
+    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      return {
+        response_Code: '02',
+        consumer_Detail: 'Voucher has been expired/blocked',
+        bill_status: 'B',
+      } as any;
+    
+    }
+  
     
     const bookingDate = voucher.issued_at;
     const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
-    else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
+    // else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
 
     const amountStr = this.formatAmountForKuickpay(
       Number(voucher.amount),
@@ -301,14 +250,14 @@ export class PaymentService {
 
       
       // Check if voucher has expired
-      // const now = new Date();
-      // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-      //   return {
-      //     response_Code: '02',
-      //     Identification_parameter: '',
-      //     reserved: 'Voucher expired/blocked',
-      //   };
-      // }
+      const now = new Date();
+      if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+        return {
+          response_Code: '02',
+          Identification_parameter: '',
+          reserved: 'Voucher expired/blocked',
+        };
+      }
       // Check if voucher is a REFUND voucher - should not be payable
       if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
         return {
@@ -335,13 +284,6 @@ export class PaymentService {
         };
       }
 
-      // if (voucher.status === VoucherStatus.CANCELLED) {
-      //   return {
-      //     response_Code: '02',
-      //     Identification_parameter: '',
-      //     reserved: 'Voucher cancelled',
-      //   };
-      // }
 
       // Update voucher
       await prisma.paymentVoucher.update({
@@ -713,17 +655,7 @@ export class PaymentService {
       throw new BadRequestException('Check-in date cannot be in the past');
     }
 
-    // Calculate number of nights and price
-    const nights = Math.ceil(
-      (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    const pricePerNight =
-      bookingData.pricingType === 'member'
-        ? typeExists.priceMember
-        : typeExists.priceGuest;
-    const totalPrice =
-      Number(pricePerNight) * nights * bookingData.numberOfRooms;
-
+    // check if unpaid online voucher exceeded 3 -- one for each room type --
     // Get available rooms with a single complex query
     const availableRooms = await this.prismaService.room.findMany({
       where: {
@@ -791,12 +723,23 @@ export class PaymentService {
       );
     }
 
+    // Calculate number of nights and price
+    const nights = Math.ceil(
+      (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    const pricePerNight =
+      bookingData.pricingType === 'member'
+        ? typeExists.priceMember
+        : typeExists.priceGuest;
+    const totalPrice =
+      Number(pricePerNight) * nights * bookingData.numberOfRooms;
+
+
     // Select specific rooms for booking
     const selectedRooms = availableRooms.slice(0, bookingData.numberOfRooms);
 
     // Calculate expiry time (1 hour from now for refined flow)
     const holdExpiry = new Date(Date.now() + 60 * 60 * 1000);
-    const invoiceDueDate = new Date(Date.now() + 60 * 60 * 1000);
 
     // Put rooms on hold
     try {
