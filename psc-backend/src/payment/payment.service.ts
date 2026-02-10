@@ -166,7 +166,8 @@ export class PaymentService {
       },
     });
 
-    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+    // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
@@ -176,15 +177,15 @@ export class PaymentService {
     // Check if voucher is a REFUND voucher - should not be payable
     
     // Check if voucher has expired
-    const now = new Date();
-    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-      return {
-        response_Code: '02',
-        consumer_Detail: 'Voucher has been expired/blocked',
-        bill_status: 'B',
-      } as any;
+    // const now = new Date();
+    // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+    //   return {
+    //     response_Code: '02',
+    //     consumer_Detail: 'Voucher has been expired/blocked',
+    //     bill_status: 'B',
+    //   } as any;
     
-    }
+    // }
   
     
     const bookingDate = voucher.issued_at;
@@ -250,16 +251,17 @@ export class PaymentService {
 
       
       // Check if voucher has expired
-      const now = new Date();
-      if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-        return {
-          response_Code: '02',
-          Identification_parameter: '',
-          reserved: 'Voucher expired/blocked',
-        };
-      }
+      // const now = new Date();
+      // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      //   return {
+      //     response_Code: '02',
+      //     Identification_parameter: '',
+      //     reserved: 'Voucher expired/blocked',
+      //   };
+      // }
       // Check if voucher is a REFUND voucher - should not be payable
-      if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
+      // if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
+      if (voucher.voucher_type === VoucherType.REFUND) {
         return {
           response_Code: '01',
           Identification_parameter: '',
