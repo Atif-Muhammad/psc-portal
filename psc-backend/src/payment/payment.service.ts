@@ -186,7 +186,6 @@ export class PaymentService {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
-        bill_status: 'B',
       } as any;
     }
     
@@ -313,7 +312,7 @@ export class PaymentService {
       // Check if voucher is a REFUND voucher - should not be payable
       if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
         return {
-          response_Code: '02',
+          response_Code: '01',
           Identification_parameter: '',
           reserved: 'Voucher not found',
         };

@@ -132,7 +132,6 @@ export class PaymentController {
       return {
         response_Code: '04',
         consumer_Detail: 'Invalid credentials'.padEnd(30, ' '),
-        bill_status: 'B',
       };
     }
 
@@ -141,7 +140,6 @@ export class PaymentController {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
-        bill_status: 'B',
       };
     }
 
@@ -149,7 +147,6 @@ export class PaymentController {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
-        bill_status: 'B',
       };
     }
 
@@ -161,7 +158,6 @@ export class PaymentController {
       return {
         response_Code: '05',
         consumer_Detail: 'Service Failed',
-        bill_status: 'B',
       };
     }
   }
