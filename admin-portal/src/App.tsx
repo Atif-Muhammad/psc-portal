@@ -146,13 +146,17 @@ function withPermissions(Component: React.ComponentType, allowedRoles: string[] 
       return <Component />;
     }
 
-    // Check inherited permissions
-    if (requiredPermission === "Room Types" && permissions.includes("Rooms")) {
+    // Unified access for related routes
+    if (["Rooms", "Room Types"].includes(requiredPermission) &&
+      (permissions.includes("Rooms") || permissions.includes("Room Types"))) {
       return <Component />;
     }
-    if (requiredPermission === "Lawn Categories" && permissions.includes("Lawns")) {
+
+    if (["Lawns", "Lawn Categories"].includes(requiredPermission) &&
+      (permissions.includes("Lawns") || permissions.includes("Lawn Categories"))) {
       return <Component />;
     }
+
     if (requiredPermission.includes("Bookings") && permissions.includes("Bookings")) {
       return <Component />;
     }
@@ -178,8 +182,13 @@ function getFirstAllowedRoute(currentUser: any): string {
     const requiredPermission = ROUTE_TO_PERMISSION_MAP[route.path];
     if (requiredPermission) {
       if (permissions.includes(requiredPermission)) return route.path;
-      if (requiredPermission === "Room Types" && permissions.includes("Rooms")) return route.path;
-      if (requiredPermission === "Lawn Categories" && permissions.includes("Lawns")) return route.path;
+      // Unified access for related routes
+      if (["Rooms", "Room Types"].includes(requiredPermission) &&
+        (permissions.includes("Rooms") || permissions.includes("Room Types"))) return route.path;
+
+      if (["Lawns", "Lawn Categories"].includes(requiredPermission) &&
+        (permissions.includes("Lawns") || permissions.includes("Lawn Categories"))) return route.path;
+
       if (requiredPermission.includes("Bookings") && permissions.includes("Bookings")) return route.path;
     }
   }
@@ -221,8 +230,13 @@ export function useCanAccessRoute(routePath: string): boolean {
 
   // Check if user has this permission
   if (permissions.includes(requiredPermission)) return true;
-  if (requiredPermission === "Room Types" && permissions.includes("Rooms")) return true;
-  if (requiredPermission === "Lawn Categories" && permissions.includes("Lawns")) return true;
+  // Unified access for related routes
+  if (["Rooms", "Room Types"].includes(requiredPermission) &&
+    (permissions.includes("Rooms") || permissions.includes("Room Types"))) return true;
+
+  if (["Lawns", "Lawn Categories"].includes(requiredPermission) &&
+    (permissions.includes("Lawns") || permissions.includes("Lawn Categories"))) return true;
+
   if (requiredPermission.includes("Bookings") && permissions.includes("Bookings")) return true;
 
   return false;
@@ -283,12 +297,12 @@ const ProtectedDashboard = withPermissions(Dashboard);
 const ProtectedMembers = withPermissions(Members);
 const ProtectedAdmins = withPermissions(Admins, ['super_admin']);
 const ProtectedAdminReservations = withPermissions(AdminReservations, ['super_admin', 'admin']);
-const ProtectedRoomTypes = withPermissions(RoomTypes, ['super_admin']);
+const ProtectedRoomTypes = withPermissions(RoomTypes);
 const ProtectedRooms = withPermissions(Rooms);
 const ProtectedRoomBookings = withPermissions(RoomBookings);
 const ProtectedHalls = withPermissions(Halls);
 const ProtectedHallBookings = withPermissions(HallBookings);
-const ProtectedLawnCategories = withPermissions(LawnCategories, ['super_admin']);
+const ProtectedLawnCategories = withPermissions(LawnCategories);
 const ProtectedLawns = withPermissions(Lawns);
 const ProtectedLawnBookings = withPermissions(LawnBookings);
 const ProtectedPhotoshoot = withPermissions(Photoshoot);

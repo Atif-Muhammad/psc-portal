@@ -79,7 +79,7 @@ const menuItems = [
     icon: BedDouble,
     items: [
       { title: "Room Types", url: "/rooms/types" },
-      { title: "Manage Rooms", url: "/rooms" },
+      { title: "Rooms", url: "/rooms" },
       { title: "Room Bookings", url: "/bookings/rooms" },
     ],
   },
@@ -146,8 +146,14 @@ export function AppSidebar() {
 
     // Check if user has this permission
     if (permissions.includes(requiredPermission)) return true;
-    if (requiredPermission === "Room Types" && permissions.includes("Rooms")) return true;
-    if (requiredPermission === "Lawn Categories" && permissions.includes("Lawns")) return true;
+
+    // Unified access for related routes
+    if (["Rooms", "Room Types"].includes(requiredPermission) &&
+      (permissions.includes("Rooms") || permissions.includes("Room Types"))) return true;
+
+    if (["Lawns", "Lawn Categories"].includes(requiredPermission) &&
+      (permissions.includes("Lawns") || permissions.includes("Lawn Categories"))) return true;
+
     if (requiredPermission.includes("Bookings") && permissions.includes("Bookings")) return true;
 
     return false;
