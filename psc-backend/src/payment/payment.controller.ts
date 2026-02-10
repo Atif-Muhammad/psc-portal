@@ -140,7 +140,7 @@ export class PaymentController {
     if (!payload.consumer_number.startsWith(prefix)) {
       return {
         response_Code: '01',
-        consumer_Detail: 'Invalid prefix'.padEnd(30, ' '),
+        consumer_Detail: 'Voucher not found',
         bill_status: 'B',
       };
     }
@@ -148,7 +148,7 @@ export class PaymentController {
     if (isNaN(Number(payload.consumer_number))) {
       return {
         response_Code: '01',
-        consumer_Detail: 'Invalid voucher ID'.padEnd(30, ' '),
+        consumer_Detail: 'Voucher not found',
         bill_status: 'B',
       };
     }
@@ -160,7 +160,7 @@ export class PaymentController {
       console.error('Kuickpay Inquiry Error:', error);
       return {
         response_Code: '05',
-        consumer_Detail: 'Processing failed'.padEnd(30, ' '),
+        consumer_Detail: 'Service Failed',
         bill_status: 'B',
       };
     }
@@ -184,9 +184,9 @@ export class PaymentController {
     const prefix = process.env.KUICKPAY_PREFIX || '25430';
     if (!payload.consumer_number.startsWith(prefix)) {
       return {
-        response_Code: '04',
+        response_Code: '01',
         Identification_parameter: '',
-        reserved: 'Invalid prefix',
+        reserved: 'Voucher not found',
       };
     }
 

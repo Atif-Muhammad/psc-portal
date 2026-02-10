@@ -166,82 +166,79 @@ export class PaymentService {
       },
     });
 
-    if (!voucher) {
+    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+    // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+      // return {
+      //   response_Code: '01',
+      //   consumer_Detail: ''.padEnd(30, ' '),
+      //   bill_status: 'B',
+      //   due_date: ' ',
+      //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+      //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+      //   email_address: ' ',
+      //   contact_number: ' ',
+      //   billing_month: ' ',
+      //   date_paid: ' ',
+      //   amount_paid: ' ',
+      //   tran_auth_Id: ' ',
+      //   reserved: ' ',
+      // } as any;
       return {
         response_Code: '01',
-        consumer_Detail: ''.padEnd(30, ' '),
+        consumer_Detail: 'Voucher not found',
         bill_status: 'B',
-        due_date: ' ',
-        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        email_address: ' ',
-        contact_number: ' ',
-        billing_month: ' ',
-        date_paid: ' ',
-        amount_paid: ' ',
-        tran_auth_Id: ' ',
-        reserved: ' ',
       } as any;
     }
-
+    
     // Check if voucher is a REFUND voucher - should not be payable
-    if (voucher.voucher_type === VoucherType.REFUND) {
-      return {
-        response_Code: '01',
-        consumer_Detail: ''.padEnd(30, ' '),
-        bill_status: 'B',
-        due_date: ' ',
-        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        email_address: ' ',
-        contact_number: ' ',
-        billing_month: ' ',
-        date_paid: ' ',
-        amount_paid: ' ',
-        tran_auth_Id: ' ',
-        reserved: 'Refund voucher',
-      } as any;
-    }
-
-    // Check if voucher is cancelled
-    if (voucher.status === VoucherStatus.CANCELLED) {
-      return {
-        response_Code: '01',
-        consumer_Detail: ''.padEnd(30, ' '),
-        bill_status: 'B',
-        due_date: ' ',
-        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        email_address: ' ',
-        contact_number: ' ',
-        billing_month: ' ',
-        date_paid: ' ',
-        amount_paid: ' ',
-        tran_auth_Id: ' ',
-        reserved: 'Cancelled',
-      } as any;
-    }
-
+    
     // Check if voucher has expired
-    const now = new Date();
-    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-      return {
-        response_Code: '01',
-        consumer_Detail: ''.padEnd(30, ' '),
-        bill_status: 'B',
-        due_date: ' ',
-        amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
-        email_address: ' ',
-        contact_number: ' ',
-        billing_month: ' ',
-        date_paid: ' ',
-        amount_paid: ' ',
-        tran_auth_Id: ' ',
-        reserved: 'Expired',
-      } as any;
-    }
-
+    // const now = new Date();
+    // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+    //   return {
+    //     response_Code: '02',
+    //     consumer_Detail: 'Voucher has been expired/blocked',
+    //     bill_status: 'B',
+    //   } as any;
+    //   // return {
+    //   //   response_Code: '01',
+    //   //   consumer_Detail: ''.padEnd(30, ' '),
+    //   //   bill_status: 'B',
+    //   //   due_date: ' ',
+    //   //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+    //   //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+    //   //   email_address: ' ',
+    //   //   contact_number: ' ',
+    //   //   billing_month: ' ',
+    //   //   date_paid: ' ',
+    //   //   amount_paid: ' ',
+    //   //   tran_auth_Id: ' ',
+    //   //   reserved: 'Expired',
+    //   // } as any;
+    // }
+    // if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
+      // return {
+      //   response_Code: '01',
+      //   consumer_Detail: 'Voucher not found',
+      //   bill_status: 'B',
+      // } as any;
+      // return {
+        //   response_Code: '01',
+        //   consumer_Detail: ''.padEnd(30, ' '),
+      //   bill_status: 'B',
+      //   due_date: ' ',
+      //   amount_within_dueDate: this.formatAmountForKuickpay(0, 13, true),
+      //   amount_after_dueDate: this.formatAmountForKuickpay(0, 13, true),
+      //   email_address: ' ',
+      //   contact_number: ' ',
+      //   billing_month: ' ',
+      //   date_paid: ' ',
+      //   amount_paid: ' ',
+      //   tran_auth_Id: ' ',
+      //   reserved: 'Refund voucher',
+      // } as any;
+    // }
+    
     const bookingDate = voucher.issued_at;
     const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
@@ -303,22 +300,22 @@ export class PaymentService {
         };
       }
 
-      // Check if voucher is a REFUND voucher - should not be payable
-      if (voucher.voucher_type === VoucherType.REFUND) {
-        return {
-          response_Code: '02',
-          Identification_parameter: '',
-          reserved: 'Refund voucher cannot be paid',
-        };
-      }
-
+      
       // Check if voucher has expired
-      const now = new Date();
-      if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      // const now = new Date();
+      // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      //   return {
+      //     response_Code: '02',
+      //     Identification_parameter: '',
+      //     reserved: 'Voucher expired/blocked',
+      //   };
+      // }
+      // Check if voucher is a REFUND voucher - should not be payable
+      if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
         return {
           response_Code: '02',
           Identification_parameter: '',
-          reserved: 'Voucher expired',
+          reserved: 'Voucher not found',
         };
       }
 
@@ -339,13 +336,13 @@ export class PaymentService {
         };
       }
 
-      if (voucher.status === VoucherStatus.CANCELLED) {
-        return {
-          response_Code: '02',
-          Identification_parameter: '',
-          reserved: 'Voucher cancelled',
-        };
-      }
+      // if (voucher.status === VoucherStatus.CANCELLED) {
+      //   return {
+      //     response_Code: '02',
+      //     Identification_parameter: '',
+      //     reserved: 'Voucher cancelled',
+      //   };
+      // }
 
       // Update voucher
       await prisma.paymentVoucher.update({
@@ -357,7 +354,7 @@ export class PaymentService {
           channel: Channel.KUICKPAY,
           gateway_meta: paymentData as any,
           paid_at: new Date(),
-          // invoice_no: paymentData.tran_auth_id, // Using auth id as invoice no for now
+          invoice_no: paymentData.tran_auth_id, // Using auth id as invoice no for now
         },
       });
 
@@ -376,8 +373,7 @@ export class PaymentService {
           const currentPaid = Number(booking.paidAmount);
           const total = Number(booking.totalPrice);
           const newPaid = currentPaid + voucherAmount;
-          const newStatus =
-            newPaid >= total ? PaymentStatus.PAID : booking.paymentStatus;
+          const newStatus = newPaid >= total ? PaymentStatus.PAID : booking.paymentStatus;
           const newPending = Math.max(0, total - newPaid);
 
           const updatedBooking = await prisma.roomBooking.update({
