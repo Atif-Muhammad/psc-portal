@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  PreconditionFailedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
@@ -166,34 +167,34 @@ export class PaymentService {
       },
     });
 
-    // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
-    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+      // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
       return {
         response_Code: '01',
         consumer_Detail: 'Voucher not found',
       } as any;
     }
-    
+
     // Check if voucher is a REFUND voucher - should not be payable
-    
+
     // Check if voucher has expired
-    // const now = new Date();
-    // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-    //   return {
-    //     response_Code: '02',
-    //     consumer_Detail: 'Voucher has been expired/blocked',
-    //     bill_status: 'B',
-    //   } as any;
-    
-    // }
-  
-    
+    const now = new Date();
+    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+      return {
+        response_Code: '02',
+        consumer_Detail: 'Voucher has been expired/blocked',
+        bill_status: 'B',
+      } as any;
+
+    }
+
+
     const bookingDate = voucher.issued_at;
     const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
 
     let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
-    // else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
+    else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
 
     const amountStr = this.formatAmountForKuickpay(
       Number(voucher.amount),
@@ -201,7 +202,11 @@ export class PaymentService {
       true,
     );
 
-    return {
+    return billStatus === 'B' ? {
+      response_Code: '02',
+      consumer_Detail: 'Voucher has been expired/blocked',
+      bill_status: 'B',
+    } as any : {
       response_Code: '00',
       consumer_Detail: (voucher.member?.Name || 'N/A')
         .toUpperCase()
@@ -249,19 +254,19 @@ export class PaymentService {
         };
       }
 
-      
+
       // Check if voucher has expired
-      // const now = new Date();
-      // if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
-      //   return {
-      //     response_Code: '02',
-      //     Identification_parameter: '',
-      //     reserved: 'Voucher expired/blocked',
-      //   };
-      // }
+      const now = new Date();
+      if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+        return {
+          response_Code: '02',
+          Identification_parameter: '',
+          reserved: 'Voucher expired/blocked',
+        };
+      }
       // Check if voucher is a REFUND voucher - should not be payable
-      // if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
-      if (voucher.voucher_type === VoucherType.REFUND) {
+      if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
+        // if (voucher.voucher_type === VoucherType.REFUND) {
         return {
           response_Code: '01',
           Identification_parameter: '',
@@ -305,72 +310,85 @@ export class PaymentService {
       const bType = voucher.booking_type;
       const bId = voucher.booking_id;
 
+      const updateCommonBooking = async (prismaTx: any, booking: any, bTypeLabel: string) => {
+        const voucherAmount = Number(voucher.amount);
+        const currentPaid = Number(booking.paidAmount);
+        const total = Number(booking.totalPrice);
+        const newPaid = currentPaid + voucherAmount;
+
+        let newStatus = booking.paymentStatus;
+        if (newPaid >= total) {
+          newStatus = PaymentStatus.PAID;
+        } else if (voucher.voucher_type === VoucherType.ADVANCE_PAYMENT) {
+          newStatus = PaymentStatus.ADVANCE_PAYMENT;
+        } else if (voucher.voucher_type === VoucherType.HALF_PAYMENT) {
+          newStatus = PaymentStatus.HALF_PAID;
+        }
+
+        const newPending = Math.max(0, total - newPaid);
+
+        const updateData: any = {
+          paymentStatus: newStatus,
+          paidAmount: newPaid,
+          pendingAmount: newPending,
+          isConfirmed: true,
+        };
+
+        let updatedBooking: any;
+        if (bTypeLabel === 'ROOM') {
+          updatedBooking = await prismaTx.roomBooking.update({
+            where: { id: bId },
+            data: updateData,
+            include: { rooms: true },
+          });
+          const roomIds = updatedBooking.rooms.map((r: any) => r.roomId);
+          await prismaTx.roomHoldings.deleteMany({
+            where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
+          });
+        } else if (bTypeLabel === 'HALL') {
+          updatedBooking = await prismaTx.hallBooking.update({
+            where: { id: bId },
+            data: updateData,
+          });
+          await prismaTx.hallHoldings.deleteMany({
+            where: { hallId: updatedBooking.hallId, holdBy: voucher.membership_no },
+          });
+        } else if (bTypeLabel === 'LAWN') {
+          updatedBooking = await prismaTx.lawnBooking.update({
+            where: { id: bId },
+            data: updateData,
+          });
+          await prismaTx.lawnHoldings.deleteMany({
+            where: { lawnId: updatedBooking.lawnId, holdBy: voucher.membership_no },
+          });
+        } else if (bTypeLabel === 'PHOTOSHOOT') {
+          updatedBooking = await prismaTx.photoshootBooking.update({
+            where: { id: bId },
+            data: updateData,
+          });
+        }
+      };
+
       if (bType === 'ROOM') {
         const booking = await prisma.roomBooking.findUnique({
           where: { id: bId },
-          include: { rooms: true },
         });
-
-        if (booking) {
-          const voucherAmount = Number(voucher.amount);
-          const currentPaid = Number(booking.paidAmount);
-          const total = Number(booking.totalPrice);
-          const newPaid = currentPaid + voucherAmount;
-          const newStatus = newPaid >= total ? PaymentStatus.PAID : booking.paymentStatus;
-          const newPending = Math.max(0, total - newPaid);
-
-          const updatedBooking = await prisma.roomBooking.update({
-            where: { id: bId },
-            data: {
-              paymentStatus: newStatus,
-              paidAmount: newPaid,
-              pendingAmount: newPending,
-              isConfirmed: true,
-            },
-            include: { rooms: true },
-          });
-
-          const roomIds = updatedBooking.rooms.map((r) => r.roomId);
-          await prisma.roomHoldings.deleteMany({
-            where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
-          });
-        }
+        if (booking) await updateCommonBooking(prisma, booking, 'ROOM');
       } else if (bType === 'HALL') {
-        const booking = await prisma.hallBooking.update({
+        const booking = await prisma.hallBooking.findUnique({
           where: { id: bId },
-          data: {
-            paymentStatus: 'PAID',
-            paidAmount: voucher.amount,
-            pendingAmount: 0,
-            isConfirmed: true,
-          },
         });
-        await prisma.hallHoldings.deleteMany({
-          where: { hallId: booking.hallId, holdBy: voucher.membership_no },
-        });
+        if (booking) await updateCommonBooking(prisma, booking, 'HALL');
       } else if (bType === 'LAWN') {
-        const booking = await prisma.lawnBooking.update({
+        const booking = await prisma.lawnBooking.findUnique({
           where: { id: bId },
-          data: {
-            paymentStatus: 'PAID',
-            paidAmount: voucher.amount,
-            pendingAmount: 0,
-            isConfirmed: true,
-          },
         });
-        await prisma.lawnHoldings.deleteMany({
-          where: { lawnId: booking.lawnId, holdBy: voucher.membership_no },
-        });
+        if (booking) await updateCommonBooking(prisma, booking, 'LAWN');
       } else if (bType === 'PHOTOSHOOT') {
-        await prisma.photoshootBooking.update({
+        const booking = await prisma.photoshootBooking.findUnique({
           where: { id: bId },
-          data: {
-            paymentStatus: 'PAID',
-            paidAmount: voucher.amount,
-            pendingAmount: 0,
-            isConfirmed: true,
-          },
         });
+        if (booking) await updateCommonBooking(prisma, booking, 'PHOTOSHOOT');
       }
 
       // Update Member Ledger
@@ -657,7 +675,54 @@ export class PaymentService {
       throw new BadRequestException('Check-in date cannot be in the past');
     }
 
-    // check if unpaid online voucher exceeded 3 -- one for each room type --
+    // Check for unpaid online vouchers for ROOM bookings
+    const unpaidVouchers = await this.prismaService.paymentVoucher.findMany({
+      where: {
+        membership_no: bookingData.membership_no,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.ONLINE,
+        booking_type: BookingType.ROOM,
+        expiresAt: {
+          gte: new Date(),
+        },
+      },
+      select: { booking_id: true },
+    });
+
+    if (unpaidVouchers.length > 0) {
+      // Fetch room bookings for these vouchers to identify their room types
+      const bookingsWithRooms = await this.prismaService.roomBooking.findMany({
+        where: { id: { in: unpaidVouchers.map((v) => v.booking_id) } },
+        select: {
+          rooms: {
+            select: {
+              room: {
+                select: { roomTypeId: true },
+              },
+            },
+          },
+        },
+      });
+
+      const existingRoomTypeIds = new Set(
+        bookingsWithRooms.flatMap((b) => b.rooms.map((r) => r.room.roomTypeId)),
+      );
+
+      // 1. Don't allow two unpaid online vouchers for a single room type
+      if (existingRoomTypeIds.has(roomType)) {
+        throw new PreconditionFailedException(
+          'An unpaid voucher for this room type already exists. Please clear it before generating a new one.',
+        );
+      }
+
+      // 2. Combined count for different room types shouldn't exceed 3
+      if (existingRoomTypeIds.size >= 3) {
+        throw new PreconditionFailedException(
+          'You have reached the maximum limit of 3 unpaid vouchers. Please clear existing ones first.',
+        );
+      }
+    }
+
     // Get available rooms with a single complex query
     const availableRooms = await this.prismaService.room.findMany({
       where: {

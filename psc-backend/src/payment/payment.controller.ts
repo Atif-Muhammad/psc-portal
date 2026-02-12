@@ -92,7 +92,7 @@ export class PaymentController {
 
   @Get('member/vouchers')
   async getMemberVouchers(@Query('membershipNo') membershipNo: string) {
-    await this.payment.cleanupExpiredVouchers(membershipNo);
+    // await this.payment.cleanupExpiredVouchers(membershipNo);
     return await this.payment.getMemberVouchers(membershipNo);
   }
 

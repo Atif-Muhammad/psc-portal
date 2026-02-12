@@ -354,10 +354,11 @@ export const cancelReqBooking = async (
   reason?: string
 ): Promise<any> => {
   try {
-    const response = await axios.delete(
+    const response = await axios.post(
       `${base_url}/booking/cancelReqBooking?bookingFor=${bookingFor}&bookID=${bookID}${reason ? `&reason=${encodeURIComponent(reason)}` : ""}`,
       { withCredentials: true }
     );
+    console.log(response)
     return response;
   } catch (error: any) {
     const message =

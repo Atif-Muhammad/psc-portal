@@ -99,6 +99,150 @@ export class BookingService {
     });
   }
 
+
+  // unpaid online vouchers
+  async unpaidTimerVouchers(membership_no: string) {
+    const vouchers = await this.prismaService.paymentVoucher.findMany({
+      where: {
+        membership_no,
+        payment_mode: PaymentMode.ONLINE,
+        status: 'PENDING',
+        issued_at: {
+          gte: new Date(Date.now() - 60 * 60 * 1000)
+        },
+        expiresAt: {
+          gt: new Date(Date.now() - 60 * 60 * 1000)
+        }
+      },
+      orderBy: {
+        issued_at: 'desc'
+      },
+      take: 3,
+      include: {
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Email: true,
+            Contact_No: true,
+          }
+        }
+      }
+    });
+
+    const enhancedVouchers = await Promise.all(vouchers.map(async (voucher) => {
+      let bookingData: any = null;
+      let roomType: any = null;
+
+      if (voucher.booking_type === 'ROOM') {
+        const booking = await this.prismaService.roomBooking.findUnique({
+          where: { id: voucher.booking_id },
+          include: {
+            rooms: {
+              include: {
+                room: {
+                  include: {
+                    roomType: true
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        if (booking) {
+          const firstRoomType = booking.rooms?.[0]?.room?.roomType;
+          roomType = firstRoomType ? {
+            id: firstRoomType.id,
+            name: firstRoomType.type,
+            screen: "details",
+            priceMember: firstRoomType.priceMember.toString(),
+            priceGuest: firstRoomType.priceGuest.toString(),
+            images: firstRoomType.images || [],
+             originalData: firstRoomType
+          } : null;
+
+          bookingData = {
+            checkIn: booking.checkIn.toISOString().split('T')[0],
+            checkOut: booking.checkOut.toISOString().split('T')[0],
+            numberOfAdults: booking.numberOfAdults,
+            numberOfChildren: booking.numberOfChildren,
+            numberOfRooms: booking.rooms.length,
+            specialRequest: booking.specialRequests || "",
+            totalPrice: booking.totalPrice.toString(),
+            advanceAmount: this.calculateAdvanceAmount(booking.rooms.length, Number(booking.totalPrice)),
+            isGuestBooking: booking.paidBy !== 'MEMBER',
+            guestName: booking.guestName || "",
+            guestContact: booking.guestContact || ""
+          };
+
+          return {
+            bookingType: voucher.booking_type,
+            voucherData: {
+              issue_date: voucher.issued_at,
+              due_date: voucher.expiresAt,
+              membership: {
+                no: voucher.member.Membership_No,
+                name: voucher.member.Name,
+                email: voucher.member.Email,
+                contact: voucher.member.Contact_No
+              },
+              voucher: {
+                ...voucher,
+                amount: voucher.amount.toString()
+              }
+            },
+            bookingId: voucher.booking_id,
+            invoiceNumber: voucher.invoice_no,
+            dueDate: voucher.expiresAt,
+            bookingData,
+            roomType,
+            memberDetails: {
+              memberName: voucher.member.Name,
+              membershipNo: voucher.member.Membership_No,
+              email: voucher.member.Email,
+              contact: voucher.member.Contact_No
+            },
+            isGuest: booking.paidBy !== 'MEMBER'
+          };
+        }
+      }
+
+      // Default structure if booking not found or not ROOM type
+      return {
+        bookingType: voucher.booking_type,
+        voucherData: {
+          issue_date: voucher.issued_at,
+          due_date: voucher.expiresAt,
+          membership: {
+            no: voucher.member.Membership_No,
+            name: voucher.member.Name,
+            email: voucher.member.Email,
+            contact: voucher.member.Contact_No
+          },
+          voucher: {
+            ...voucher,
+            amount: voucher.amount.toString()
+          }
+        },
+        bookingId: voucher.booking_id,
+        invoiceNumber: voucher.invoice_no,
+        dueDate: voucher.expiresAt,
+        bookingData: null,
+        roomType: null,
+        memberDetails: {
+          memberName: voucher.member.Name,
+          membershipNo: voucher.member.Membership_No,
+          email: voucher.member.Email,
+          contact: voucher.member.Contact_No
+        },
+        isGuest: false
+      };
+    }));
+
+    return enhancedVouchers;
+  }
+
   // room booking
   // room booking
   // gBookingsRoom moved to bottom for better organization with new include logic
@@ -6623,6 +6767,7 @@ export class BookingService {
               },
             },
           },
+          cancellationRequests: true
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -6669,6 +6814,7 @@ export class BookingService {
   }
 
   async cancelUnpaidBooking(consumer_number: string) {
+    console.log(consumer_number)
     const voucher = await this.prismaService.paymentVoucher.findUnique({
       where: { consumer_number: consumer_number },
     });
@@ -6682,14 +6828,16 @@ export class BookingService {
         'Only pending vouchers can be cancelled/deleted',
       );
     }
-
     const { booking_type, booking_id, membership_no } = voucher;
 
     return await this.prismaService.$transaction(async (prisma) => {
-      // 1. Delete Voucher
-      await prisma.paymentVoucher.delete({ where: { consumer_number: consumer_number } });
+      // 1. Mark Voucher as Cancelled
+      await prisma.paymentVoucher.update({
+        where: { consumer_number: consumer_number },
+        data: { status: VoucherStatus.CANCELLED, remarks: "Cancelled by Member on Payment Screen" },
+      });
 
-      // 2. Delete Booking and associated Holdings
+      // 2. Mark Booking as Cancelled and associated Holdings
       if (booking_type === 'ROOM') {
         const booking = await prisma.roomBooking.findUnique({
           where: { id: booking_id },
@@ -6698,7 +6846,7 @@ export class BookingService {
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
             throw new BadRequestException(
-              'Cannot delete a paid or half-paid booking',
+              'Cannot cancel a paid or half-paid booking recursively',
             );
           }
           const roomIds = booking.rooms.map((r) => r.roomId);
@@ -6706,8 +6854,11 @@ export class BookingService {
           await prisma.roomHoldings.deleteMany({
             where: { roomId: { in: roomIds }, holdBy: membership_no },
           });
-          // Delete booking
-          await prisma.roomBooking.delete({ where: { id: booking_id } });
+          // Mark booking as cancelled
+          await prisma.roomBooking.update({
+            where: { id: booking_id },
+            data: { isCancelled: true, remarks: "Cancelled by Member on Payment Screen" },
+          });
         }
       } else if (booking_type === 'HALL') {
         const booking = await prisma.hallBooking.findUnique({
@@ -6716,13 +6867,16 @@ export class BookingService {
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
             throw new BadRequestException(
-              'Cannot delete a paid or half-paid booking',
+              'Cannot cancel a paid or half-paid booking recursively',
             );
           }
           await prisma.hallHoldings.deleteMany({
             where: { hallId: booking.hallId, holdBy: membership_no },
           });
-          await prisma.hallBooking.delete({ where: { id: booking_id } });
+          await prisma.hallBooking.update({
+            where: { id: booking_id },
+            data: { isCancelled: true, remarks: "Cancelled by Member on Payment Screen" },
+          });
         }
       } else if (booking_type === 'LAWN') {
         const booking = await prisma.lawnBooking.findUnique({
@@ -6731,13 +6885,16 @@ export class BookingService {
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
             throw new BadRequestException(
-              'Cannot delete a paid or half-paid booking',
+              'Cannot cancel a paid or half-paid booking recursively',
             );
           }
           await prisma.lawnHoldings.deleteMany({
             where: { lawnId: booking.lawnId, holdBy: membership_no },
           });
-          await prisma.lawnBooking.delete({ where: { id: booking_id } });
+          await prisma.lawnBooking.update({
+            where: { id: booking_id },
+            data: { isCancelled: true },
+          });
         }
       } else if (booking_type === 'PHOTOSHOOT') {
         const booking = await prisma.photoshootBooking.findUnique({
@@ -6746,16 +6903,19 @@ export class BookingService {
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
             throw new BadRequestException(
-              'Cannot delete a paid or half-paid booking',
+              'Cannot cancel a paid or half-paid booking recursively',
             );
           }
-          await prisma.photoshootBooking.delete({ where: { id: booking_id } });
+          await prisma.photoshootBooking.update({
+            where: { id: booking_id },
+            data: { isCancelled: true },
+          });
         }
       }
 
       return {
         success: true,
-        message: 'Unpaid booking and voucher deleted successfully',
+        message: 'Unpaid booking and voucher marked as cancelled successfully',
       };
     });
   }

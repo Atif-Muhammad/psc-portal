@@ -197,17 +197,16 @@ export class BookingController {
       return this.bookingService.gCancellationRequestsLawn(page, limit);
   }
 
-  @UseGuards(JwtAccGuard, RolesGuard)
-  @Roles(RolesEnum.SUPER_ADMIN)
-  @Delete('cancelReqBooking')
+  @UseGuards(JwtAccGuard)
+  @Post('cancelReqBooking')
   async cancelReqBooking(
     @Query('bookingFor') bookingFor: string,
     @Query('bookID') bookID: string,
     @Query('reason') reason: string,
-    @Req() req: any,
+    @Req() req: { user: { id: string, name: string }},
   ) {
     const requestedBy = req.user?.name || 'Admin';
-
+   
     if (bookingFor === 'rooms')
       return this.bookingService.cCancellationRequestRoom(Number(bookID), reason, requestedBy);
     if (bookingFor === 'halls')
@@ -484,6 +483,13 @@ export class BookingController {
     return await this.bookingService.memberBookings(memberId, type);
   }
 
+  // fetch unpaid online vouchers for timer
+  @UseGuards(JwtAccGuard)
+  @Get('vouchers/unpaid/countdown')
+  async unpaidVouchersForTimer(@Req() req: {user: {id: string}}){
+    return await this.bookingService.unpaidTimerVouchers(req?.user?.id)
+  }
+
   // rules
   @UseGuards(JwtAccGuard)
   @Get('hall/rule')
@@ -507,10 +513,10 @@ export class BookingController {
   }
 
   @UseGuards(JwtAccGuard)
-  @Delete('cancel-unpaid/:voucherId')
+  @Delete('cancel-unpaid')
   async cancelUnpaidBooking(
-    @Param('voucherId', ParseIntPipe) voucherId: number,
+    @Query('consumer_number') consumer_number: string,
   ) {
-    return await this.bookingService.cancelUnpaidBooking(voucherId.toString());
+    return await this.bookingService.cancelUnpaidBooking(consumer_number);
   }
 }
