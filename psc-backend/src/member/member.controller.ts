@@ -96,4 +96,9 @@ export class MemberController {
   async getNotifications(@Req() req: { user: { id: string } }) {
     return await this.notifications.getMemberNotifications(req.user?.id);
   }
+  @UseGuards(JwtAccGuard)
+  @Get('notifications/un-seen-count')
+  async getUnseenCount(@Req() req: { user: { id: string } }) {
+    return await this.notifications.getUnseenNotificationsCount(req.user?.id);
+  }
 }

@@ -359,9 +359,9 @@ export class NotificationService {
 
   async getMemberNotifications(membershipNo: string) {
     return await this.prisma.notification.findMany({
-      where: {
+      include: {
         deliveries: {
-          some: {
+          where: {
             member: membershipNo,
           },
         },
@@ -369,6 +369,20 @@ export class NotificationService {
       orderBy: {
         createdAt: 'desc',
       },
+    });
+  }
+  async getUnseenNotificationsCount(membershipNo: string) {
+    return await this.prisma.notification.count({
+      where: {
+        deliveries: {
+          some: {
+            AND: [
+              {member: membershipNo},
+              {seen: false}
+            ]
+          },
+        },
+      }
     });
   }
 
