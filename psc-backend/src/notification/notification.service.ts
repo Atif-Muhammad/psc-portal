@@ -12,7 +12,7 @@ export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject('FIREBASE_ADMIN') private readonly firebase: typeof admin,
-  ) {}
+  ) { }
 
   private readonly DATA_DIR = path.join(process.cwd(), 'data', 'notification');
 
@@ -359,6 +359,13 @@ export class NotificationService {
 
   async getMemberNotifications(membershipNo: string) {
     return await this.prisma.notification.findMany({
+      where: {
+        deliveries: {
+          some: {
+            member: membershipNo,
+          },
+        },
+      },
       include: {
         deliveries: {
           where: {
@@ -377,12 +384,12 @@ export class NotificationService {
         deliveries: {
           some: {
             AND: [
-              {member: membershipNo},
-              {seen: false}
+              { member: membershipNo },
+              { seen: false }
             ]
           },
         },
-      }
+      },
     });
   }
 

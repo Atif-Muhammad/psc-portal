@@ -6,6 +6,7 @@ import {
   Post,
   Req,
   UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { NotificationDto } from './dtos/notification';
@@ -20,7 +21,7 @@ export class NotificationController {
   constructor(
     private readonly notificationService: NotificationService,
     private readonly contentService: ContentService,
-  ) {}
+  ) { }
 
   @UseGuards(JwtAccGuard)
   @Post('send-msg')
@@ -106,7 +107,7 @@ export class NotificationController {
   }
 
   @Patch('update-seen')
-  async updateSeen(@Body('notiID') notiID: number) {
+  async updateSeen(@Body('notiID', ParseIntPipe) notiID: number) {
     return this.notificationService.updateSeen(notiID);
   }
 }
