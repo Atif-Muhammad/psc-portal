@@ -159,7 +159,7 @@ export class BookingService {
             priceMember: firstRoomType.priceMember.toString(),
             priceGuest: firstRoomType.priceGuest.toString(),
             images: firstRoomType.images || [],
-             originalData: firstRoomType
+            originalData: firstRoomType
           } : null;
 
           bookingData = {
@@ -6767,13 +6767,24 @@ export class BookingService {
               },
             },
           },
-          cancellationRequests: true
+          cancellationRequests: true,
         },
         orderBy: { createdAt: 'desc' },
       });
+
+      const bookingIds = roomBookings.map((b) => b.id);
+      const vouchers = await this.prismaService.paymentVoucher.findMany({
+        where: {
+          booking_type: 'ROOM',
+          booking_id: { in: bookingIds },
+        },
+        orderBy: { issued_at: 'desc' },
+      });
+
       return roomBookings.map((b) => ({
         ...b,
         type: 'Room',
+        vouchers: vouchers.filter((v) => v.booking_id === b.id),
         name: `Room ${b.rooms.map((r) => r.room.roomNumber).join(', ')} (${b.rooms[0]?.room.roomType?.type || 'N/A'})`,
       }));
     } else if (type === 'Hall') {
@@ -6782,9 +6793,20 @@ export class BookingService {
         include: { hall: true },
         orderBy: { createdAt: 'desc' },
       });
+
+      const bookingIds = hallBookings.map((b) => b.id);
+      const vouchers = await this.prismaService.paymentVoucher.findMany({
+        where: {
+          booking_type: 'HALL',
+          booking_id: { in: bookingIds },
+        },
+        orderBy: { issued_at: 'desc' },
+      });
+
       return hallBookings.map((b) => ({
         ...b,
         type: 'Hall',
+        vouchers: vouchers.filter((v) => v.booking_id === b.id),
         name: b.hall.name,
       }));
     } else if (type === 'Lawn') {
@@ -6793,9 +6815,20 @@ export class BookingService {
         include: { lawn: { include: { lawnCategory: true } } },
         orderBy: { createdAt: 'desc' },
       });
+
+      const bookingIds = lawnBookings.map((b) => b.id);
+      const vouchers = await this.prismaService.paymentVoucher.findMany({
+        where: {
+          booking_type: 'LAWN',
+          booking_id: { in: bookingIds },
+        },
+        orderBy: { issued_at: 'desc' },
+      });
+
       return lawnBookings.map((b) => ({
         ...b,
         type: 'Lawn',
+        vouchers: vouchers.filter((v) => v.booking_id === b.id),
         name: b.lawn.description,
       }));
     } else if (type === 'Photoshoot') {
@@ -6805,9 +6838,20 @@ export class BookingService {
           include: { photoshoot: true },
           orderBy: { createdAt: 'desc' },
         });
+
+      const bookingIds = photoshootBookings.map((b) => b.id);
+      const vouchers = await this.prismaService.paymentVoucher.findMany({
+        where: {
+          booking_type: 'PHOTOSHOOT',
+          booking_id: { in: bookingIds },
+        },
+        orderBy: { issued_at: 'desc' },
+      });
+
       return photoshootBookings.map((b) => ({
         ...b,
         type: 'Photoshoot',
+        vouchers: vouchers.filter((v) => v.booking_id === b.id),
         name: b.photoshoot.description,
       }));
     }
