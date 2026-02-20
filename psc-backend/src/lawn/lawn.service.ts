@@ -16,13 +16,13 @@ export class LawnService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // ─────────────────────────── LAWN CATEGORY ───────────────────────────
   async getLawnCategories() {
     return await this.prismaService.lawnCategory.findMany({
       include: { lawns: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
     });
   }
   async getLawnNames(id: number) {
@@ -89,6 +89,7 @@ export class LawnService {
       return await this.prismaService.lawnCategory.create({
         data: {
           category: capitalizeWords(payload.category),
+          order: payload.order,
           images: uploadedImages,
           createdBy,
         },
@@ -223,6 +224,7 @@ export class LawnService {
       // Only update category field if provided
       if (payload.category)
         updateData.category = capitalizeWords(payload.category);
+      updateData.order = payload.order;
 
       return await this.prismaService.lawnCategory.update({
         where: { id },
@@ -410,6 +412,8 @@ export class LawnService {
         maxGuests: Number(payload.maxGuests) || 0,
         memberCharges: new Prisma.Decimal(payload.memberCharges || 0),
         guestCharges: new Prisma.Decimal(payload.guestCharges || 0),
+        corporateCharges: new Prisma.Decimal(payload.corporateCharges || 0),
+        order: Number(payload.order || 0),
         isActive:
           payload.isActive !== undefined
             ? typeof payload.isActive === 'string'
@@ -514,6 +518,10 @@ export class LawnService {
           guestCharges: payload.guestCharges
             ? new Prisma.Decimal(payload.guestCharges)
             : undefined,
+          corporateCharges: payload.corporateCharges
+            ? new Prisma.Decimal(payload.corporateCharges)
+            : undefined,
+          order: payload.order ? Number(payload.order) : 0,
           isActive:
             payload.isActive !== undefined
               ? typeof payload.isActive === 'string'
@@ -628,27 +636,27 @@ export class LawnService {
     const heldLawns =
       reserve && fromDate && toDate
         ? await this.prismaService.lawnHoldings.findMany({
-            where: {
-              lawnId: { in: lawnIds },
-              onHold: true,
-              holdExpiry: { gt: new Date() },
-              OR: [
-                {
-                  // Granular hold overlap
-                  fromDate: { lte: toDate },
-                  toDate: { gte: fromDate },
-                  timeSlot: timeSlot,
-                },
-                {
-                  // Legacy/Global hold fallback
-                  fromDate: null,
-                },
-              ],
-            },
-            include: {
-              lawn: { include: { lawnCategory: true } },
-            },
-          })
+          where: {
+            lawnId: { in: lawnIds },
+            onHold: true,
+            holdExpiry: { gt: new Date() },
+            OR: [
+              {
+                // Granular hold overlap
+                fromDate: { lte: toDate },
+                toDate: { gte: fromDate },
+                timeSlot: timeSlot,
+              },
+              {
+                // Legacy/Global hold fallback
+                fromDate: null,
+              },
+            ],
+          },
+          include: {
+            lawn: { include: { lawnCategory: true } },
+          },
+        })
         : [];
 
     if (heldLawns.length > 0) {
@@ -676,10 +684,10 @@ export class LawnService {
         );
       }
 
-      const validTimeSlots = ['MORNING', 'EVENING', 'NIGHT'];
-      if (!validTimeSlots.includes(timeSlot)) {
+      const validTimeSlots = ['DAY', 'NIGHT'];
+      if (!validTimeSlots.includes(timeSlot.toUpperCase())) {
         throw new HttpException(
-          'Invalid time slot. Must be MORNING, EVENING, or NIGHT',
+          'Invalid time slot. Must be DAY or NIGHT',
           HttpStatus.BAD_REQUEST,
         );
       }

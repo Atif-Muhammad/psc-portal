@@ -128,6 +128,8 @@ interface Lawn {
   maxGuests: number;
   memberCharges: string | number;
   guestCharges: string | number;
+  corporateCharges: string | number;
+  order: number;
   isActive: boolean;
   isOutOfService: boolean;
   outOfOrders: LawnOutOfOrder[];
@@ -144,6 +146,8 @@ interface LawnForm {
   maxGuests: string;
   memberCharges: string;
   guestCharges: string;
+  corporateCharges: string;
+  order: string;
   isOutOfService: boolean;
   isActive: boolean;
   outOfOrders: LawnOutOfOrder[];
@@ -156,6 +160,8 @@ const initialFormState: LawnForm = {
   maxGuests: "",
   memberCharges: "0",
   guestCharges: "0",
+  corporateCharges: "0",
+  order: "0",
   isOutOfService: false,
   isActive: true,
   outOfOrders: [],
@@ -511,6 +517,21 @@ const LawnDetailDialog = ({
               </div>
             </div>
           </Card>
+          <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-md">
+                <Users className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
+                  Corporate Price
+                </p>
+                <p className="text-sm font-bold text-slate-700">
+                  Rs. {Number(lawn.corporateCharges || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
           <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left overflow-hidden">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-slate-100 rounded-md shrink-0">
@@ -820,7 +841,7 @@ export default function Lawns() {
     from: new Date().toISOString().split("T")[0],
     to: new Date().toISOString().split("T")[0],
   });
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("MORNING");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("DAY");
   const [reserveRemarks, setReserveRemarks] = useState("");
 
   const [form, setForm] = useState<LawnForm>(initialFormState);
@@ -863,7 +884,7 @@ export default function Lawns() {
   }, [detailLawn, detailDateRange, fetchLogs]);
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => createLawn({ ...data, lawnCategoryId: Number(data.lawnCategoryId) }),
+    mutationFn: (data: any) => createLawn({ ...data, lawnCategoryId: Number(data.lawnCategoryId), order: Number(data.order || 0) }),
     onSuccess: () => {
       toast({ title: "Lawn created" });
       queryClient.invalidateQueries({ queryKey: ["lawns"] });
@@ -874,7 +895,7 @@ export default function Lawns() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => updateLawn({ ...data, id: Number(data.id), lawnCategoryId: Number(data.lawnCategoryId) }),
+    mutationFn: (data: any) => updateLawn({ ...data, id: Number(data.id), lawnCategoryId: Number(data.lawnCategoryId), order: Number(data.order || 0) }),
     onSuccess: () => {
       toast({ title: "Lawn updated" });
       queryClient.invalidateQueries({ queryKey: ["lawns"] });
@@ -911,6 +932,8 @@ export default function Lawns() {
         maxGuests: editLawn.maxGuests.toString(),
         memberCharges: editLawn.memberCharges.toString(),
         guestCharges: editLawn.guestCharges.toString(),
+        corporateCharges: (editLawn.corporateCharges || 0).toString(),
+        order: (editLawn.order || 0).toString(),
         isActive: editLawn.isActive,
         isOutOfService: editLawn.isOutOfService,
         outOfOrders: editLawn.outOfOrders?.map((p: any) => ({
@@ -938,11 +961,13 @@ export default function Lawns() {
   }, [reserveDialog, reserveDates, selectedTimeSlot, lawns]);
 
   const categories = useMemo(() => Array.from(new Set(lawns.map((l: any) => l.lawnCategory?.category).filter(Boolean))), [lawns]);
-  const filteredLawns = useMemo(() => categoryFilter === "ALL" ? lawns : lawns.filter((l: any) => l.lawnCategory?.category === categoryFilter), [lawns, categoryFilter]);
+  const filteredLawns = useMemo(() => {
+    const list = categoryFilter === "ALL" ? lawns : lawns.filter((l: any) => l.lawnCategory?.category === categoryFilter);
+    return [...list].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+  }, [lawns, categoryFilter]);
 
   const getTimeSlotIcon = (slot: string) => {
-    if (slot === "MORNING") return <Sun className="h-4 w-4 text-yellow-500" />;
-    if (slot === "EVENING") return <Sunset className="h-4 w-4 text-orange-500" />;
+    if (slot === "DAY") return <Sunset className="h-4 w-4 text-orange-500" />;
     return <Moon className="h-4 w-4 text-blue-500" />;
   };
 
@@ -978,7 +1003,11 @@ export default function Lawns() {
           <Button variant="outline" className="gap-2 border-orange-200 bg-orange-50 text-orange-700" onClick={() => setReserveDialog(true)}>
             <CalendarIcon className="h-4 w-4" /> Reservations
           </Button>
-          <Button onClick={() => { setForm(initialFormState); setIsAddOpen(true); }}>
+          <Button onClick={() => {
+            const maxOrder = lawns.reduce((max: number, l: any) => Math.max(max, Number(l.order || 0)), 0);
+            setForm({ ...initialFormState, order: (maxOrder + 1).toString() });
+            setIsAddOpen(true);
+          }}>
             <Plus className="h-4 w-4 mr-2" /> Add Lawn
           </Button>
         </div>
@@ -993,9 +1022,10 @@ export default function Lawns() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16">Order</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Capacity</TableHead>
-                  <TableHead>Charges (Member/Guest)</TableHead>
+                  <TableHead>Charges (Memb/Guest/Corp)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Maintenance</TableHead>
                   <TableHead>Upcoming Reservations</TableHead>
@@ -1005,9 +1035,12 @@ export default function Lawns() {
               <TableBody>
                 {filteredLawns.map((l: any) => (
                   <TableRow key={l.id}>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono">{l.order || 0}</Badge>
+                    </TableCell>
                     <TableCell className="font-semibold">{l.lawnCategory?.category}</TableCell>
                     <TableCell>{l.minGuests} - {l.maxGuests}</TableCell>
-                    <TableCell>PKR {Number(l.memberCharges).toLocaleString()} / {Number(l.guestCharges).toLocaleString()}</TableCell>
+                    <TableCell>PKR {Number(l.memberCharges).toLocaleString()} / {Number(l.guestCharges).toLocaleString()} / {Number(l.corporateCharges || 0).toLocaleString()}</TableCell>
                     <TableCell>
                       <Badge variant={getLawnStatusVariant(getLawnStatus(l)) as any} className={cn(
                         getLawnStatus(l) === "Available" ? "bg-emerald-600 text-white" :
@@ -1135,8 +1168,7 @@ export default function Lawns() {
               <Select value={selectedTimeSlot} onValueChange={setSelectedTimeSlot}>
                 <SelectTrigger className="mt-1 h-10 bg-white shadow-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MORNING">Morning (8:00 AM - 1:00 PM)</SelectItem>
-                  <SelectItem value="EVENING">Evening (2:00 PM - 7:00 PM)</SelectItem>
+                  <SelectItem value="DAY">Day (2:00 PM - 7:00 PM)</SelectItem>
                   <SelectItem value="NIGHT">Night (8:00 PM - 1:00 AM)</SelectItem>
                 </SelectContent>
               </Select>
@@ -1334,14 +1366,20 @@ export default function Lawns() {
         <DialogContent className="max-w-7xl h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Add New Lawn</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2">
-              <Label>Category</Label>
-              <Select value={form.lawnCategoryId} onValueChange={v => setForm(p => ({ ...p, lawnCategoryId: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {lawnCategories.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.category}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4 col-span-2">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={form.lawnCategoryId} onValueChange={v => setForm(p => ({ ...p, lawnCategoryId: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {lawnCategories.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.category}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Order Number</Label>
+                <Input type="number" value={form.order} onChange={e => setForm(p => ({ ...p, order: e.target.value }))} placeholder="0" />
+              </div>
             </div>
             <div>
               <Label>Min Guests</Label>
@@ -1358,6 +1396,10 @@ export default function Lawns() {
             <div>
               <Label>Guest Price</Label>
               <Input type="number" value={form.guestCharges} onChange={e => setForm(p => ({ ...p, guestCharges: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <Label>Corporate Price</Label>
+              <Input type="number" value={form.corporateCharges} onChange={e => setForm(p => ({ ...p, corporateCharges: e.target.value }))} />
             </div>
             <div className="col-span-2">
               <Label>Description</Label>
@@ -1412,14 +1454,20 @@ export default function Lawns() {
         <DialogContent className="max-w-7xl h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Lawn</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2">
-              <Label>Category</Label>
-              <Select value={editForm.lawnCategoryId} onValueChange={v => setEditForm(p => ({ ...p, lawnCategoryId: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {lawnCategories.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.category}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4 col-span-2">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={editForm.lawnCategoryId} onValueChange={v => setEditForm(p => ({ ...p, lawnCategoryId: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {lawnCategories.map((c: any) => <SelectItem key={c.id} value={c.id.toString()}>{c.category}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Order Number</Label>
+                <Input type="number" value={editForm.order} onChange={e => setEditForm(p => ({ ...p, order: e.target.value }))} placeholder="0" />
+              </div>
             </div>
             <div>
               <Label>Min Guests</Label>
@@ -1436,6 +1484,10 @@ export default function Lawns() {
             <div>
               <Label>Guest Price</Label>
               <Input type="number" value={editForm.guestCharges} onChange={e => setEditForm(p => ({ ...p, guestCharges: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <Label>Corporate Price</Label>
+              <Input type="number" value={editForm.corporateCharges} onChange={e => setEditForm(p => ({ ...p, corporateCharges: e.target.value }))} />
             </div>
             <div className="col-span-2">
               <Label>Description</Label>

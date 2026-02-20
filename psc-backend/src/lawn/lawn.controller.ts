@@ -56,6 +56,7 @@ export class LawnController {
     // Parse form data fields correctly
     const lawnCategoryPayload: LawnCategory = {
       category: payload.category,
+      order: Number(payload.order),
       existingimgs: payload.existingimgs || [], // For create, this should usually be empty
     };
     return await this.lawn.createLawnCategory(
@@ -96,6 +97,7 @@ export class LawnController {
 
     const lawnCategoryPayload: Partial<LawnCategory> = {
       category: payload.category,
+      order: Number(payload.order),
       existingimgs: existingimgs,
     };
 

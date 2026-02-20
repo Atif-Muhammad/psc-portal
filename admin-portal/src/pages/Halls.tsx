@@ -144,6 +144,8 @@ interface Hall {
   capacity: number;
   chargesMembers: number;
   chargesGuests: number;
+  chargesCorporate: number;
+  order: number;
   description: string;
   isActive: boolean;
   outOfOrders?: OutOfOrderPeriod[];
@@ -298,6 +300,21 @@ function HallDetailDialog({
                 </p>
                 <p className="text-sm font-bold text-slate-700">
                   Rs. {Number(hall.chargesGuests || 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </Card>
+          <Card className="p-3 bg-muted/20 border border-border/50 shadow-none transition-all hover:bg-muted/30 text-left">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-md">
+                <Users className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
+                  Corporate Price
+                </p>
+                <p className="text-sm font-bold text-slate-700">
+                  Rs. {Number(hall.chargesCorporate || 0).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -614,7 +631,7 @@ export default function Halls() {
     from: new Date().toISOString().split("T")[0],
     to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   });
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState("MORNING");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("DAY");
   const [reservationRemarks, setReservationRemarks] = useState("");
   const [detailHall, setDetailHall] = useState<Hall | null>(null);
   const [detailLogs, setDetailLogs] = useState<any>(null);
@@ -646,7 +663,9 @@ export default function Halls() {
     capacity: "",
     chargesMembers: "",
     chargesGuests: "",
+    chargesCorporate: "",
     description: "",
+    order: "",
     isActive: true,
     isExclusive: false,
     outOfOrders: [] as OutOfOrderPeriod[],
@@ -659,7 +678,9 @@ export default function Halls() {
     capacity: "",
     chargesMembers: "",
     chargesGuests: "",
+    chargesCorporate: "",
     description: "",
+    order: "",
     isActive: true,
     isExclusive: false,
     outOfOrders: [] as OutOfOrderPeriod[],
@@ -899,9 +920,7 @@ export default function Halls() {
   // Get time slot icon
   const getTimeSlotIcon = (timeSlot: string) => {
     switch (timeSlot) {
-      case "MORNING":
-        return <Sun className="h-4 w-4 text-yellow-500" />;
-      case "EVENING":
+      case "DAY":
         return <Sunset className="h-4 w-4 text-orange-500" />;
       case "NIGHT":
         return <Moon className="h-4 w-4 text-blue-500" />;
@@ -913,10 +932,8 @@ export default function Halls() {
   // Get time slot display name
   const getTimeSlotDisplay = (timeSlot: string) => {
     switch (timeSlot) {
-      case "MORNING":
-        return "Morning (8:00 AM - 2:00 PM)";
-      case "EVENING":
-        return "Evening (2:00 PM - 8:00 PM)";
+      case "DAY":
+        return "Day (2:00 PM - 8:00 PM)";
       case "NIGHT":
         return "Night (8:00 PM - 12:00 AM)";
       default:
@@ -1133,6 +1150,8 @@ export default function Halls() {
     fd.append("capacity", form.capacity);
     fd.append("chargesMembers", form.chargesMembers || "0");
     fd.append("chargesGuests", form.chargesGuests || "0");
+    fd.append("chargesCorporate", form.chargesCorporate || "0");
+    fd.append("order", form.order || "0");
     fd.append("description", form.description);
     fd.append("isActive", String(form.isActive));
     fd.append("isExclusive", String(form.isExclusive));
@@ -1160,6 +1179,8 @@ export default function Halls() {
       capacity: "",
       chargesMembers: "",
       chargesGuests: "",
+      chargesCorporate: "",
+      order: "",
       description: "",
       isActive: true,
       isExclusive: false,
@@ -1175,6 +1196,7 @@ export default function Halls() {
 
   useEffect(() => {
     if (editHall) {
+      console.log(editHall)
       const outOfOrders = editHall.outOfOrders?.map((period: any) => ({
         id: period.id,
         reason: period.reason,
@@ -1187,6 +1209,8 @@ export default function Halls() {
         capacity: editHall.capacity || "",
         chargesMembers: editHall.chargesMembers || "",
         chargesGuests: editHall.chargesGuests || "",
+        chargesCorporate: editHall.chargesCorporate || "",
+        order: editHall.order,
         description: editHall.description || "",
         isActive: editHall.isActive || false,
         isExclusive: editHall.isExclusive || false,
@@ -1278,6 +1302,8 @@ export default function Halls() {
     fd.append("capacity", editForm.capacity);
     fd.append("chargesMembers", editForm.chargesMembers);
     fd.append("chargesGuests", editForm.chargesGuests);
+    fd.append("chargesCorporate", editForm.chargesCorporate);
+    fd.append("order", editForm.order);
     fd.append("description", editForm.description);
     fd.append("isActive", String(editForm.isActive));
     fd.append("isExclusive", String(editForm.isExclusive));
@@ -1312,8 +1338,7 @@ export default function Halls() {
     // Determine current slot based on time
     const hours = now.getHours();
     let currentSlot = "";
-    if (hours >= 8 && hours < 14) currentSlot = "MORNING";
-    else if (hours >= 14 && hours < 20) currentSlot = "EVENING";
+    if (hours >= 14 && hours < 20) currentSlot = "DAY";
     else if (hours >= 20 || hours < 8) currentSlot = "NIGHT";
 
     return hall.holdings?.some(hold => {
@@ -1498,7 +1523,7 @@ export default function Halls() {
                 Add Hall
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Hall</DialogTitle>
               </DialogHeader>
@@ -1545,6 +1570,28 @@ export default function Halls() {
                         setForm({ ...form, chargesGuests: e.target.value })
                       }
                       placeholder="35000"
+                    />
+                  </div>
+                  <div>
+                    <Label>Corporate Charges (PKR)</Label>
+                    <Input
+                      type="number"
+                      value={form.chargesCorporate}
+                      onChange={(e) =>
+                        setForm({ ...form, chargesCorporate: e.target.value })
+                      }
+                      placeholder="45000"
+                    />
+                  </div>
+                  <div>
+                    <Label>Order Number</Label>
+                    <Input
+                      type="number"
+                      value={form.order}
+                      onChange={(e) =>
+                        setForm({ ...form, order: e.target.value })
+                      }
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -1828,6 +1875,7 @@ export default function Halls() {
                   <TableHead>Capacity</TableHead>
                   <TableHead>Member Rate</TableHead>
                   <TableHead>Guest Rate</TableHead>
+                  <TableHead>Corporate Rate</TableHead>
                   <TableHead>Images</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Maintenance</TableHead>
@@ -1862,6 +1910,9 @@ export default function Halls() {
                       </TableCell>
                       <TableCell>
                         PKR {Number(hall.chargesGuests).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        PKR {Number(hall.chargesCorporate).toLocaleString()}
                       </TableCell>
                       <TableCell className="grid grid-cols-2">
                         {hall.images ? hall.images?.slice(0, 5).map((img: any, idx: number) => (
@@ -2093,16 +2144,10 @@ export default function Halls() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MORNING">
-                      <div className="flex items-center gap-2">
-                        <Sun className="h-4 w-4 text-yellow-500" />
-                        Morning (8:00 AM - 2:00 PM)
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="EVENING">
+                    <SelectItem value="DAY">
                       <div className="flex items-center gap-2">
                         <Sunset className="h-4 w-4 text-orange-500" />
-                        Evening (2:00 PM - 8:00 PM)
+                        Day (2:00 PM - 8:00 PM)
                       </div>
                     </SelectItem>
                     <SelectItem value="NIGHT">
@@ -2289,7 +2334,7 @@ export default function Halls() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editHall} onOpenChange={() => setEditHall(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Hall: {editHall?.name}</DialogTitle>
           </DialogHeader>
@@ -2331,6 +2376,26 @@ export default function Halls() {
                   value={editForm.chargesGuests}
                   onChange={(e) =>
                     setEditForm({ ...editForm, chargesGuests: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Corporate Charges</Label>
+                <Input
+                  type="number"
+                  value={editForm.chargesCorporate}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, chargesCorporate: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Order Number</Label>
+                <Input
+                  type="number"
+                  value={editForm.order}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, order: e.target.value })
                   }
                 />
               </div>

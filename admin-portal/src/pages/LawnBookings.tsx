@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon, Ban, Eye, CheckCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,14 +12,20 @@ import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses } from "../../config/apis";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses, updateCancellationReq, getCancelledBookings, getCancellationRequests } from "../../config/apis";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, addYears, startOfDay } from "date-fns";
 import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { Voucher } from "@/types/room-booking.type";
+import { MemberSearchComponent } from "@/components/MemberSearch";
+import paymentRules from "../config/paymentRules.json";
+import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 
 interface Member {
   id: number;
@@ -47,6 +52,7 @@ interface Lawn {
   images: any[];
   memberCharges: string;
   guestCharges: string;
+  corporateCharges?: string;
   isActive: boolean;
   isOutOfService: boolean;
   outOfServiceReason: string | null;
@@ -55,6 +61,32 @@ interface Lawn {
   isBooked: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LawnBookingForm {
+  membershipNo: string;
+  lawncategoryId: string | number;
+  lawnId: string | number;
+  bookingDate: string;
+  endDate: string;
+  pricingType: string;
+  eventType: string;
+  numberOfGuests: number;
+  guestName?: string;
+  guestContact?: string;
+  guestCNIC?: string;
+  paidBy?: string;
+  paymentStatus: string;
+  paymentMode: string;
+  paidAmount: number;
+  pendingAmount: number;
+  totalPrice: number;
+  bookingDetails: { date: string; timeSlot: string; eventType?: string; reservationId?: string | number }[];
+  heads: { head: string; amount: number }[];
+  remarks?: string;
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
 }
 
 export interface LawnBooking {
@@ -96,7 +128,11 @@ export interface LawnBooking {
   updatedAt?: string;
   createdBy?: string;
   updatedBy?: string;
-  bookingDetails?: { date: string; timeSlot: string; eventType?: string }[];
+  remarks?: string;
+  guestCNIC?: string;
+  bookingDetails?: { date: string; timeSlot: string; eventType?: string; reservationId?: string | number }[];
+  extraCharges?: any[];
+  heads?: { head: string; amount: number }[];
 }
 
 
@@ -114,6 +150,10 @@ const LawnPaymentSection = React.memo(
       totalPrice: number;
       paidAmount: number;
       pendingAmount: number;
+      paymentMode?: string;
+      card_number?: string;
+      check_number?: string;
+      bank_name?: string;
     };
     onChange: (field: string, value: any) => void;
   }) => {
@@ -151,8 +191,14 @@ const LawnPaymentSection = React.memo(
               <SelectItem value="HALF_PAID">Half Paid</SelectItem>
               <SelectItem value="PAID">Paid</SelectItem>
               <SelectItem value="TO_BILL">To Bill</SelectItem>
+              <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
             </SelectContent>
           </Select>
+          {form.totalPrice > paymentRules.lawnBooking.advancePayment.threshold && (
+            <p className="text-[10px] text-blue-600 mt-1 italic font-medium">
+              * For bookings over {paymentRules.lawnBooking.advancePayment.threshold.toLocaleString()} PKR, an advance payment of {paymentRules.lawnBooking.advancePayment.defaultPaidAmount.toLocaleString()} PKR is required.
+            </p>
+          )}
         </div>
 
         {form.paymentStatus === "TO_BILL" && (
@@ -166,7 +212,7 @@ const LawnPaymentSection = React.memo(
           </div>
         )}
 
-        {form.paymentStatus === "HALF_PAID" && (
+        {(form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
               <Label>Paid Amount (PKR) *</Label>
@@ -222,7 +268,7 @@ const LawnPaymentSection = React.memo(
         </div>
 
         {/* Payment Mode Selection */}
-        {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID") && (
+        {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 border rounded-lg bg-gray-50">
             <div className="col-span-2">
               <Label className="font-semibold text-blue-800">Payment Medium Details</Label>
@@ -230,8 +276,8 @@ const LawnPaymentSection = React.memo(
             <div>
               <Label>Payment Mode *</Label>
               <Select
-                value={(form as any).paymentMode || "CASH"}
-                onValueChange={(val) => onChange("paymentMode" as any, val)}
+                value={form.paymentMode || "CASH"}
+                onValueChange={(val) => onChange("paymentMode", val)}
               >
                 <SelectTrigger className="mt-2">
                   <SelectValue />
@@ -240,42 +286,43 @@ const LawnPaymentSection = React.memo(
                   <SelectItem value="CASH">Cash</SelectItem>
                   <SelectItem value="CARD">Card</SelectItem>
                   <SelectItem value="CHECK">Check</SelectItem>
+                  <SelectItem value="ONLINE">Online</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {(form as any).paymentMode === "CARD" && (
+            {form.paymentMode === "CARD" && (
               <div>
                 <Label>Card Number (Last 4) *</Label>
                 <Input
                   className="mt-2"
                   placeholder="e.g. 1234"
-                  value={(form as any).card_number || ""}
-                  onChange={(e) => onChange("card_number" as any, e.target.value)}
+                  value={form.card_number || ""}
+                  onChange={(e) => onChange("card_number", e.target.value)}
                 />
               </div>
             )}
 
-            {(form as any).paymentMode === "CHECK" && (
+            {form.paymentMode === "CHECK" && (
               <div>
                 <Label>Check Number *</Label>
                 <Input
                   className="mt-2"
                   placeholder="Enter check number"
-                  value={(form as any).check_number || ""}
-                  onChange={(e) => onChange("check_number" as any, e.target.value)}
+                  value={form.check_number || ""}
+                  onChange={(e) => onChange("check_number", e.target.value)}
                 />
               </div>
             )}
 
-            {((form as any).paymentMode === "CARD" || (form as any).paymentMode === "CHECK") && (
+            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK") && (
               <div className="col-span-2">
                 <Label>Bank Name *</Label>
                 <Input
                   className="mt-2"
                   placeholder="Enter bank name"
-                  value={(form as any).bank_name || ""}
-                  onChange={(e) => onChange("bank_name" as any, e.target.value)}
+                  value={form.bank_name || ""}
+                  onChange={(e) => onChange("bank_name", e.target.value)}
                 />
               </div>
             )}
@@ -318,7 +365,7 @@ const getAvailableLawnTimeSlots = (
   lawns: Lawn[],
   reservations: any[]
 ): string[] => {
-  const allSlots = ["MORNING", "EVENING", "NIGHT"];
+  const allSlots = ["DAY", "NIGHT"];
   const lawn = lawns.find(l => l.id.toString() === lawnId);
   if (!lawn) return allSlots;
 
@@ -392,7 +439,7 @@ const LawnIndividualTimeSlotSelector = ({
   editBookingId,
   defaultEventType
 }: {
-  bookingDetails: { date: string; timeSlot: string; eventType?: string }[];
+  bookingDetails: { date: string; timeSlot: string; eventType?: string; reservationId?: string | number }[];
   lawnId: string;
   bookings: LawnBooking[];
   lawns: Lawn[];
@@ -477,7 +524,7 @@ const LawnIndividualTimeSlotSelector = ({
                   {format(date, "EEEE, MMMM do")}
                 </span>
                 <div className="flex gap-1">
-                  {["MORNING", "EVENING", "NIGHT"].map(slot => {
+                  {["DAY", "NIGHT"].map(slot => {
                     const isActive = dayDetails.some(d => d.timeSlot === slot);
                     const isAvailable = availableSlots.includes(slot) || isActive;
 
@@ -542,37 +589,85 @@ const LawnIndividualTimeSlotSelector = ({
   );
 };
 
+const initialForm: LawnBookingForm = {
+  membershipNo: "",
+  lawncategoryId: "",
+  lawnId: "",
+  bookingDate: format(new Date(), "yyyy-MM-dd"),
+  endDate: format(new Date(), "yyyy-MM-dd"),
+  pricingType: "member",
+  eventType: "wedding",
+  numberOfGuests: 0,
+  guestName: "",
+  guestContact: "",
+  guestCNIC: "",
+  paidBy: "MEMBER",
+  paymentStatus: "UNPAID",
+  paymentMode: "CASH",
+  paidAmount: 0,
+  pendingAmount: 0,
+  totalPrice: 0,
+  bookingDetails: [],
+  heads: [],
+  remarks: "",
+  card_number: "",
+  check_number: "",
+  bank_name: "",
+};
+
+// Available heads for extra charges
+const extraChargeHeads = [
+  "Stage",
+  "DJ",
+  "Food / Menu",
+  "GST Tax (%)",
+  "Others",
+];
+
+const recalculateHeads = (basePrice: number, currentHeads: { head: string; amount: number }[]) => {
+  let totalExtra = 0;
+  const updatedHeads = currentHeads.map((h) => {
+    let amount = h.amount;
+    if (h.head.includes("GST (") && h.head.includes("%)")) {
+      const match = h.head.match(/GST \((\d+)%\)/);
+      if (match) {
+        const rate = parseInt(match[1]);
+        amount = Math.round((basePrice * rate) / 100);
+      }
+    }
+    totalExtra += amount;
+    return { ...h, amount };
+  });
+  return { updatedHeads, totalExtra };
+};
+
 export default function LawnBookings() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editBooking, setEditBooking] = useState<LawnBooking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<LawnBooking | null>(null);
+  const [activeTab, setActiveTab] = useState("active");
+  const [updateReqBooking, setUpdateReqBooking] = useState<LawnBooking | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<"APPROVED" | "REJECTED" | null>(null);
+  const [adminRemarks, setAdminRemarks] = useState("");
+  const [reasonToView, setReasonToView] = useState<{ reason: string; requestedBy: string } | null>(null);
   const [viewVouchers, setViewVouchers] = useState<LawnBooking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
-  const [selectedLawnCategory, setSelectedLawnCategory] = useState("");
-  const [selectedLawn, setSelectedLawn] = useState("");
-  const [pricingType, setPricingType] = useState("member");
-  const [paymentStatus, setPaymentStatus] = useState("UNPAID");
-  const [paidAmount, setPaidAmount] = useState(0);
-  const [calculatedPrice, setCalculatedPrice] = useState(0);
-  const [guestCount, setGuestCount] = useState(0);
-  const [lPaymentMode, setLPaymentMode] = useState("CASH");
-  const [lCardNumber, setLCardNumber] = useState("");
-  const [lCheckNumber, setLCheckNumber] = useState("");
-  const [lBankName, setLBankName] = useState("");
 
-  // Multi-date booking with individual time slots per date
-  const [bookingDetails, setBookingDetails] = useState<{ date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[]>([]);
-
+  const [form, setForm] = useState<LawnBookingForm>(initialForm);
+  const [editForm, setEditForm] = useState<LawnBookingForm>(initialForm);
 
   const [detailBooking, setDetailBooking] = useState<LawnBooking | null>(null);
-  const [openDetails, setOpenDetails] = useState(false)
+  const [openDetails, setOpenDetails] = useState(false);
 
-  const [guestSec, setGuestSec] = useState({
-    paidBy: "MEMBER",
-    guestName: "",
-    guestContact: "",
-    guestCNIC: ""
-  })
+  // Local state for extra charges form (Add dialog)
+  const [localSelectedHead, setLocalSelectedHead] = useState(extraChargeHeads[0]);
+  const [localHeadAmount, setLocalHeadAmount] = useState<string>("");
+  const [localCustomHeadName, setLocalCustomHeadName] = useState("");
+
+  // Local state for extra charges form (Edit dialog)
+  const [editLocalSelectedHead, setEditLocalSelectedHead] = useState(extraChargeHeads[0]);
+  const [editLocalHeadAmount, setEditLocalHeadAmount] = useState<string>("");
+  const [editLocalCustomHeadName, setEditLocalCustomHeadName] = useState("");
 
   // Member search states
   const [memberSearch, setMemberSearch] = useState("");
@@ -590,12 +685,17 @@ export default function LawnBookings() {
     if (state?.fromReservation) {
       const { reservationId, resourceId, startTime, endTime, timeSlot, remarks } = state;
 
-      setSelectedLawn(resourceId?.toString() || "");
-      setBookingDetails([{
-        date: format(new Date(startTime), "yyyy-MM-dd"),
-        timeSlot: (timeSlot as any) || "NIGHT",
-        reservationId: reservationId // Special case for Lawns: reservationId might need to be passed per detail or globally
-      }]);
+      setForm(prev => ({
+        ...prev,
+        lawnId: resourceId?.toString() || "",
+        bookingDate: format(new Date(startTime), "yyyy-MM-dd"),
+        bookingDetails: [{
+          date: format(new Date(startTime), "yyyy-MM-dd"),
+          timeSlot: (timeSlot as any) || "NIGHT",
+          eventType: "wedding",
+          reservationId: reservationId
+        }]
+      }));
       // If multiple days reservation, handle that
       if (startTime && endTime && new Date(startTime).toDateString() !== new Date(endTime).toDateString()) {
         // for simplicity just use first date, or could loop. 
@@ -627,9 +727,16 @@ export default function LawnBookings() {
     isFetchingNextPage,
     isLoading: isLoadingBookings,
   } = useInfiniteQuery({
-    queryKey: ["lawn-bookings"],
+    queryKey: ["lawn-bookings", activeTab],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getBookings({ bookingsFor: "lawns", pageParam });
+      let res;
+      if (activeTab === "active") {
+        res = await getBookings({ bookingsFor: "lawns", pageParam });
+      } else if (activeTab === "cancelled") {
+        res = await getCancelledBookings({ bookingsFor: "lawns", pageParam });
+      } else {
+        res = await getCancellationRequests({ bookingsFor: "lawns", pageParam });
+      }
       return res as LawnBooking[];
     },
     initialPageParam: 1,
@@ -660,19 +767,20 @@ export default function LawnBookings() {
   console.log(lawnBookings)
 
   // Fetch available lawns when category is selected
+  const activeCategory = isAddOpen ? form.lawncategoryId : (editBooking ? editForm.lawncategoryId : "");
   const {
     data: availableLawnsData = [],
     isLoading: isLoadingLawns,
   } = useQuery({
-    queryKey: ["available-lawns", selectedLawnCategory],
+    queryKey: ["available-lawns", activeCategory],
     queryFn: async () => {
-      if (!selectedLawnCategory) return [];
-      const category = lawnCategories.find(cat => cat.category === selectedLawnCategory);
+      if (!activeCategory) return [];
+      const category = lawnCategories.find(cat => cat.id.toString() === activeCategory.toString() || cat.category === activeCategory);
       if (!category) return [];
 
       return category.lawns;
     },
-    enabled: !!selectedLawnCategory,
+    enabled: !!activeCategory,
   });
 
   // Member search query
@@ -691,21 +799,25 @@ export default function LawnBookings() {
     data: vouchers = [],
     isLoading: isLoadingVouchers,
   } = useQuery<Voucher[]>({
-    queryKey: ["lawn-vouchers", viewVouchers?.id],
-    queryFn: () => (viewVouchers ? getVouchers("LAWN", viewVouchers.id) : []),
-    enabled: !!viewVouchers,
+    queryKey: ["lawn-vouchers", viewVouchers?.id || detailBooking?.id],
+    queryFn: () => {
+      const id = viewVouchers?.id || detailBooking?.id;
+      return id ? getVouchers("LAWN", id.toString()) : [];
+    },
+    enabled: !!viewVouchers || (openDetails && !!detailBooking),
   });
 
   // Fetch date statuses for selected lawn - fetch 1 year from today
+  const activeLawnId = isAddOpen ? form.lawnId : (editBooking ? editForm.lawnId : "");
   const { data: fetchedStatuses } = useQuery({
-    queryKey: ["lawnDateStatuses", "upcoming", selectedLawn],
+    queryKey: ["lawnDateStatuses", "upcoming", activeLawnId],
     queryFn: async () => {
-      if (!selectedLawn) return null;
+      if (!activeLawnId) return null;
       const from = format(new Date(), "yyyy-MM-dd");
       const to = format(addYears(new Date(), 1), "yyyy-MM-dd");
-      return await getLawnDateStatuses(from, to, [selectedLawn]);
+      return await getLawnDateStatuses(from, to, [activeLawnId.toString()]);
     },
-    enabled: !!selectedLawn,
+    enabled: !!activeLawnId,
   });
 
   const calendarModifiers = useMemo(() => {
@@ -794,21 +906,59 @@ export default function LawnBookings() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: ({ bookingFor, bookID }: { bookingFor: string; bookID: string }) =>
-      cancelReqBooking(bookingFor, bookID, "Cancelled by Admin"),
+    mutationFn: ({ bookingFor, bookID, reason }: { bookingFor: string; bookID: string; reason: string }) =>
+      cancelReqBooking(bookingFor, bookID, reason),
     onSuccess: () => {
-      toast({ title: "Lawn booking cancelled successfully" });
+      toast({ title: "Lawn booking cancellation requested successfully" });
       queryClient.invalidateQueries({ queryKey: ["lawn-bookings"] });
       setCancelBooking(null);
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to cancel lawn booking",
+        title: "Failed to request cancellation",
         description: error?.message || "Please try again",
         variant: "destructive",
       });
     },
   });
+
+  const updateReqMutation = useMutation({
+    mutationFn: ({ bookingFor, bookID, status, remarks }: any) =>
+      updateCancellationReq(bookingFor, bookID, status, remarks),
+    onSuccess: () => {
+      toast({ title: `Cancellation request ${updateStatus === "APPROVED" ? "approved" : "rejected"} successfully` });
+      queryClient.invalidateQueries({ queryKey: ["lawn-bookings"] });
+      setUpdateReqBooking(null);
+      setUpdateStatus(null);
+      setAdminRemarks("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update cancellation request",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApproveReq = useCallback((booking: LawnBooking) => {
+    setUpdateReqBooking(booking);
+    setUpdateStatus("APPROVED");
+    setAdminRemarks("");
+  }, []);
+
+  const handleRejectReq = useCallback((booking: LawnBooking) => {
+    setUpdateReqBooking(booking);
+    setUpdateStatus("REJECTED");
+    setAdminRemarks("");
+  }, []);
+
+  const handleViewReason = useCallback((booking: LawnBooking) => {
+    setReasonToView({
+      reason: (booking as any).cancellationRequest?.reason || "No reason provided.",
+      requestedBy: (booking as any).cancellationRequest?.requestedBy || "Unknown"
+    });
+  }, []);
 
   // Member search handler with debouncing
   const handleMemberSearch = useCallback((searchTerm: string) => {
@@ -858,18 +1008,172 @@ export default function LawnBookings() {
   const calculateLawnPrice = (lawnId: string, pricing: string, slotsCount: number = 1) => {
     const lawn = (availableLawnsData as Lawn[]).find((l: Lawn) => l.id.toString() === lawnId);
     if (!lawn) return 0;
-    const slotRate = pricing === "member" ? parseInt(lawn.memberCharges as string) : parseInt(lawn.guestCharges as string);
+
+    let slotRate = parseInt(lawn.memberCharges as string) || 0;
+    if (pricing === "guest") slotRate = parseInt(lawn.guestCharges as string) || 0;
+    else if (pricing === "corporate") slotRate = parseInt(lawn.corporateCharges || lawn.guestCharges as string) || 0;
+
     return slotRate * slotsCount;
   };
 
-  // Add a useEffect to keep calculatedPrice updated for the Create Form
+  const createFormChangeHandler = (isEdit: boolean) => {
+    return (field: keyof LawnBookingForm, value: any) => {
+      const setFormFn = isEdit ? setEditForm : setForm;
+
+      setFormFn((prev) => {
+        const newForm = { ...prev, [field]: value };
+
+        // Handle price recalculation
+        if (["lawnId", "pricingType", "bookingDetails"].includes(field as string)) {
+          const basePrice = calculateLawnPrice(
+            field === "lawnId" ? value : newForm.lawnId.toString(),
+            field === "pricingType" ? value : newForm.pricingType,
+            newForm.bookingDetails.length || 1
+          );
+          const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newForm.heads || []);
+          newForm.heads = updatedHeads;
+          newForm.totalPrice = basePrice + totalExtra;
+
+          // Update pending amount based on new total
+          if (newForm.paymentStatus === "PAID") {
+            newForm.paidAmount = newForm.totalPrice;
+            newForm.pendingAmount = 0;
+          } else if (newForm.paymentStatus === "UNPAID") {
+            newForm.paidAmount = 0;
+            newForm.pendingAmount = newForm.totalPrice;
+          } else if (newForm.paymentStatus === "ADVANCE_PAYMENT") {
+            const rules = paymentRules.lawnBooking.advancePayment;
+            if (newForm.totalPrice > rules.threshold && (newForm.paidAmount === 0 || newForm.paidAmount < rules.defaultPaidAmount)) {
+              newForm.paidAmount = rules.defaultPaidAmount;
+            }
+            newForm.pendingAmount = newForm.totalPrice - newForm.paidAmount;
+          } else {
+            newForm.pendingAmount = newForm.totalPrice - newForm.paidAmount;
+          }
+
+          // AUTO-ADJUST PAYMENT STATUS WHEN PRICE INCREASES IN EDIT MODE
+          if (isEdit) {
+            const oldPaid = prev.paidAmount || 0;
+            const oldPaymentStatus = prev.paymentStatus;
+            const total = newForm.totalPrice;
+
+            if (total < oldPaid) {
+              newForm.paymentStatus = "PAID";
+              newForm.paidAmount = total;
+              newForm.pendingAmount = 0;
+            } else if (total > oldPaid && oldPaymentStatus === "PAID") {
+              newForm.paymentStatus = "HALF_PAID";
+              newForm.paidAmount = oldPaid;
+              newForm.pendingAmount = total - oldPaid;
+            }
+          }
+        }
+
+        // Handle payment status changes
+        if (field === "paymentStatus") {
+          if (value === "PAID") {
+            newForm.paidAmount = newForm.totalPrice;
+            newForm.pendingAmount = 0;
+          } else if (value === "UNPAID") {
+            newForm.paidAmount = 0;
+            newForm.pendingAmount = newForm.totalPrice;
+          } else if (value === "ADVANCE_PAYMENT") {
+            const rules = paymentRules.lawnBooking.advancePayment;
+            if (newForm.totalPrice > rules.threshold) {
+              newForm.paidAmount = rules.defaultPaidAmount;
+            }
+            newForm.pendingAmount = newForm.totalPrice - (newForm.paidAmount || 0);
+          }
+        }
+
+        // Handle paid amount changes
+        if (field === "paidAmount") {
+          if (value > newForm.totalPrice) {
+            value = newForm.totalPrice;
+            newForm.paidAmount = value;
+          }
+          newForm.pendingAmount = newForm.totalPrice - value;
+        }
+
+        return newForm;
+      });
+    };
+  };
+
+  const handleFormChange = createFormChangeHandler(false);
+  const handleEditFormChange = createFormChangeHandler(true);
+
+  // Update edit form when editBooking changes
   useEffect(() => {
-    if (selectedLawn) {
-      setCalculatedPrice(calculateLawnPrice(selectedLawn, pricingType, bookingDetails.length || 1));
-    } else {
-      setCalculatedPrice(0);
+    if (editBooking) {
+      // Find the lawn to get its category ID
+      const lawn = lawnCategories
+        .flatMap((cat: LawnCategory) => cat.lawns)
+        .find((l: Lawn) => l.id.toString() === editBooking.lawn?.id);
+
+      // Initialize bookingDetails if missing (for legacy bookings)
+      let details = (editBooking.bookingDetails as any[]) || [];
+      if (details.length === 0) {
+        const days = editBooking.numberOfDays || 1;
+        const start = new Date(editBooking.bookingDate);
+
+        for (let i = 0; i < days; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          details.push({
+            date: format(d, "yyyy-MM-dd"),
+            timeSlot: editBooking.bookingTime || "NIGHT",
+            eventType: editBooking.eventType || "wedding"
+          });
+        }
+      } else {
+        // Normalize dates to yyyy-MM-dd
+        details = details.map(d => ({
+          ...d,
+          date: typeof d.date === 'string' && d.date.includes('T') ? format(new Date(d.date), "yyyy-MM-dd") : d.date
+        }));
+      }
+
+      // Calculate endDate if missing (for legacy bookings)
+      let endDate = editBooking.endDate;
+      if (!endDate && editBooking.numberOfDays && editBooking.numberOfDays > 1) {
+        const start = new Date(editBooking.bookingDate);
+        const end = new Date(start);
+        end.setDate(end.getDate() + (editBooking.numberOfDays - 1));
+        endDate = format(end, "yyyy-MM-dd");
+      } else if (endDate) {
+        endDate = format(new Date(endDate), "yyyy-MM-dd");
+      } else {
+        endDate = format(new Date(editBooking.bookingDate), "yyyy-MM-dd");
+      }
+
+      setEditForm({
+        membershipNo: editBooking.member?.Membership_No || editBooking.membershipNo || "",
+        lawncategoryId: lawn?.lawnCategoryId || editBooking.lawn?.lawnCategory?.id || "",
+        lawnId: editBooking.lawn?.id || "",
+        bookingDate: format(new Date(editBooking.bookingDate), "yyyy-MM-dd"),
+        endDate: endDate,
+        pricingType: editBooking.pricingType || "member",
+        eventType: editBooking.eventType || "wedding",
+        numberOfGuests: editBooking.guestsCount || 0,
+        guestName: editBooking.guestName || "",
+        guestContact: editBooking.guestContact || "",
+        guestCNIC: editBooking.guestCNIC || "",
+        paidBy: editBooking.paidBy || "MEMBER",
+        paymentStatus: editBooking.paymentStatus || "UNPAID",
+        paymentMode: (editBooking as any).paymentMode || "CASH",
+        paidAmount: editBooking.paidAmount || 0,
+        pendingAmount: editBooking.pendingAmount || 0,
+        totalPrice: editBooking.totalPrice || 0,
+        bookingDetails: details,
+        heads: editBooking.extraCharges || editBooking.heads || [],
+        remarks: editBooking.remarks || "",
+        card_number: (editBooking as any).card_number || "",
+        check_number: (editBooking as any).check_number || "",
+        bank_name: (editBooking as any).bank_name || "",
+      });
     }
-  }, [selectedLawn, pricingType, bookingDetails, availableLawnsData]);
+  }, [editBooking, lawnCategories]);
 
   // Filter available lawns based on active status and service status
   const availableLawns = useMemo(() => {
@@ -890,6 +1194,8 @@ export default function LawnBookings() {
         return <Badge variant="destructive">Unpaid</Badge>;
       case "TO_BILL":
         return <Badge className="bg-blue-600 text-white">To Bill</Badge>;
+      case "ADVANCE_PAYMENT":
+        return <Badge className="bg-purple-600 text-white">Advance</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -897,10 +1203,8 @@ export default function LawnBookings() {
 
   const getTimeSlotBadge = (timeSlot: string) => {
     switch (timeSlot) {
-      case "MORNING":
-        return <Badge className="bg-blue-100 text-blue-800">Morning</Badge>;
-      case "EVENING":
-        return <Badge className="bg-orange-100 text-orange-800">Evening</Badge>;
+      case "DAY":
+        return <Badge className="bg-orange-100 text-orange-800">Day</Badge>;
       case "NIGHT":
         return <Badge className="bg-purple-100 text-purple-800">Night</Badge>;
       default:
@@ -910,53 +1214,17 @@ export default function LawnBookings() {
 
 
 
-  const handleLawnCategoryChange = (value: string) => {
-    setSelectedLawnCategory(value);
-    setSelectedLawn("");
-    setCalculatedPrice(0);
-  };
-
-  const handleLawnChange = (value: string) => {
-    setSelectedLawn(value);
-    const uniqueDays = new Set(bookingDetails.map(d => d.date)).size || 1;
-    setCalculatedPrice(calculateLawnPrice(value, pricingType, uniqueDays));
-  };
-
-  const handlePricingTypeChange = (value: string) => {
-    setPricingType(value);
-    if (selectedLawn) {
-      const uniqueDays = new Set(bookingDetails.map(d => d.date)).size || 1;
-      setCalculatedPrice(calculateLawnPrice(selectedLawn, value, uniqueDays));
-    }
-  };
 
   const resetForm = () => {
-    setSelectedLawnCategory("");
-    setSelectedLawn("");
-    setCalculatedPrice(0);
-    setPaymentStatus("UNPAID");
-    setPaidAmount(0);
-    setPricingType("member");
-    setBookingDetails([]);
-    setGuestCount(0);
+    setForm(initialForm);
     setSelectedMember(null);
     setMemberSearch("");
     setShowMemberResults(false);
-    setGuestSec({
-      paidBy: "MEMBER",
-      guestName: "",
-      guestContact: "",
-      guestCNIC: ""
-    });
-    setLPaymentMode("CASH");
-    setLCardNumber("");
-    setLCheckNumber("");
-    setLBankName("");
   };
 
 
   const handleCreateBooking = () => {
-    if (!selectedMember || !selectedLawn || bookingDetails.length === 0 || guestCount < 1) {
+    if (!selectedMember || !form.lawnId || form.bookingDetails.length === 0 || form.numberOfGuests < 1) {
       toast({
         title: "Please fill all required fields",
         description: "Member, lawn, booking dates with time slots, and guest count are required",
@@ -967,7 +1235,7 @@ export default function LawnBookings() {
     }
 
     // Check all slots have event types
-    const missingEventType = bookingDetails.some(d => !d.eventType);
+    const missingEventType = form.bookingDetails.some(d => !d.eventType);
     if (missingEventType) {
       toast({
         title: "Missing event types",
@@ -977,10 +1245,10 @@ export default function LawnBookings() {
       return;
     }
 
-    const selectedLawnData = availableLawns.find((l: Lawn) => l.id.toString() === selectedLawn);
+    const selectedLawnData = availableLawns.find((l: Lawn) => l.id.toString() === form.lawnId.toString());
     if (!selectedLawnData) return;
 
-    if (guestCount < selectedLawnData.minGuests || guestCount > selectedLawnData.maxGuests) {
+    if (form.numberOfGuests < selectedLawnData.minGuests || form.numberOfGuests > selectedLawnData.maxGuests) {
       toast({
         title: "Invalid guest count",
         description: `Guest count must be between ${selectedLawnData.minGuests} and ${selectedLawnData.maxGuests} for this lawn`,
@@ -990,49 +1258,138 @@ export default function LawnBookings() {
     }
 
     // Get first and last dates from bookingDetails
-    const sortedDates = [...new Set(bookingDetails.map(d => d.date))].sort();
+    const sortedDates = [...new Set(form.bookingDetails.map(d => d.date))].sort();
     const firstDate = sortedDates[0];
     const lastDate = sortedDates[sortedDates.length - 1];
 
     const payload = {
       category: "Lawn",
       membershipNo: selectedMember.Membership_No,
-      entityId: selectedLawn,
+      entityId: form.lawnId.toString(),
       bookingDate: new Date(firstDate).toISOString(),
       endDate: new Date(lastDate).toISOString(),
-      totalPrice: calculatedPrice.toString(),
-      paymentStatus: paymentStatus,
-      numberOfGuests: guestCount,
-      paidAmount: paidAmount,
-      pendingAmount: calculatedPrice - paidAmount,
-      pricingType: pricingType,
-      paymentMode: lPaymentMode,
-      card_number: lCardNumber,
-      check_number: lCheckNumber,
-      bank_name: lBankName,
+      totalPrice: form.totalPrice.toString(),
+      paymentStatus: form.paymentStatus,
+      numberOfGuests: form.numberOfGuests,
+      paidAmount: form.paidAmount,
+      pendingAmount: form.pendingAmount,
+      pricingType: form.pricingType,
+      paymentMode: form.paymentMode,
+      card_number: form.card_number,
+      check_number: form.check_number,
+      bank_name: form.bank_name,
       // Use first slot's time and event type for legacy support
-      eventTime: bookingDetails[0].timeSlot,
-      eventType: bookingDetails[0].eventType,
+      eventTime: form.bookingDetails[0].timeSlot,
+      eventType: form.bookingDetails[0].eventType,
       // Send full booking details for multi-date support
-      bookingDetails: bookingDetails,
-      paidBy: guestSec.paidBy,
-      guestName: guestSec.guestName,
-      guestContact: guestSec.guestContact,
-      reservationId: bookingDetails[0]?.reservationId
+      bookingDetails: form.bookingDetails,
+      paidBy: form.paidBy,
+      guestName: form.guestName,
+      guestContact: form.guestContact,
+      guestCNIC: form.guestCNIC,
+      heads: form.heads,
+      reservationId: form.bookingDetails[0]?.reservationId
     };
     createMutation.mutate(payload);
   };
 
 
 
-  const handleDeleteBooking = () => {
-    if (cancelBooking) {
-      deleteMutation.mutate({
-        bookingFor: "lawns",
-        bookID: cancelBooking.id.toString(),
+  const addHead = (isEdit: boolean) => {
+    const head = isEdit ? editLocalSelectedHead : localSelectedHead;
+    const amountStr = isEdit ? editLocalHeadAmount : localHeadAmount;
+    const customName = isEdit ? editLocalCustomHeadName : localCustomHeadName;
+    const amount = parseInt(amountStr);
+
+    if (isNaN(amount)) {
+      toast({ title: "Please enter a valid amount", variant: "destructive" });
+      return;
+    }
+
+    let headName = head === "Others" ? customName : head;
+    if (head === "GST Tax (%)") {
+      headName = `GST (${amount}%)`;
+    }
+
+    if (!headName) {
+      toast({ title: "Please enter a name for the extra charge", variant: "destructive" });
+      return;
+    }
+
+    if (isEdit) {
+      setEditForm(prev => {
+        const newHeads = [...prev.heads, { head: headName, amount }];
+        const basePrice = calculateLawnPrice(prev.lawnId.toString(), prev.pricingType, prev.bookingDetails.length);
+        const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newHeads);
+        const newTotal = basePrice + totalExtra;
+
+        const updated = {
+          ...prev,
+          heads: updatedHeads,
+          totalPrice: newTotal,
+          pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
+        };
+
+        if (newTotal > prev.totalPrice && prev.paymentStatus === "PAID") {
+          updated.paymentStatus = "HALF_PAID";
+        }
+
+        return updated;
+      });
+      setEditLocalHeadAmount("");
+      setEditLocalCustomHeadName("");
+    } else {
+      setForm(prev => {
+        const newHeads = [...prev.heads, { head: headName, amount }];
+        const basePrice = calculateLawnPrice(prev.lawnId.toString(), prev.pricingType, prev.bookingDetails.length);
+        const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newHeads);
+        const newTotal = basePrice + totalExtra;
+
+        return {
+          ...prev,
+          heads: updatedHeads,
+          totalPrice: newTotal,
+          pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
+        };
+      });
+      setLocalHeadAmount("");
+      setLocalCustomHeadName("");
+    }
+  };
+
+  const removeHead = (index: number, isEdit: boolean) => {
+    if (isEdit) {
+      setEditForm(prev => {
+        const newHeads = prev.heads.filter((_, i) => i !== index);
+        const basePrice = calculateLawnPrice(prev.lawnId.toString(), prev.pricingType, prev.bookingDetails.length);
+        const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newHeads);
+        const newTotal = basePrice + totalExtra;
+
+        return {
+          ...prev,
+          heads: updatedHeads,
+          totalPrice: newTotal,
+          pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
+        };
+      });
+    } else {
+      setForm(prev => {
+        const newHeads = prev.heads.filter((_, i) => i !== index);
+        const basePrice = calculateLawnPrice(prev.lawnId.toString(), prev.pricingType, prev.bookingDetails.length);
+        const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newHeads);
+        const newTotal = basePrice + totalExtra;
+
+        return {
+          ...prev,
+          heads: updatedHeads,
+          totalPrice: newTotal,
+          pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
+        };
       });
     }
   };
+
+
 
   const handleViewVouchers = (booking: LawnBooking) => {
     setViewVouchers(booking);
@@ -1056,6 +1413,7 @@ export default function LawnBookings() {
               <SelectItem value="HALF_PAID">Half Paid</SelectItem>
               <SelectItem value="UNPAID">Unpaid</SelectItem>
               <SelectItem value="TO_BILL">To Bill</SelectItem>
+              <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
             </SelectContent>
           </Select>
           <Dialog open={isAddOpen} onOpenChange={(open) => {
@@ -1068,367 +1426,380 @@ export default function LawnBookings() {
                 New Booking
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="max-w-7xl max-h-fit overflow-hidden">
+              <DialogHeader className="border-b pb-4">
                 <DialogTitle>Create Lawn Booking</DialogTitle>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                <div className="md:col-span-2 space-y-3">
-                  <Label>Member *</Label>
 
-                  {selectedMember && (
-                    <div className="p-3 border border-green-200 bg-green-50 rounded-md">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium flex items-center">
-                            <User className="h-4 w-4 mr-2 text-green-600" />
-                            {selectedMember.Name}
-                          </div>
-                          <div className="text-sm text-green-600 mt-1">
-                            Membership: #{selectedMember.Membership_No}
-                            {selectedMember.Balance !== undefined && (
-                              <div className="mt-1">
-                                <Badge
-                                  variant={selectedMember.Balance >= 0 ? "outline" : "destructive"}
-                                  className="bg-green-100 text-green-800"
-                                >
-                                  Balance: PKR {selectedMember.Balance.toLocaleString()}
-                                </Badge>
-                              </div>
-                            )}
-                          </div>
+              {/* Horizontal layout with two columns */}
+              <div className="flex gap-6 py-4 h-[calc(90vh-120px)] overflow-hidden">
+                {/* Left Column - Main Form Fields */}
+                <div className="w-1/2 overflow-y-auto pr-2 space-y-4">
+                  {/* Member Search */}
+                  <div className="space-y-2">
+                    <Label>Member *</Label>
+                    <MemberSearchComponent
+                      searchTerm={memberSearch}
+                      onSearchChange={handleMemberSearch}
+                      showResults={showMemberResults}
+                      searchResults={searchResults}
+                      isSearching={isSearching}
+                      selectedMember={selectedMember}
+                      onSelectMember={handleSelectMember}
+                      onClearMember={handleClearMember}
+                      onFocus={handleSearchFocus}
+                    />
+                  </div>
+
+                  {/* Lawn Category & Lawn Selection */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Lawn Category *</Label>
+                      {isLoadingCategories ? (
+                        <div className="h-10 bg-muted animate-pulse rounded-md" />
+                      ) : (
+                        <Select value={form.lawncategoryId.toString()} onValueChange={(val) => setForm(prev => ({ ...prev, lawncategoryId: val, lawnId: "" }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lawnCategories.map((cat: LawnCategory) => (
+                              <SelectItem key={cat.id} value={cat.id.toString()}>{cat.category}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Lawn *</Label>
+                      {isLoadingLawns ? (
+                        <div className="h-10 bg-muted animate-pulse rounded-md" />
+                      ) : (
+                        <Select
+                          value={form.lawnId.toString()}
+                          onValueChange={(val) => handleFormChange("lawnId", val)}
+                          disabled={!form.lawncategoryId || availableLawns.length === 0}
+                        >
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                !form.lawncategoryId
+                                  ? "Select category first"
+                                  : availableLawns.length === 0
+                                    ? "No available lawns"
+                                    : "Select lawn"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLawns.map((lawn: Lawn) => (
+                              <SelectItem key={lawn.id} value={lawn.id.toString()}>
+                                <div className="flex flex-col">
+                                  <span>{lawn.description}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    Capacity: {lawn.minGuests}-{lawn.maxGuests}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Booking Dates */}
+                  <div className="space-y-2">
+                    <Label>Booking Dates *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full justify-start text-left font-normal h-10 bg-muted/30 border-none shadow-none",
+                            form.bookingDetails.length === 0 && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {form.bookingDetails.length > 0 ? (
+                            (() => {
+                              const dates = [...new Set(form.bookingDetails.map(d => d.date))].sort();
+                              const firstDate = dates[0];
+                              const lastDate = dates[dates.length - 1];
+                              return firstDate === lastDate
+                                ? format(parseLocalDate(firstDate), "LLL dd, y")
+                                : `${format(parseLocalDate(firstDate), "LLL dd, y")} - ${format(parseLocalDate(lastDate), "LLL dd, y")}`;
+                            })()
+                          ) : (
+                            <span>Select dates</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="range"
+                          selected={
+                            form.bookingDetails.length > 0
+                              ? {
+                                from: parseLocalDate([...new Set(form.bookingDetails.map(d => d.date))].sort()[0]),
+                                to: parseLocalDate([...new Set(form.bookingDetails.map(d => d.date))].sort().pop()!),
+                              }
+                              : undefined
+                          }
+                          onSelect={(range) => {
+                            if (range?.from) {
+                              const newDetails: { date: string; timeSlot: string; eventType?: string }[] = [];
+                              let currentDate = new Date(range.from);
+                              const endDate = range.to || range.from;
+
+                              while (currentDate <= endDate) {
+                                const dateStr = format(currentDate, "yyyy-MM-dd");
+                                newDetails.push({
+                                  date: dateStr,
+                                  timeSlot: "NIGHT",
+                                  eventType: "wedding"
+                                });
+                                currentDate.setDate(currentDate.getDate() + 1);
+                              }
+                              handleFormChange("bookingDetails", newDetails);
+                            } else {
+                              handleFormChange("bookingDetails", []);
+                            }
+                          }}
+                          disabled={(date) =>
+                            date < new Date(new Date().setHours(0, 0, 0, 0))
+                          }
+                          modifiers={calendarModifiers}
+                          modifiersClassNames={{
+                            today: "border-2 border-primary bg-transparent text-primary hover:bg-transparent hover:text-primary",
+                            booked: "bg-blue-100 border-blue-200 text-blue-900 font-semibold rounded-none",
+                            reserved: "bg-amber-100 border-amber-200 text-amber-900 font-semibold rounded-none",
+                            outOfOrder: "bg-red-100 border-red-200 text-red-900 font-semibold rounded-none",
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Pricing Type & Guest Count */}
+                  <div className="flex gap-4">
+                    <div className="flex-1 space-y-2">
+                      <Label>Pricing Type</Label>
+                      <Select value={form.pricingType} onValueChange={(val) => handleFormChange("pricingType", val)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="guest">Guest</SelectItem>
+                          <SelectItem value="corporate">Corporate</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      <Label>Guest Count *</Label>
+                      <Input
+                        type="number"
+                        placeholder="150"
+                        value={form.numberOfGuests || ""}
+                        onChange={(e) => handleFormChange("numberOfGuests", parseInt(e.target.value) || 0)}
+                        min={form.lawnId ? availableLawns.find((l: Lawn) => l.id.toString() === form.lawnId.toString())?.minGuests || 1 : 1}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="space-y-2">
+                    <Label>Remarks (Optional)</Label>
+                    <textarea
+                      className="w-full p-2 border rounded-md resize-none min-h-[80px] text-sm"
+                      placeholder="Add notes about this booking..."
+                      value={form.remarks || ""}
+                      onChange={(e) => handleFormChange("remarks", e.target.value)}
+                    />
+                  </div>
+
+                  {/* Guest Info */}
+                  {form.pricingType === "guest" && (
+                    <div className="p-3 rounded-lg border bg-gray-50 space-y-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <NotepadText className="h-4 w-4 text-blue-500" />
+                        Guest Information
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input
+                          placeholder="Guest Name *"
+                          value={form.guestName}
+                          onChange={(e) => handleFormChange("guestName", e.target.value)}
+                        />
+                        <Input
+                          placeholder="Contact *"
+                          type="text"
+                          value={form.guestContact}
+                          onChange={(e) => handleFormChange("guestContact", e.target.value)}
+                        />
+                        <div className="col-span-2">
+                          <Input
+                            placeholder="Guest CNIC (Optional)"
+                            value={form.guestCNIC}
+                            onChange={(e) => handleFormChange("guestCNIC", e.target.value)}
+                          />
                         </div>
+                        <div className="col-span-2">
+                          <Label className="text-[10px] mb-1 block">Who will pay?</Label>
+                          <Select
+                            value={form.paidBy}
+                            onValueChange={(val) => handleFormChange("paidBy", val)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="MEMBER">Member</SelectItem>
+                              <SelectItem value="GUEST">Guest</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column - Schedule & Payment */}
+                <div className="w-1/2 overflow-y-auto pl-2 space-y-4 border-l">
+                  {/* Time Slots */}
+                  {form.lawnId && form.bookingDetails.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Schedule & Time Slots *</Label>
+                      <LawnIndividualTimeSlotSelector
+                        bookingDetails={form.bookingDetails}
+                        lawnId={form.lawnId.toString()}
+                        bookings={lawnBookings}
+                        lawns={availableLawns}
+                        reservations={fetchedStatuses?.reservations || []}
+                        onChange={(details) => handleFormChange("bookingDetails", details)}
+                        defaultEventType="wedding"
+                      />
+                    </div>
+                  )}
+
+                  {/* Extra Charges (Heads) Section */}
+                  <div className="space-y-4 col-span-2">
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Plus className="h-4 w-4 text-emerald-500" />
+                        Extra Charges (Heads)
+                      </h3>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50">
+                        Optional
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-2 items-end bg-gray-50/50 p-3 rounded-lg border border-dashed">
+                      <div className="col-span-4 space-y-1">
+                        <Label className="text-[10px]">Charge Head</Label>
+                        <Select
+                          value={localSelectedHead}
+                          onValueChange={setLocalSelectedHead}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {extraChargeHeads.map(h => (
+                              <SelectItem key={h} value={h}>{h}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {localSelectedHead === "Others" && (
+                        <div className="col-span-4 space-y-1">
+                          <Label className="text-[10px]">Custom Name</Label>
+                          <Input
+                            placeholder="Head name"
+                            className="h-8 text-xs"
+                            value={localCustomHeadName}
+                            onChange={(e) => setLocalCustomHeadName(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      <div className={cn("space-y-1", localSelectedHead === "Others" ? "col-span-3" : "col-span-6")}>
+                        <Label className="text-[10px]">Amount</Label>
+                        <Input
+                          type="number"
+                          placeholder="Amount"
+                          className="h-8 text-xs"
+                          value={localHeadAmount}
+                          onChange={(e) => setLocalHeadAmount(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-span-1">
                         <Button
                           type="button"
-                          variant="ghost"
                           size="sm"
-                          onClick={handleClearMember}
-                          className="text-destructive hover:text-destructive"
+                          className="h-8 w-full bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => addHead(false)}
                         >
-                          Clear Selection
+                          <Plus className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
-                  )}
 
-                  <div className="relative">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder={selectedMember ? "Search to change member..." : "Search member by name or membership number..."}
-                        className="pl-10 pr-10"
-                        value={memberSearch}
-                        onChange={(e) => handleMemberSearch(e.target.value)}
-                        onFocus={handleSearchFocus}
-                      />
-                      {isSearching && (
-                        <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
-                    </div>
-
-                    {showMemberResults && (
-                      <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                        {searchResults.length === 0 ? (
-                          <div className="p-4 text-center text-muted-foreground">
-                            No members found
-                          </div>
-                        ) : (
-                          searchResults.map((member) => (
-                            <div
-                              key={member.id}
-                              className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
-                              onClick={() => handleSelectMember(member)}
-                            >
-                              <div className="font-medium">{member.Name}</div>
-                              <div className="text-sm text-muted-foreground">
-                                Membership: #{member.Membership_No}
-                                {member.Balance !== undefined && (
-                                  <span className={`ml-2 ${member.Balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    Balance: PKR {member.Balance.toLocaleString()}
-                                  </span>
-                                )}
-                              </div>
+                    {form.heads && form.heads.length > 0 && (
+                      <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                        {form.heads.map((h, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-white border rounded-md text-xs shadow-sm group">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <span className="font-medium text-gray-700">{h.head}</span>
                             </div>
-                          ))
-                        )}
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-emerald-700">PKR {h.amount.toLocaleString()}</span>
+                              <button
+                                onClick={() => removeHead(index, false)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                </div>
 
-                <div>
-                  <Label>Lawn Category *</Label>
-                  {isLoadingCategories ? (
-                    <div className="h-10 bg-muted animate-pulse rounded-md mt-2" />
-                  ) : (
-                    <Select value={selectedLawnCategory} onValueChange={handleLawnCategoryChange}>
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="Select lawn category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lawnCategories.map((cat: LawnCategory) => (
-                          <SelectItem key={cat.id} value={cat.category}>{cat.category}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                <div>
-                  <Label>Lawn *</Label>
-                  {isLoadingLawns ? (
-                    <div className="h-10 bg-muted animate-pulse rounded-md mt-2" />
-                  ) : (
-                    <Select
-                      value={selectedLawn}
-                      onValueChange={handleLawnChange}
-                      disabled={!selectedLawnCategory || availableLawns.length === 0}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue
-                          placeholder={
-                            !selectedLawnCategory
-                              ? "Select category first"
-                              : availableLawns.length === 0
-                                ? "No available lawns"
-                                : "Select lawn"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableLawns.map((lawn: Lawn) => (
-                          <SelectItem key={lawn.id} value={lawn.id.toString()}>
-                            <div className="flex flex-col">
-                              <span>{lawn.description}</span>
-                              <span className="text-xs text-muted-foreground">
-                                Capacity: {lawn.minGuests}-{lawn.maxGuests} guests
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                Member: PKR {parseInt(lawn.memberCharges).toLocaleString()} |
-                                Guest: PKR {parseInt(lawn.guestCharges).toLocaleString()}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                <div className="col-span-full">
-                  <Label>Booking Dates *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal mt-2",
-                          bookingDetails.length === 0 && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {bookingDetails.length > 0 ? (
-                          (() => {
-                            const dates = [...new Set(bookingDetails.map(d => d.date))].sort();
-                            const firstDate = dates[0];
-                            const lastDate = dates[dates.length - 1];
-                            return firstDate === lastDate
-                              ? format(parseLocalDate(firstDate), "LLL dd, y")
-                              : `${format(parseLocalDate(firstDate), "LLL dd, y")} - ${format(parseLocalDate(lastDate), "LLL dd, y")}`;
-                          })()
-                        ) : (
-                          <span>Pick booking dates</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="range"
-                        selected={
-                          bookingDetails.length > 0
-                            ? {
-                              from: parseLocalDate([...new Set(bookingDetails.map(d => d.date))].sort()[0]),
-                              to: parseLocalDate([...new Set(bookingDetails.map(d => d.date))].sort().pop()!),
+                  {/* Payment */}
+                  <div className="space-y-2">
+                    <LawnPaymentSection
+                      onChange={(field, value) => {
+                        setForm(prev => {
+                          const updated = { ...prev, [field]: value };
+                          if (field === "paymentStatus") {
+                            if (value === "PAID") {
+                              updated.paidAmount = prev.totalPrice;
+                              updated.pendingAmount = 0;
+                            } else if (value === "UNPAID") {
+                              updated.paidAmount = 0;
+                              updated.pendingAmount = prev.totalPrice;
                             }
-                            : undefined
-                        }
-                        onSelect={(range) => {
-                          if (range?.from) {
-                            const newDetails: { date: string; timeSlot: string; eventType?: string }[] = [];
-                            let currentDate = new Date(range.from);
-                            const endDate = range.to || range.from;
-
-                            while (currentDate <= endDate) {
-                              const dateStr = format(currentDate, "yyyy-MM-dd");
-                              newDetails.push({
-                                date: dateStr,
-                                timeSlot: "NIGHT",
-                                eventType: "wedding"
-                              });
-                              currentDate.setDate(currentDate.getDate() + 1);
-                            }
-                            setBookingDetails(newDetails);
-                          } else {
-                            setBookingDetails([]);
+                          } else if (field === "paidAmount") {
+                            updated.pendingAmount = prev.totalPrice - value;
                           }
-                        }}
-                        disabled={(date) =>
-                          date < new Date(new Date().setHours(0, 0, 0, 0))
-                        }
-                        modifiers={calendarModifiers}
-                        modifiersClassNames={{
-                          today: "border-2 border-primary bg-transparent text-primary hover:bg-transparent hover:text-primary",
-                          booked: "bg-blue-100 border-blue-200 text-blue-900 font-semibold rounded-none",
-                          reserved: "bg-amber-100 border-amber-200 text-amber-900 font-semibold rounded-none",
-                          outOfOrder: "bg-red-100 border-red-200 text-red-900 font-semibold rounded-none",
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Time slot selector for each date */}
-                {selectedLawn && bookingDetails.length > 0 && (
-                  <LawnIndividualTimeSlotSelector
-                    bookingDetails={bookingDetails}
-                    lawnId={selectedLawn}
-                    bookings={lawnBookings}
-                    lawns={availableLawns}
-                    reservations={[]} // TODO: Add reservations data if available
-                    onChange={setBookingDetails}
-                    defaultEventType="wedding"
-                  />
-                )}
-
-                <div>
-                  <Label>Pricing Type</Label>
-                  <Select value={pricingType} onValueChange={handlePricingTypeChange}>
-                    <SelectTrigger className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="guest">Guest</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Guest Count *</Label>
-                  <Input
-                    type="number"
-                    placeholder="150"
-                    className="mt-2"
-                    value={guestCount || ""}
-                    onChange={(e) => setGuestCount(parseInt(e.target.value) || 0)}
-                    min={selectedLawn ? availableLawns.find((l: Lawn) => l.id.toString() === selectedLawn)?.minGuests || 1 : 1}
-                    max={selectedLawn ? availableLawns.find((l: Lawn) => l.id.toString() === selectedLawn)?.maxGuests : undefined}
-                  />
-                </div>
-                {pricingType == "guest" && <div className="p-4 rounded-xl border bg-white shadow-sm col-span-full">
-
-
-                  <h3 className="text-lg font-semibold mb-4">Guest Information</h3>
-
-                  <div className="flex  flex-col">
-
-                    <div className="flex items-center justify-center gap-x-5">
-
-                      <div className="w-1/2">
-                        <Label className="text-sm font-medium mb-1 block whitespace-nowrap">
-                          Guest Name *
-                        </Label>
-                        {/* {console.log(form)} */}
-
-                        <FormInput
-                          label=""
-                          type="text"
-                          value={guestSec.guestName}
-                          onChange={(val) => setGuestSec((prev) => ({ ...prev, guestName: val }))}
-                        />
-                      </div>
-
-                      <div className="w-1/2">
-                        <Label className="text-sm font-medium mb-1 block whitespace-nowrap">
-                          Contact
-                        </Label>
-
-                        <FormInput
-                          label=""
-                          type="number"
-                          value={guestSec.guestContact}
-                          onChange={(val) => setGuestSec((prev) => ({ ...prev, guestContact: val }))}
-                          min="0"
-                        />
-                      </div>
-
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-1">
-                      <Label className="text-sm font-medium my-2 block whitespace-nowrap">
-                        Who will Pay?
-                      </Label>
-                      <Select
-                        value={guestSec.paidBy}
-                        onValueChange={(val) => setGuestSec((prev) => ({ ...prev, paidBy: val }))}
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Who will pay?" />
-                        </SelectTrigger>
-
-                        <SelectContent>
-                          <SelectItem value="MEMBER">Member</SelectItem>
-                          <SelectItem value="GUEST">Guest</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-
-                    </div>
-
+                          return updated;
+                        });
+                      }}
+                      form={form}
+                    />
                   </div>
-                </div>}
-
-                <LawnPaymentSection
-                  onChange={(field, value) => {
-                    if (field === "paymentStatus") {
-                      setPaymentStatus(value);
-                      // Recalculate amounts when payment status changes
-                      if (value === "PAID") {
-                        setPaidAmount(calculatedPrice);
-                      } else if (value === "UNPAID") {
-                        setPaidAmount(0);
-                      } else if (value === "HALF_PAID") {
-                        // Set to half if no amount is set yet
-                        if (paidAmount === 0) {
-                          setPaidAmount(calculatedPrice / 2);
-                        }
-                      }
-                    } else if (field === "paidAmount") {
-                      setPaidAmount(value);
-                    } else if (field === "paymentMode") {
-                      setLPaymentMode(value);
-                    } else if (field === "card_number") {
-                      setLCardNumber(value);
-                    } else if (field === "check_number") {
-                      setLCheckNumber(value);
-                    } else if (field === "bank_name") {
-                      setLBankName(value);
-                    }
-                  }}
-                  // Pass the local states to form prop
-                  form={{
-                    paymentStatus: paymentStatus,
-                    totalPrice: calculatedPrice,
-                    paidAmount: paidAmount,
-                    pendingAmount: calculatedPrice - paidAmount,
-                    paymentMode: lPaymentMode,
-                    card_number: lCardNumber,
-                    check_number: lCheckNumber,
-                    bank_name: lBankName
-                  } as any}
-                />
+                </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="border-t pt-4">
                 <Button variant="outline" onClick={() => {
                   setIsAddOpen(false);
                   resetForm();
@@ -1437,16 +1808,9 @@ export default function LawnBookings() {
                 </Button>
                 <Button
                   onClick={handleCreateBooking}
-                  disabled={!selectedMember || !selectedLawn || calculatedPrice === 0 || createMutation.isPending}
+                  disabled={!selectedMember || (form.bookingDetails[0]?.reservationId ? false : !form.lawnId) || form.totalPrice === 0 || createMutation.isPending}
                 >
-                  {createMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Booking"
-                  )}
+                  {createMutation.isPending ? "Creating..." : "Create Booking"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1454,324 +1818,281 @@ export default function LawnBookings() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          {isLoadingBookings ? (
-            <div className="flex justify-center items-center py-32">
-              <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredBookings.length === 0 ? (
-            <div className="text-center py-32 text-muted-foreground text-lg">
-              No lawn bookings found
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Member</TableHead>
-                    <TableHead>Lawn</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Event Type</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Guests</TableHead>
-                    <TableHead>Total Price</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBookings.map((booking) => (
-                    <TableRow key={booking.id}>
-                      <TableCell className="font-medium">
-                        {booking.member?.Name || booking.memberName}
-                        {booking.member?.Membership_No && (
-                          <div className="text-xs text-muted-foreground">
-                            #{booking.member.Membership_No}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{booking.lawn?.description}</TableCell>
-                      <TableCell>
-                        {booking.numberOfDays && booking.numberOfDays > 1 && booking.endDate
-                          ? (
-                            <div className="flex flex-col">
-                              <span>
-                                {format(new Date(booking.bookingDate), "MMM dd")} - {format(new Date(booking.endDate), "MMM dd, yyyy")}
-                              </span>
-                              <span className="text-xs text-muted-foreground">{booking.numberOfDays} days</span>
-                            </div>
-                          )
-                          : new Date(booking.bookingDate).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        {booking.bookingDetails && booking.bookingDetails.length > 0
-                          ? Array.from(new Set(booking.bookingDetails.map(d => d.eventType))).join(", ")
-                          : booking.eventType}
-                      </TableCell>
-                      <TableCell>
-                        {booking.bookingDetails && booking.bookingDetails.length > 0
-                          ? (
-                            <div className="flex flex-col gap-1">
-                              {Array.from(new Set(booking.bookingDetails.map(d => d.timeSlot))).map(slot => (
-                                <span key={slot}>{getTimeSlotBadge(slot)}</span>
-                              ))}
-                            </div>
-                          )
-                          : getTimeSlotBadge(booking.bookingTime || "NIGHT")}
-                      </TableCell>
-                      <TableCell>{booking.guestsCount}</TableCell>
-                      <TableCell>PKR {booking.totalPrice.toLocaleString()}</TableCell>
-                      <TableCell>{getPaymentBadge(booking.paymentStatus)}</TableCell>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="active">Active Bookings</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
+          <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
+        </TabsList>
 
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setDetailBooking(booking)
-                              setOpenDetails(true)
-                            }}
-                            title="Booking Details">
-                            <NotepadText />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => {
-                            // Find the lawn to get its category ID
-                            const lawn = lawnCategories
-                              .flatMap((cat: LawnCategory) => cat.lawns)
-                              .find((l: Lawn) => l.id.toString() === booking.lawn?.id);
-
-                            // Initialize bookingDetails if missing (for legacy bookings)
-                            let details = booking.bookingDetails || [];
-                            if (details.length === 0) {
-                              const days = booking.numberOfDays || 1;
-                              const start = new Date(booking.bookingDate);
-
-                              for (let i = 0; i < days; i++) {
-                                const d = new Date(start);
-                                d.setDate(d.getDate() + i);
-                                details.push({
-                                  date: format(d, "yyyy-MM-dd"),
-                                  timeSlot: booking.bookingTime || "NIGHT",
-                                  eventType: booking.eventType || "wedding"
-                                });
-                              }
-                            }
-
-                            // Calculate endDate if missing (for legacy bookings)
-                            let endDate = booking.endDate;
-                            if (!endDate && booking.numberOfDays && booking.numberOfDays > 1) {
-                              const start = new Date(booking.bookingDate);
-                              const end = new Date(start);
-                              end.setDate(end.getDate() + (booking.numberOfDays - 1));
-                              endDate = format(end, "yyyy-MM-dd");
-                            }
-
-                            setEditBooking({
-                              ...booking,
-                              bookingDetails: details,
-                              endDate: endDate,
-                              lawn: {
-                                ...booking.lawn,
-                              }
-                            });
-
-                          }} title="Edit Booking">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {(booking.paymentStatus === "PAID" || booking.paymentStatus === "HALF_PAID") && (
-                            <Button variant="ghost" size="icon" onClick={() => handleViewVouchers(booking)} title="View Vouchers">
-                              <Receipt className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setCancelBooking(booking)} title="Cancel Booking">
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {/* Scroll Trigger & Loader */}
-              <div
-                ref={lastElementRef}
-                className="h-10 w-full flex items-center justify-center mt-4"
-              >
-                {isFetchingNextPage && (
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                )}
-                {!hasNextPage && lawnBookings.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    No more bookings
-                  </span>
-                )}
+        <Card>
+          <CardContent className="p-0 overflow-x-auto">
+            {isLoadingBookings ? (
+              <div className="flex justify-center items-center py-32">
+                <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            ) : filteredBookings.length === 0 ? (
+              <div className="text-center py-32 text-muted-foreground text-lg">
+                {activeTab === "active" ? "No lawn bookings found" :
+                  activeTab === "cancelled" ? "No cancelled bookings found" :
+                    "No cancellation requests found"}
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Lawn</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Event Type</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Guests</TableHead>
+                      <TableHead>Total Price</TableHead>
+                      <TableHead>Payment</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBookings.map((booking) => (
+                      <TableRow key={booking.id}>
+                        <TableCell className="font-medium">
+                          {booking.member?.Name || booking.memberName}
+                          {booking.member?.Membership_No && (
+                            <div className="text-xs text-muted-foreground">
+                              #{booking.member.Membership_No}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{booking.lawn?.description}</TableCell>
+                        <TableCell>
+                          {booking.numberOfDays && booking.numberOfDays > 1 && booking.endDate
+                            ? (
+                              <div className="flex flex-col">
+                                <span>
+                                  {format(new Date(booking.bookingDate), "MMM dd")} - {format(new Date(booking.endDate), "MMM dd, yyyy")}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{booking.numberOfDays} days</span>
+                              </div>
+                            )
+                            : new Date(booking.bookingDate).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          {booking.bookingDetails && booking.bookingDetails.length > 0
+                            ? Array.from(new Set(booking.bookingDetails.map(d => d.eventType))).join(", ")
+                            : booking.eventType}
+                        </TableCell>
+                        <TableCell>
+                          {booking.bookingDetails && booking.bookingDetails.length > 0
+                            ? (
+                              <div className="flex flex-col gap-1">
+                                {Array.from(new Set(booking.bookingDetails.map(d => d.timeSlot))).map(slot => (
+                                  <span key={slot}>{getTimeSlotBadge(slot)}</span>
+                                ))}
+                              </div>
+                            )
+                            : getTimeSlotBadge(booking.bookingTime || "NIGHT")}
+                        </TableCell>
+                        <TableCell>{booking.guestsCount}</TableCell>
+                        <TableCell>PKR {booking.totalPrice.toLocaleString()}</TableCell>
+                        <TableCell>{getPaymentBadge(booking.paymentStatus)}</TableCell>
+
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDetailBooking(booking)
+                                setOpenDetails(true)
+                              }}
+                              title="Booking Details">
+                              <NotepadText className="h-4 w-4" />
+                            </Button>
+
+                            {activeTab === "active" && (
+                              <>
+                                <Button variant="ghost" size="icon" onClick={() => {
+                                  setEditBooking(booking);
+                                }} title="Edit Booking">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                {(booking.paymentStatus != "UNPAID") && (
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewVouchers(booking)} title="View Vouchers">
+                                    <Receipt className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setCancelBooking(booking)} title="Cancel Booking">
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+
+                            {activeTab === "requests" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-green-600"
+                                  onClick={() => handleApproveReq(booking)}
+                                  title="Approve Cancellation"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive"
+                                  onClick={() => handleRejectReq(booking)}
+                                  title="Reject Cancellation"
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleViewReason(booking)}
+                                  title="View Reason"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+
+                            {activeTab === "cancelled" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewReason(booking)}
+                                title="View Reason"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Scroll Trigger & Loader */}
+                <div
+                  ref={lastElementRef}
+                  className="h-10 w-full flex items-center justify-center mt-4"
+                >
+                  {isFetchingNextPage && (
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  )}
+                  {!hasNextPage && lawnBookings.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      No more bookings
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </Tabs>
 
       {/* Edit Dialog */}
       <Dialog open={!!editBooking} onOpenChange={() => setEditBooking(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Booking</DialogTitle>
+        <DialogContent className="max-w-7xl max-h-fit overflow-hidden">
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle>Edit Lawn Booking</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            {/* Member Information Display (Read-only) */}
-            <div className="md:col-span-2">
-              <Label>Member Information</Label>
-              <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="font-medium text-sm flex items-center">
-                      <User className="h-4 w-4 mr-2 text-blue-600" />
-                      {editBooking?.member?.Name || editBooking?.memberName}
-                    </div>
-                    <div className="text-xs text-blue-600 mt-1">
-                      {editBooking?.member?.Membership_No && `Membership: #${editBooking.member.Membership_No}`}
-                      {editBooking?.member?.Balance !== undefined && (
-                        <div className="mt-1 space-y-1">
-                          <Badge
-                            variant={editBooking.member.Balance >= 0 ? "outline" : "destructive"}
-                            className="bg-blue-100 text-blue-800"
-                          >
-                            Account Balance: PKR {editBooking.member.Balance.toLocaleString()}
-                          </Badge>
-                          <div className="text-xs">
-                            <span className="text-green-700">
-                              DR: PKR {editBooking.member.drAmount?.toLocaleString() || "0"}
-                            </span>
-                            {" • "}
-                            <span className="text-red-700">
-                              CR: PKR {editBooking.member.crAmount?.toLocaleString() || "0"}
-                            </span>
+
+          {/* Horizontal layout with two columns */}
+          <div className="flex gap-6 py-4 h-[calc(90vh-120px)] overflow-hidden">
+            {/* Left Column - Main Form Fields */}
+            <div className="w-1/2 overflow-y-auto pr-2 space-y-4">
+              {/* Member Information Display (Read-only) */}
+              <div className="space-y-2">
+                <Label>Member Information</Label>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm flex items-center">
+                        <User className="h-4 w-4 mr-2 text-blue-600" />
+                        {editBooking?.member?.Name || editBooking?.memberName}
+                      </div>
+                      <div className="text-xs text-blue-600 mt-1">
+                        {editBooking?.member?.Membership_No && `Membership: #${editBooking.member.Membership_No}`}
+                        {editBooking?.member?.Balance !== undefined && (
+                          <div className="mt-1 space-y-1">
+                            <Badge
+                              variant={editBooking.member.Balance >= 0 ? "outline" : "destructive"}
+                              className="bg-blue-100 text-blue-800"
+                            >
+                              Account Balance: PKR {editBooking.member.Balance.toLocaleString()}
+                            </Badge>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
+                    <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                      Current Booking
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                    Current Booking
-                  </Badge>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <Label>Lawn Category *</Label>
-              <Select
-                value={editBooking?.lawn?.lawnCategory?.id?.toString() || ""}
-                onValueChange={(categoryId) => {
-                  if (!editBooking) return;
-                  setEditBooking(prev => prev ? {
-                    ...prev,
-                    lawn: {
-                      ...prev.lawn,
-                      lawnCategory: { id: parseInt(categoryId) },
-                      id: "",
-                      description: ""
-                    }
-                  } : null);
-                }}
-              >
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder="Select lawn category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lawnCategories.map((cat: LawnCategory) => (
-                    <SelectItem key={cat.id} value={cat.id.toString()}>
-                      {cat.category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Lawn *</Label>
-              <Select
-                value={editBooking?.lawn?.id?.toString() || ""}
-                onValueChange={(lawnId) => {
-                  if (!editBooking) return;
-                  const oldTotal = editBooking.totalPrice || 0;
-                  const oldPaid = editBooking.paidAmount || 0;
-                  const oldPaymentStatus = editBooking.paymentStatus;
-                  const lawn = lawnCategories.flatMap((cat: LawnCategory) => cat.lawns).find((l: Lawn) => l.id.toString() === lawnId);
-                  if (!lawn) return;
-                  const newPrice = editBooking.pricingType === "member" ? parseInt(lawn.memberCharges) : parseInt(lawn.guestCharges);
-                  let newPaidAmount = oldPaid;
-                  let newPendingAmount = newPrice - oldPaid;
-                  let newPaymentStatus = oldPaymentStatus;
+              {/* Lawn Category & Lawn Selection */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Lawn Category *</Label>
+                  <Select
+                    value={editForm.lawncategoryId.toString()}
+                    onValueChange={(categoryId) => {
+                      handleEditFormChange("lawncategoryId", categoryId);
+                      handleEditFormChange("lawnId", "");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lawnCategories.map((cat: LawnCategory) => (
+                        <SelectItem key={cat.id} value={cat.id.toString()}>
+                          {cat.category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lawn *</Label>
+                  <Select
+                    value={editForm.lawnId.toString()}
+                    onValueChange={(lawnId) => handleEditFormChange("lawnId", lawnId)}
+                    disabled={!editForm.lawncategoryId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={!editForm.lawncategoryId ? "Select category first" : "Select lawn"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lawnCategories.find((cat: LawnCategory) => cat.id.toString() === editForm.lawncategoryId.toString())?.lawns.filter((lawn: Lawn) => lawn.isActive && !lawn.isOutOfService).map((lawn: Lawn) => (
+                        <SelectItem key={lawn.id} value={lawn.id.toString()}>
+                          <div className="flex flex-col">
+                            <span>{lawn.description}</span>
+                            <span className="text-[10px] text-muted-foreground">Capacity: {lawn.minGuests}-{lawn.maxGuests}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-                  // AUTO-ADJUST PAYMENT STATUS
-                  if (newPrice < oldPaid) {
-                    newPaymentStatus = "PAID";
-                    newPaidAmount = newPrice;
-                    newPendingAmount = 0;
-                  } else if (newPrice > oldPaid && oldPaymentStatus === "PAID") {
-                    newPaymentStatus = "HALF_PAID";
-                    newPaidAmount = oldPaid;
-                    newPendingAmount = newPrice - oldPaid;
-                  } else if (newPrice > oldTotal && (oldPaymentStatus === "HALF_PAID" || oldPaymentStatus === "UNPAID")) {
-                    newPaidAmount = oldPaid;
-                    newPendingAmount = newPrice - oldPaid;
-                  } else {
-                    if (oldPaymentStatus === "PAID") {
-                      newPaidAmount = newPrice;
-                      newPendingAmount = 0;
-                    } else if (oldPaymentStatus === "HALF_PAID") {
-                      newPaidAmount = oldPaid;
-                      newPendingAmount = newPrice - oldPaid;
-                    } else {
-                      newPaidAmount = 0;
-                      newPendingAmount = newPrice;
-                    }
-                  }
-
-                  setEditBooking(prev => prev ? {
-                    ...prev,
-                    lawn: { ...lawn, id: lawnId, lawnCategory: { id: lawn.lawnCategoryId } },
-                    totalPrice: newPrice,
-                    paidAmount: newPaidAmount,
-                    pendingAmount: newPendingAmount,
-                    paymentStatus: newPaymentStatus,
-                    lawnId: lawnId,
-                    entityId: lawnId
-                  } : null);
-                }}
-                disabled={!editBooking?.lawn?.lawnCategory?.id}
-              >
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder={!editBooking?.lawn?.lawnCategory?.id ? "Select category first" : "Select lawn"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {lawnCategories.find((cat: LawnCategory) => cat.id.toString() === editBooking?.lawn?.lawnCategory?.id?.toString())?.lawns.filter((lawn: Lawn) => lawn.isActive && !lawn.isOutOfService).map((lawn: Lawn) => (
-                    <SelectItem key={lawn.id} value={lawn.id.toString()}>
-                      <div className="flex flex-col">
-                        <span>{lawn.description}</span>
-                        <span className="text-xs text-muted-foreground">Capacity: {lawn.minGuests}-{lawn.maxGuests} guests</span>
-                        <span className="text-xs text-muted-foreground">Member: PKR {parseInt(lawn.memberCharges).toLocaleString()} | Guest: PKR {parseInt(lawn.guestCharges).toLocaleString()}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="col-span-full">
-              <Label>Booking Dates</Label>
-              <UnifiedDatePicker
-                value={editBooking?.bookingDate ? parseLocalDate(editBooking.bookingDate) : undefined}
-                endDate={editBooking?.endDate ? parseLocalDate(editBooking.endDate) : undefined}
-                selectionMode="range"
-                onChange={(date, type) => {
-                  setEditBooking(prev => {
-                    if (!prev) return null;
-                    const dateStr = date ? format(date, "yyyy-MM-dd") : "";
-
-                    const startDate = type === "start" ? (date || new Date()) : parseLocalDate(prev.bookingDate);
-                    const endDate = type === "end" ? (date || startDate) : (type === "start" ? startDate : parseLocalDate(prev.endDate || prev.bookingDate));
+              {/* Booking Dates */}
+              <div className="space-y-2">
+                <Label>Booking Dates</Label>
+                <UnifiedDatePicker
+                  value={editForm.bookingDate ? parseLocalDate(editForm.bookingDate) : undefined}
+                  endDate={editForm.endDate ? parseLocalDate(editForm.endDate) : undefined}
+                  selectionMode="range"
+                  onChange={(date, type) => {
+                    const startDate = type === "start" ? (date || new Date()) : parseLocalDate(editForm.bookingDate);
+                    const endDate = type === "end" ? (date || startDate) : parseLocalDate(editForm.endDate || editForm.bookingDate);
 
                     const startDateStr = format(startDate, "yyyy-MM-dd");
                     const endDateStr = format(endDate, "yyyy-MM-dd");
@@ -1779,340 +2100,284 @@ export default function LawnBookings() {
                     // Generate initial booking details for the range
                     const newDetails: { date: string; timeSlot: string; eventType?: string }[] = [];
                     let scanDate = new Date(startDate);
-                    const lastDate = new Date(endDate);
+                    const lastDateEnd = new Date(endDate);
 
-                    // Safety break
-                    let count = 0;
-                    while (scanDate <= lastDate && count < 100) {
-                      count++;
+                    while (scanDate <= lastDateEnd) {
                       const sDateStr = format(scanDate, "yyyy-MM-dd");
-                      const existing = prev.bookingDetails?.find(d => d.date === sDateStr);
+                      const existing = editForm.bookingDetails?.find(d => d.date === sDateStr);
                       if (existing) {
                         newDetails.push(existing);
                       } else {
                         newDetails.push({
                           date: sDateStr,
                           timeSlot: "NIGHT",
-                          eventType: prev.eventType || "wedding"
+                          eventType: editForm.eventType || "wedding"
                         });
                       }
                       scanDate.setDate(scanDate.getDate() + 1);
                     }
 
-                    // Calculate new price based on days
-                    const lawn = lawnCategories
-                      .flatMap((cat: LawnCategory) => cat.lawns)
-                      .find((l: Lawn) => l.id.toString() === prev.lawn?.id.toString());
+                    handleEditFormChange("bookingDate", startDateStr);
+                    handleEditFormChange("endDate", endDateStr);
+                    handleEditFormChange("bookingDetails", newDetails);
+                  }}
+                  className="w-full h-10 bg-muted/30 border-none shadow-none"
+                  placeholder="Select booking dates"
+                  minDate={new Date()}
+                />
+              </div>
 
-                    let newTotalPrice = prev.totalPrice;
-                    let newPaidAmount = prev.paidAmount || 0;
-                    let newPendingAmount = prev.pendingAmount || 0;
-                    let newPaymentStatus = prev.paymentStatus;
+              {/* Individual Time Slot Selector for Edit Dialog */}
+              {editForm.lawnId && editForm.bookingDetails && editForm.bookingDetails.length > 0 && (
+                <LawnIndividualTimeSlotSelector
+                  bookingDetails={editForm.bookingDetails}
+                  lawnId={editForm.lawnId.toString()}
+                  bookings={lawnBookings}
+                  lawns={availableLawns}
+                  reservations={fetchedStatuses?.reservations || []}
+                  onChange={(details) => handleEditFormChange("bookingDetails", details)}
+                />
+              )}
 
-                    if (lawn) {
-                      const dailyRate = prev.pricingType === "member"
-                        ? parseInt(lawn.memberCharges)
-                        : parseInt(lawn.guestCharges);
-
-                      newTotalPrice = dailyRate * newDetails.length;
-
-                      // Payment logic adjustment (similar to pricing type change)
-                      if (newTotalPrice < newPaidAmount) {
-                        newPaymentStatus = "PAID";
-                        newPaidAmount = newTotalPrice;
-                        newPendingAmount = 0;
-                      } else {
-                        if (newPaymentStatus === "PAID" && newTotalPrice > newPaidAmount) {
-                          newPaymentStatus = "HALF_PAID";
-                        }
-                        newPendingAmount = newTotalPrice - newPaidAmount;
-                      }
-                    }
-
-                    return {
-                      ...prev,
-                      bookingDate: startDateStr,
-                      endDate: endDateStr,
-                      bookingDetails: newDetails,
-                      numberOfDays: newDetails.length,
-                      totalPrice: newTotalPrice,
-                      paidAmount: newPaidAmount,
-                      pendingAmount: newPendingAmount,
-                      paymentStatus: newPaymentStatus
-                    };
-                  });
-                }}
-                placeholder="Select booking dates"
-                minDate={new Date()}
-              />
-            </div>
-
-            {editBooking && editBooking.lawn?.id && editBooking.bookingDetails && (
-              <LawnIndividualTimeSlotSelector
-                bookingDetails={editBooking.bookingDetails}
-                lawnId={editBooking.lawn.id.toString()}
-                bookings={lawnBookings}
-                lawns={availableLawns}
-                reservations={[]}
-                editBookingId={editBooking.id.toString()}
-                onChange={(newDetails) => setEditBooking(prev => {
-                  if (!prev) return null;
-                  const lawn = (availableLawnsData as Lawn[]).find(l => l.id.toString() === prev.lawn?.id.toString());
-                  if (!lawn) return { ...prev, bookingDetails: newDetails };
-
-                  const rate = prev.pricingType === "member" ? parseInt(lawn.memberCharges as string) : parseInt(lawn.guestCharges as string);
-                  const newTotalPrice = rate * newDetails.length;
-                  const newPaidAmount = Math.min(prev.paidAmount || 0, newTotalPrice);
-                  const newPaymentStatus = newTotalPrice <= (prev.paidAmount || 0) ? "PAID" : (prev.paidAmount || 0) > 0 ? "HALF_PAID" : "UNPAID";
-
-                  return {
-                    ...prev,
-                    bookingDetails: newDetails,
-                    totalPrice: newTotalPrice,
-                    pendingAmount: newTotalPrice - newPaidAmount,
-                    paymentStatus: newPaymentStatus === "PAID" ? "PAID" : prev.paymentStatus === "TO_BILL" ? "TO_BILL" : newPaymentStatus
-                  };
-                })}
-                defaultEventType={editBooking.eventType}
-              />
-            )}
-
-            <div>
-              <Label>Guest Count</Label>
-              <Input
-                type="number"
-                value={editBooking?.guestsCount || ""}
-                onChange={(e) => setEditBooking(prev => prev ? { ...prev, guestsCount: parseInt(e.target.value) || 0 } : null)}
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label>Pricing Type</Label>
-              <Select
-                value={editBooking?.pricingType || "member"}
-                onValueChange={(value) => {
-                  if (!editBooking) return;
-
-                  const oldTotal = editBooking.totalPrice || 0;
-                  const oldPaid = editBooking.paidAmount || 0;
-                  const oldPaymentStatus = editBooking.paymentStatus;
-
-                  // Find the lawn to get pricing
-                  const lawn = lawnCategories
-                    .flatMap((cat: LawnCategory) => cat.lawns)
-                    .find((l: Lawn) => l.id.toString() === editBooking.lawn?.id.toString());
-
-                  if (!lawn) {
-                    setEditBooking(prev => prev ? { ...prev, pricingType: value } : null);
-                    return;
-                  }
-
-                  const slotRate = value === "member"
-                    ? parseInt(lawn.memberCharges as string)
-                    : parseInt(lawn.guestCharges as string);
-
-                  const slotsCount = (editBooking.bookingDetails || []).length || 1;
-                  const newPrice = slotRate * slotsCount;
-
-                  let newPaidAmount = oldPaid;
-                  let newPaymentStatus = oldPaymentStatus;
-
-                  if (newPrice < oldPaid) {
-                    newPaymentStatus = "PAID";
-                    newPaidAmount = newPrice;
-                  } else if (oldPaymentStatus === "PAID" && newPrice > oldPaid) {
-                    newPaymentStatus = "HALF_PAID";
-                  }
-
-                  setEditBooking(prev => prev ? {
-                    ...prev,
-                    pricingType: value,
-                    totalPrice: newPrice,
-                    paidAmount: newPaidAmount,
-                    pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newPrice - newPaidAmount),
-                    paymentStatus: newPaymentStatus
-                  } : null);
-                }}
-              >
-                <SelectTrigger className="mt-2">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="guest">Guest</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div></div>
-            {editBooking?.pricingType == "guest" && <div className="p-4 rounded-xl border bg-white shadow-sm col-span-full">
-
-              <h3 className="text-lg font-semibold mb-4">Guest Information</h3>
-
-              <div className="flex  flex-col">
-
-                <div className="flex items-center justify-center gap-x-5">
-
-                  <div className="w-1/2">
-                    <Label className="text-sm font-medium mb-1 block whitespace-nowrap">
-                      Guest Name *
-                    </Label>
-                    {/* {console.log(form)} */}
-
-                    <FormInput
-                      label=""
-                      type="text"
-                      value={editBooking.guestName}
-                      onChange={(val) => setEditBooking((prev) => ({ ...prev, guestName: val }))}
-                    />
-                  </div>
-
-                  <div className="w-1/2">
-                    <Label className="text-sm font-medium mb-1 block whitespace-nowrap">
-                      Contact
-                    </Label>
-
-                    <FormInput
-                      label=""
-                      type="number"
-                      value={editBooking.guestContact}
-                      onChange={(val) => setEditBooking((prev) => ({ ...prev, guestContact: val }))}
-                      min="0"
-                    />
-                  </div>
-
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <Label className="text-sm font-medium my-2 block whitespace-nowrap">
-                    Who will Pay?
-                  </Label>
+              {/* Pricing Type & Guest Count */}
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label>Pricing Type</Label>
                   <Select
-                    value={editBooking.paidBy}
-                    onValueChange={(val) => setEditBooking((prev) => ({ ...prev, paidBy: val }))}
+                    value={editForm.pricingType}
+                    onValueChange={(value) => handleEditFormChange("pricingType", value)}
                   >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Who will pay?" />
+                    <SelectTrigger>
+                      <SelectValue />
                     </SelectTrigger>
-
                     <SelectContent>
-                      <SelectItem value="MEMBER">Member</SelectItem>
-                      <SelectItem value="GUEST">Guest</SelectItem>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="guest">Guest</SelectItem>
+                      <SelectItem value="corporate">Corporate</SelectItem>
                     </SelectContent>
                   </Select>
-
-
                 </div>
 
+                <div className="flex-1 space-y-2">
+                  <Label>Guest Count</Label>
+                  <Input
+                    type="number"
+                    value={editForm.numberOfGuests || ""}
+                    onChange={(e) => handleEditFormChange("numberOfGuests", parseInt(e.target.value) || 0)}
+                  />
+                </div>
               </div>
-            </div>}
 
-            {/* Payment Section with Accounting Summary */}
-            <LawnPaymentSection
-              
-              onChange={(field, value) => {
-                setEditBooking(prev => {
-                  if (!prev) return null;
+              {/* Remarks */}
+              <div className="space-y-2">
+                <Label>Remarks (Optional)</Label>
+                <textarea
+                  className="w-full p-2 border rounded-md resize-none min-h-[80px] text-sm"
+                  placeholder="Add notes..."
+                  value={editForm.remarks || ""}
+                  onChange={(e) => handleEditFormChange("remarks", e.target.value)}
+                />
+              </div>
 
-                  const updated = { ...prev };
+              {/* Guest Information */}
+              {editForm.pricingType === "guest" && (
+                <div className="p-3 rounded-lg border bg-gray-50 space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <NotepadText className="h-4 w-4 text-blue-500" />
+                    Guest Information
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      placeholder="Guest Name *"
+                      value={editForm.guestName || ""}
+                      onChange={(e) => handleEditFormChange("guestName", e.target.value)}
+                    />
+                    <Input
+                      placeholder="Contact *"
+                      type="text"
+                      value={editForm.guestContact || ""}
+                      onChange={(e) => handleEditFormChange("guestContact", e.target.value)}
+                    />
+                    <div className="col-span-2">
+                      <Input
+                        placeholder="Guest CNIC (Optional)"
+                        value={editForm.guestCNIC || ""}
+                        onChange={(e) => handleEditFormChange("guestCNIC", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-[10px] mb-1 block">Who will pay?</Label>
+                      <Select
+                        value={editForm.paidBy || "MEMBER"}
+                        onValueChange={(val) => handleEditFormChange("paidBy", val)}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="MEMBER">Member</SelectItem>
+                          <SelectItem value="GUEST">Guest</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
-                  if (field === "paymentStatus") {
-                    updated.paymentStatus = value;
-                    // Recalculate amounts when payment status changes
-                    if (value === "PAID") {
-                      updated.paidAmount = updated.totalPrice;
-                      updated.pendingAmount = 0;
-                    } else if (value === "UNPAID") {
-                      updated.paidAmount = 0;
-                      updated.pendingAmount = updated.totalPrice;
-                    } else if (value === "HALF_PAID") {
-                      // Keep existing paid amount or set to half
-                      const currentPaid = updated.paidAmount || 0;
-                      if (currentPaid === 0) {
-                        updated.paidAmount = updated.totalPrice / 2;
-                        updated.pendingAmount = updated.totalPrice / 2;
-                      }
-                    }
-                  } else if (field === "paidAmount") {
-                    updated.paidAmount = value;
-                    updated.pendingAmount = updated.totalPrice - value;
-                  } else if (field === "paymentMode") {
-                    (updated as any).paymentMode = value;
-                  } else if (field === "card_number") {
-                    (updated as any).card_number = value;
-                  } else if (field === "check_number") {
-                    (updated as any).check_number = value;
-                  } else if (field === "bank_name") {
-                    (updated as any).bank_name = value;
-                  }
+            <div className="w-1/2 overflow-y-auto pr-2 space-y-4">
+              {/* Extra Charges (Heads) Section */}
+              <div className="space-y-4 col-span-2">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-emerald-500" />
+                    Extra Charges (Heads)
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50">
+                    Optional
+                  </Badge>
+                </div>
 
-                  return updated;
-                });
-              }}
-              form={{
-                paymentStatus: editBooking?.paymentStatus || "UNPAID",
-                totalPrice: editBooking?.totalPrice || 0,
-                paidAmount: editBooking?.paidAmount || 0,
-                pendingAmount: editBooking?.pendingAmount || 0,
-                paymentMode: (editBooking as any)?.paymentMode || "CASH",
-                card_number: (editBooking as any)?.card_number || "",
-                check_number: (editBooking as any)?.check_number || "",
-                bank_name: (editBooking as any)?.bank_name || ""
-              } as any}
-            />
+                <div className="grid grid-cols-12 gap-2 items-end bg-gray-50/50 p-3 rounded-lg border border-dashed">
+                  <div className="col-span-4 space-y-1">
+                    <Label className="text-[10px]">Charge Head</Label>
+                    <Select
+                      value={editLocalSelectedHead}
+                      onValueChange={setEditLocalSelectedHead}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {extraChargeHeads.map(h => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {editLocalSelectedHead === "Others" && (
+                    <div className="col-span-4 space-y-1">
+                      <Label className="text-[10px]">Custom Name</Label>
+                      <Input
+                        placeholder="Head name"
+                        className="h-8 text-xs"
+                        value={editLocalCustomHeadName}
+                        onChange={(e) => setEditLocalCustomHeadName(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div className={cn("space-y-1", editLocalSelectedHead === "Others" ? "col-span-3" : "col-span-6")}>
+                    <Label className="text-[10px]">Amount</Label>
+                    <Input
+                      type="number"
+                      placeholder="Amount"
+                      className="h-8 text-xs"
+                      value={editLocalHeadAmount}
+                      onChange={(e) => setEditLocalHeadAmount(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-span-1">
+                    <button
+                      type="button"
+                      className="h-8 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center justify-center transition-colors shadow-sm"
+                      onClick={() => addHead(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {editForm.heads && editForm.heads.length > 0 && (
+                  <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                    {editForm.heads.map((h, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-white border rounded-md text-xs shadow-sm group">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="font-medium text-gray-700">{h.head}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-emerald-700">PKR {h.amount.toLocaleString()}</span>
+                          <button
+                            onClick={() => removeHead(index, true)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Section */}
+              <div className="space-y-2">
+                <LawnPaymentSection
+                  form={editForm}
+                  onChange={(field, value) => handleEditFormChange(field as keyof LawnBookingForm, value)}
+                />
+              </div>
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setEditBooking(null)}>Cancel</Button>
             <Button
               onClick={() => {
                 if (!editBooking) return;
 
                 // VALIDATION
-                if (!editBooking.bookingDetails || editBooking.bookingDetails.length === 0) {
+                if (!editForm.bookingDetails || editForm.bookingDetails.length === 0) {
                   toast({ title: "Booking dates are required", variant: "destructive" });
                   return;
                 }
-                const missingEvent = editBooking.bookingDetails.some(d => !d.eventType);
+                const missingEvent = editForm.bookingDetails.some(d => !d.eventType);
                 if (missingEvent) {
                   toast({ title: "Event type is required for all slots", variant: "destructive" });
                   return;
                 }
 
-                if (!editBooking.guestsCount || editBooking.guestsCount < 1) {
+                if (!editForm.numberOfGuests || editForm.numberOfGuests < 1) {
                   toast({ title: "Guest count must be at least 1", variant: "destructive" });
                   return;
                 }
 
-                const membershipNo = editBooking.member?.Membership_No || editBooking.membershipNo || "";
+                const membershipNo = editBooking.member?.Membership_No || editForm.membershipNo || "";
                 if (!membershipNo) {
                   toast({ title: "Membership number is missing", variant: "destructive" });
                   return;
                 }
 
-                const sortedDates = [...new Set(editBooking.bookingDetails.map(d => d.date))].sort();
+                const sortedDates = [...new Set(editForm.bookingDetails.map(d => d.date))].sort();
 
                 const payload = {
                   id: editBooking.id.toString(),
                   category: "Lawn",
                   membershipNo: membershipNo,
-                  entityId: editBooking.lawn?.id?.toString() || editBooking.entityId || "",
+                  entityId: editForm.lawnId.toString(),
                   bookingDate: new Date(sortedDates[0]).toISOString(),
                   endDate: new Date(sortedDates[sortedDates.length - 1]).toISOString(),
-                  totalPrice: editBooking.totalPrice.toString(),
-                  paymentStatus: editBooking.paymentStatus,
-                  numberOfGuests: editBooking.guestsCount,
-                  paidAmount: editBooking.paidAmount || 0,
-                  pendingAmount: editBooking.pendingAmount || 0,
-                  pricingType: editBooking.pricingType || "member",
-                  paymentMode: (editBooking as any).paymentMode || "CASH",
-                  card_number: (editBooking as any).card_number,
-                  check_number: (editBooking as any).check_number,
-                  bank_name: (editBooking as any).bank_name,
-                  eventTime: editBooking.bookingDetails[0].timeSlot, // Legacy support
-                  eventType: editBooking.bookingDetails[0].eventType, // Legacy support
-                  bookingDetails: editBooking.bookingDetails,
-                  paidBy: editBooking.paidBy || "MEMBER",
-                  guestName: editBooking.guestName,
-                  guestContact: editBooking.guestContact?.toString(),
+                  totalPrice: editForm.totalPrice.toString(),
+                  paymentStatus: editForm.paymentStatus,
+                  numberOfGuests: editForm.numberOfGuests,
+                  paidAmount: editForm.paidAmount || 0,
+                  pendingAmount: editForm.pendingAmount || 0,
+                  pricingType: editForm.pricingType || "member",
+                  paymentMode: editForm.paymentMode || "CASH",
+                  card_number: editForm.card_number,
+                  check_number: editForm.check_number,
+                  bank_name: editForm.bank_name,
+                  eventTime: editForm.bookingDetails[0].timeSlot, // Legacy support
+                  eventType: editForm.bookingDetails[0].eventType, // Legacy support
+                  bookingDetails: editForm.bookingDetails,
+                  heads: editForm.heads,
+                  paidBy: editForm.paidBy || "MEMBER",
+                  guestName: editForm.guestName,
+                  guestContact: editForm.guestContact,
+                  guestCNIC: editForm.guestCNIC,
                 };
 
 
@@ -2139,6 +2404,8 @@ export default function LawnBookings() {
           {detailBooking && (
             <LawnBookingDetailsCard
               booking={detailBooking}
+              vouchers={vouchers}
+              isLoadingVouchers={isLoadingVouchers}
               className="rounded-none border-0 shadow-none"
             />
           )}
@@ -2152,36 +2419,80 @@ export default function LawnBookings() {
         isLoadingVouchers={isLoadingVouchers}
       />
 
-      {/* Delete Dialog */}
-      <Dialog open={!!cancelBooking} onOpenChange={() => setCancelBooking(null)}>
+      {/* View Reason Dialog */}
+      <Dialog open={!!reasonToView} onOpenChange={() => setReasonToView(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel Booking</DialogTitle>
+            <DialogTitle>Cancellation Reason</DialogTitle>
           </DialogHeader>
-          <p className="py-4">
-            Are you sure you want to cancel this booking for <strong>{cancelBooking?.memberName}</strong>?
-          </p>
+          <div className="py-4 space-y-4">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Requested By</Label>
+              <p className="font-medium">{reasonToView?.requestedBy}</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Reason</Label>
+              <p className="whitespace-pre-wrap">{reasonToView?.reason}</p>
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelBooking(null)}>
-              No
-            </Button>
+            <Button onClick={() => setReasonToView(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval/Rejection Dialog */}
+      <Dialog open={!!updateReqBooking} onOpenChange={() => setUpdateReqBooking(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{updateStatus === "APPROVED" ? "Approve" : "Reject"} Cancellation Request</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p>
+              Are you sure you want to <strong>{updateStatus?.toLowerCase()}</strong> the cancellation request for{" "}
+              <strong>{updateReqBooking?.memberName}</strong>?
+            </p>
+            <div className="space-y-2">
+              <Label>Admin Remarks (Optional)</Label>
+              <Textarea
+                placeholder="Add any internal notes..."
+                value={adminRemarks}
+                onChange={(e) => setAdminRemarks(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateReqBooking(null)}>Cancel</Button>
             <Button
-              variant="destructive"
-              onClick={handleDeleteBooking}
-              disabled={deleteMutation.isPending}
+              className={updateStatus === "APPROVED" ? "bg-green-600 hover:bg-green-700 font-medium" : "bg-destructive hover:bg-destructive/90 font-medium"}
+              onClick={() => {
+                updateReqMutation.mutate({
+                  bookingFor: "lawns",
+                  bookID: updateReqBooking?.id.toString(),
+                  status: updateStatus,
+                  remarks: adminRemarks
+                });
+              }}
+              disabled={updateReqMutation.isPending}
             >
-              {deleteMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Cancelling...
-                </>
-              ) : (
-                "Cancel Booking"
-              )}
+              {updateReqMutation.isPending ? "Updating..." : `Confirm ${updateStatus === "APPROVED" ? "Approval" : "Rejection"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CancelBookingDialog
+        cancelBooking={cancelBooking}
+        onClose={() => setCancelBooking(null)}
+        onConfirm={(reason) => {
+          deleteMutation.mutate({
+            bookingFor: "lawns",
+            bookID: cancelBooking?.id.toString() || "",
+            reason
+          });
+        }}
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 }

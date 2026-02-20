@@ -39,7 +39,7 @@ export const hallInitialFormState: HallBookingForm = {
   hallId: "",
   bookingDate: "",
   eventType: "",
-  eventTime: "MORNING",
+  eventTime: "DAY",
   pricingType: "member",
   totalPrice: 0,
   numberOfGuests: 0,
@@ -53,10 +53,12 @@ export const hallInitialFormState: HallBookingForm = {
   paidBy: "MEMBER",
   guestName: "",
   guestContact: "",
+  guestCNIC: "",
   remarks: "",
   endDate: "",
   numberOfDays: 1,
   bookingDetails: [],
+  heads: [],
 };
 
 export const calculateHallPrice = (
@@ -70,9 +72,12 @@ export const calculateHallPrice = (
   const hall = halls.find((h) => h.id.toString() === hallId);
   if (!hall) return 0;
 
-  const basePrice = pricingType === "member"
-    ? Number(hall.chargesMembers || 0)
-    : Number(hall.chargesGuests || 0);
+  const basePrice =
+    pricingType === "member"
+      ? Number(hall.chargesMembers || 0)
+      : pricingType === "corporate"
+        ? Number(hall.chargesCorporate || 0)
+        : Number(hall.chargesGuests || 0);
 
   // If we have granular details, price is per-slot
   if (bookingDetails && bookingDetails.length > 0) {
@@ -93,7 +98,7 @@ export const calculateHallAccountingValues = (
   if (paymentStatus === "PAID") {
     paid = totalPrice;
     owed = 0;
-  } else if (paymentStatus === "HALF_PAID") {
+  } else if (paymentStatus === "HALF_PAID" || paymentStatus === "ADVANCE_PAYMENT") {
     paid = paidAmount;
     owed = totalPrice - paidAmount;
   }
@@ -150,7 +155,7 @@ export const getHallDateTimeStatuses = (
 
     statusMap[dateString] = {
       disabled,
-      unavailableTimeSlots: disabled ? ['MORNING', 'EVENING', 'NIGHT'] : unavailableTimeSlots
+      unavailableTimeSlots: disabled ? ['DAY', 'NIGHT'] : unavailableTimeSlots
     };
   }
 
@@ -280,14 +285,14 @@ export const getUnavailableTimeSlotsForDate = (
             unavailableSlots.push(hold.timeSlot);
           } else if (!hold.timeSlot) {
             // Global hold
-            ['MORNING', 'EVENING', 'NIGHT'].forEach(slot => {
+            ['DAY', 'NIGHT'].forEach(slot => {
               if (!unavailableSlots.includes(slot)) unavailableSlots.push(slot);
             });
           }
         }
       } else {
         // Legacy hold (global)
-        ['MORNING', 'EVENING', 'NIGHT'].forEach(slot => {
+        ['DAY', 'NIGHT'].forEach(slot => {
           if (!unavailableSlots.includes(slot)) unavailableSlots.push(slot);
         });
       }
@@ -305,7 +310,7 @@ export const getAvailableTimeSlots = (
   halls: Hall[],
   reservations: any[] = []
 ): string[] => {
-  const allTimeSlots = ['MORNING', 'EVENING', 'NIGHT'];
+  const allTimeSlots = ['DAY', 'NIGHT'];
 
   if (!date || !hallId) return allTimeSlots;
 

@@ -156,6 +156,7 @@ enum BookingOpt {
   MORNING
   EVENING
   NIGHT
+  DAY
 }
 
 model HallBooking {
@@ -178,6 +179,7 @@ model HallBooking {
 
   guestName    String? @db.Text
   guestContact String? @db.Text
+  guestCNIC    String? @db.Text
   paidBy       PaidBy  @default(MEMBER)
   remarks      String? @db.Text
 
@@ -186,6 +188,7 @@ model HallBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
   cancellationRequests HallCancellationRequest[]
 
   member Member @relation(fields: [memberId], references: [Sno])
@@ -218,13 +221,16 @@ model LawnBooking {
 
   guestName    String? @db.Text
   guestContact String? @db.Text
+  guestCNIC    String? @db.Text
   paidBy       PaidBy  @default(MEMBER)
+  remarks      String? @db.Text
 
 
   refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
   cancellationRequests LawnCancellationRequest[]
 
   member Member @relation(fields: [memberId], references: [Sno])
@@ -253,6 +259,7 @@ model PhotoshootBooking {
 
   guestName    String? @db.Text
   guestContact String? @db.Text
+  guestCNIC    String? @db.Text
   paidBy       PaidBy  @default(MEMBER)
   remarks      String? @db.Text
 
@@ -486,6 +493,8 @@ model Hall {
   capacity       Int
   chargesMembers Decimal @default(0.00) @db.Decimal(30, 2)
   chargesGuests  Decimal @default(0.00) @db.Decimal(30, 2)
+  chargesCorporate Decimal @default(0.00) @db.Decimal(30, 2)
+  order            Int     @default(0)
 
   isActive    Boolean          @default(true)
   isExclusive Boolean          @default(false)
@@ -591,6 +600,8 @@ model Lawn {
   maxGuests      Int          @default(0)
   memberCharges  Decimal      @default(0.00) @db.Decimal(30, 2)
   guestCharges   Decimal      @default(0.00) @db.Decimal(30, 2)
+  corporateCharges Decimal     @default(0.00) @db.Decimal(30, 2)
+  order            Int         @default(0)
   isActive       Boolean      @default(true)
   isOutOfService Boolean      @default(false)
 
@@ -626,6 +637,7 @@ model lawnHoldings {
 model LawnCategory {
   id        Int      @unique @default(autoincrement())
   category  String   @db.VarChar(200)
+  order            Int         @default(0)
   images    Json     @default("[]")
   lawns     Lawn[]
 
@@ -683,6 +695,7 @@ model Photoshoot {
 
   memberCharges Decimal @default(0.00) @db.Decimal(30, 2)
   guestCharges  Decimal @default(0.00) @db.Decimal(30, 2)
+  corporateCharges Decimal @default(0.00) @db.Decimal(30, 2)
   images        Json    @default("[]")
   isActive Boolean @default(true)
   outOfOrders PhotoshootOutOfOrder[]

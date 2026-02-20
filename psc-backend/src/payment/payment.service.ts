@@ -1259,12 +1259,12 @@ export class PaymentService {
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
     const normalizedEventTime = (
       bookingData.eventTime || 'NIGHT'
-    ).toUpperCase() as 'MORNING' | 'EVENING' | 'NIGHT';
-    const validEventTimes = ['MORNING', 'EVENING', 'NIGHT'];
+    ).toUpperCase() as 'DAY' | 'NIGHT';
+    const validEventTimes = ['DAY', 'NIGHT'];
 
     if (!validEventTimes.includes(normalizedEventTime)) {
       throw new BadRequestException(
-        'Invalid event time. Must be MORNING, EVENING, or NIGHT',
+        'Invalid event time. Must be DAY or NIGHT',
       );
     }
 

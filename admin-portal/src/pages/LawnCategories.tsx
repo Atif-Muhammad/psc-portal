@@ -23,10 +23,12 @@ import {
 export default function LawnCategories() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newCat, setNewCat] = useState("");
+  const [newOrder, setNewOrder] = useState("0")
   const [newImages, setNewImages] = useState<File[]>([]);
 
   const [editCategory, setEditCategory] = useState<any>(null);
   const [editName, setEditName] = useState("");
+  const [editOrder, setEditOrder] = useState("0")
   const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
   const [editNewImages, setEditNewImages] = useState<File[]>([]);
 
@@ -108,6 +110,7 @@ export default function LawnCategories() {
 
     const formData = new FormData();
     formData.append("category", newCat);
+    formData.append("order", newOrder);
 
     // Append images
     newImages.forEach((file) => {
@@ -130,6 +133,7 @@ export default function LawnCategories() {
     const formData = new FormData();
     formData.append("id", editCategory.id.toString());
     formData.append("category", editName);
+    formData.append("order", editOrder);
 
     // Append existing images (publicIds)
     editExistingImages.forEach((publicId) => {
@@ -148,6 +152,7 @@ export default function LawnCategories() {
   useEffect(() => {
     if (editCategory) {
       setEditName(editCategory.category || "");
+      setEditOrder(editCategory.order);
       setEditExistingImages(
         editCategory.images?.map((img: any) => img.publicId || img.url || img) || []
       );
@@ -192,6 +197,16 @@ export default function LawnCategories() {
                   onChange={(e) => setNewCat(e.target.value)}
                   placeholder="e.g. Premium Lawn"
                   className="mt-2"
+                />
+              </div>
+              <div>
+                <Label>Order *</Label>
+                <Input
+                  value={newOrder}
+                  onChange={(e) => setNewOrder(e.target.value)}
+                  placeholder="e.g. 0"
+                  className="mt-2"
+                  type="number"
                 />
               </div>
 
@@ -331,6 +346,14 @@ export default function LawnCategories() {
               <Input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>Order *</Label>
+              <Input
+                value={editOrder}
+                onChange={(e) => setEditOrder(e.target.value)}
                 className="mt-2"
               />
             </div>

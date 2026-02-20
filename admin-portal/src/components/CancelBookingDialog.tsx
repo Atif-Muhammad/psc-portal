@@ -8,7 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 interface CancelBookingDialogProps {
-  cancelBooking: Booking | null;
+  cancelBooking: {
+    id: number | string;
+    memberName: string;
+  } | null;
   onClose: () => void;
   onConfirm: (reason: string) => void;
   isDeleting: boolean;

@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `hall` ADD COLUMN `order` INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE `lawn` ADD COLUMN `order` INTEGER NOT NULL DEFAULT 0;

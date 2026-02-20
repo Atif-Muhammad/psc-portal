@@ -6,5 +6,7 @@ export class LawnCategory {
   @IsNotEmpty()
   category: string;
   @IsOptional()
+  order: number;
+  @IsOptional()
   existingimgs?: string[];
 }

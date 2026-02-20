@@ -1,0 +1,14 @@
+{
+  "hallBooking": {
+    "advancePayment": {
+      "threshold": 50000,
+      "defaultPaidAmount": 50000
+    }
+  },
+  "lawnBooking": {
+    "advancePayment": {
+      "threshold": 50000,
+      "defaultPaidAmount": 50000
+    }
+  }
+}

@@ -14,7 +14,7 @@ export class HallService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // ─────────────────────────── HALLS ───────────────────────────
   async getHalls() {
@@ -57,7 +57,7 @@ export class HallService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
     });
   }
   async getAvailHalls() {
@@ -71,7 +71,7 @@ export class HallService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
     });
   }
 
@@ -115,6 +115,8 @@ export class HallService {
         capacity: Number(payload.capacity),
         chargesGuests: Number(payload.chargesGuests),
         chargesMembers: Number(payload.chargesMembers),
+        chargesCorporate: Number(payload.chargesCorporate),
+        order: Number(payload.order) || 0,
         isActive:
           payload.isActive !== undefined
             ? typeof payload.isActive === 'string'
@@ -172,8 +174,8 @@ export class HallService {
 
     const filteredExistingImages = Array.isArray(hall.images)
       ? hall.images?.filter((img: any) =>
-          keepImagePublicIds.includes(img.publicId),
-        )
+        keepImagePublicIds.includes(img.publicId),
+      )
       : [];
 
     const newUploadedImages: any[] = [];
@@ -245,6 +247,8 @@ export class HallService {
           capacity: Number(payload.capacity) || 0,
           chargesMembers: Number(payload.chargesMembers) || 0,
           chargesGuests: Number(payload.chargesGuests) || 0,
+          chargesCorporate: Number(payload.chargesCorporate) || 0,
+          order: Number(payload.order) || 0,
           isActive:
             payload.isActive !== undefined
               ? typeof payload.isActive === 'string'

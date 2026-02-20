@@ -19,6 +19,8 @@ export class LawnDto {
   @IsNotEmpty() maxGuests: string;
   @IsNotEmpty() memberCharges: string;
   @IsNotEmpty() guestCharges: string;
+  @IsNotEmpty() corporateCharges: string;
+  @IsNotEmpty() order: string;
   @IsNotEmpty({ message: 'lawn activity must be provided' })
   isActive: boolean | string;
   @IsOptional()

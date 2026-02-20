@@ -690,7 +690,7 @@ export default function RoomBookings() {
 
         // Recalculate price when relevant fields change
         if (
-          ["roomTypeId", "pricingType", "checkIn", "checkOut"].includes(field)
+          ["roomTypeId", "pricingType", "checkIn", "checkOut", "heads", "totalPrice"].includes(field)
         ) {
           const oldTotal = prev.totalPrice || 0;
           const oldPaid = prev.paidAmount || 0;
@@ -710,11 +710,15 @@ export default function RoomBookings() {
           // AUTO-ADJUST PAYMENT STATUS WHEN DATES OR PRICING CHANGE IN EDIT MODE
           if (isEdit) {
             if (newPrice > oldPaid && oldPaymentStatus === "PAID") {
-              // Price Increased and was Fully Paid -> Downgrade to HALF_PAID but keep status name till they choose
-              // Note: the user might want to stay in PAID if they pay more, but for now we note the debt
+              // Price Increased and was Fully Paid -> Downgrade to HALF_PAID
               newForm.paymentStatus = "HALF_PAID";
               newForm.paidAmount = oldPaid; // Preserve existing paid amount
               newForm.pendingAmount = newPrice - oldPaid;
+            } else if (newPrice < oldPaid) {
+              // Price decreased below what was paid -> Mark as PAID
+              newForm.paymentStatus = "PAID";
+              newForm.paidAmount = newPrice;
+              newForm.pendingAmount = 0;
             } else if (newPrice > oldTotal && (oldPaymentStatus === "HALF_PAID" || oldPaymentStatus === "UNPAID" || oldPaymentStatus === "ADVANCE_PAYMENT")) {
               // Price Increased -> Preserve existing paid amount
               newForm.paidAmount = oldPaid;

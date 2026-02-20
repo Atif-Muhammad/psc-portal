@@ -31,6 +31,11 @@ export class HallDto {
   chargesMembers: string;
   @IsNotEmpty({ message: 'hall charges for guests must be provided' })
   chargesGuests: string;
+  @IsOptional()
+  chargesCorporate?: string;
+
+  @IsNotEmpty({message: "order for hall must be provided"})
+  order: number;
 
   @IsNotEmpty({ message: 'hall activity must be provided' })
   isActive: boolean | string;

@@ -297,7 +297,11 @@ export function UnifiedDatePicker({
                         {selectionMode === "range" ? (
                             selectedDate ? (
                                 selectedEndDate ? (
-                                    <span>{format(selectedDate, "PPP")} - {format(selectedEndDate, "PPP")}</span>
+                                    <span>
+                                        {isSameDay(selectedDate, selectedEndDate)
+                                            ? format(selectedDate, "PPP")
+                                            : `${format(selectedDate, "PPP")} - ${format(selectedEndDate, "PPP")}`}
+                                    </span>
                                 ) : (
                                     <span>{format(selectedDate, "PPP")} ...</span>
                                 )

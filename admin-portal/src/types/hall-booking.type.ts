@@ -1,8 +1,8 @@
 import { Member, Voucher, DateStatus } from "@/types/room-booking.type";
 
-export type HallBookingTime = "MORNING" | "EVENING" | "NIGHT";
-export type PricingType = "member" | "guest";
-export type PaymentStatus = "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
+export type HallBookingTime = "DAY" | "NIGHT";
+export type PricingType = "member" | "guest" | "corporate";
+export type PaymentStatus = "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL" | "ADVANCE_PAYMENT";
 
 
 export interface HallBooking {
@@ -27,12 +27,32 @@ export interface HallBooking {
   card_number?: string;
   check_number?: string;
   bank_name?: string;
-  guestName?: "",
-  guestContact?: "",
+  guestName?: "";
+  guestContact?: "";
+  guestCNIC?: "";
   numberOfDays?: number;
   endDate?: string;
   bookingDetails?: { date: string; timeSlot: string; eventType?: string }[];
   remarks?: string;
+  extraCharges?: { head: string; amount: number }[];
+  cancellationRequest?: {
+    id: number;
+    reason: string;
+    requestedBy: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    adminRemarks?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  cancellationRequests?: {
+    id: number;
+    reason: string;
+    requestedBy: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    adminRemarks?: string;
+    createdAt: string;
+    updatedAt: string;
+  }[];
 
   member?: {
     id: string;
@@ -48,7 +68,8 @@ export interface HallBooking {
     capacity: number;
     chargesMembers: number;
     chargesGuests: number;
-    outOfOrders?: any[],
+    chargesCorporate: number;
+    outOfOrders?: any[];
   };
   // Add these for backward compatibility
   Membership_No?: string;
@@ -62,6 +83,7 @@ export interface Hall {
   capacity: number;
   chargesMembers: number;
   chargesGuests: number;
+  chargesCorporate: number;
   description: string;
   isActive: boolean;
   isExclusive: boolean;
@@ -72,8 +94,13 @@ export interface Hall {
   outOfServiceFrom?: string;
   outOfServiceTo?: string;
   paidBy?: "MEMBER" | "GUEST";
-  guestName?: "",
-  guestContact?: ""
+  guestName?: string;
+  guestContact?: string;
+  guestCNIC?: string;
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  card_number?: string;
+  check_number?: string;
+  bank_name?: string;
   reservations: any[];
   bookings: HallBooking[];
   holdings?: any[];
@@ -106,12 +133,14 @@ export interface HallBookingForm {
   check_number?: string;
   bank_name?: string;
   paidBy?: "MEMBER" | "GUEST";
-  guestName?: "",
-  guestContact?: ""
+  guestName?: "";
+  guestContact?: "";
+  guestCNIC?: "";
   endDate: string;
   numberOfDays: number;
   bookingDetails: { date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[];
   remarks?: string;
+  heads?: { head: string; amount: number }[];
 }
 
 export type HallVoucher = Voucher;
