@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon, Ban, Eye, CheckCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon, Ban, Eye, CheckCircle, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -668,6 +668,13 @@ export default function LawnBookings() {
   const [editLocalSelectedHead, setEditLocalSelectedHead] = useState(extraChargeHeads[0]);
   const [editLocalHeadAmount, setEditLocalHeadAmount] = useState<string>("");
   const [editLocalCustomHeadName, setEditLocalCustomHeadName] = useState("");
+  const [conflictData, setConflictData] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: string;
+    payload: any;
+    isEdit: boolean;
+  } | null>(null);
 
   // Member search states
   const [memberSearch, setMemberSearch] = useState("");
@@ -880,7 +887,18 @@ export default function LawnBookings() {
       setIsAddOpen(false);
       resetForm();
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: any) => {
+      if (error?.status === 409 && error?.type?.startsWith("SOFT_")) {
+        setConflictData({
+          isOpen: true,
+          message: error.message,
+          type: error.type,
+          payload: variables,
+          isEdit: false,
+        });
+        return;
+      }
+
       toast({
         title: "Failed to create lawn booking",
         description: error?.message || "Please try again",
@@ -896,7 +914,18 @@ export default function LawnBookings() {
       queryClient.invalidateQueries({ queryKey: ["lawn-bookings"] });
       setEditBooking(null);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: any) => {
+      if (error?.status === 409 && error?.type?.startsWith("SOFT_")) {
+        setConflictData({
+          isOpen: true,
+          message: error.message,
+          type: error.type,
+          payload: variables,
+          isEdit: true,
+        });
+        return;
+      }
+
       toast({
         title: "Failed to update lawn booking",
         description: error?.message || "Please try again",
@@ -2493,6 +2522,59 @@ export default function LawnBookings() {
         }}
         isDeleting={deleteMutation.isPending}
       />
+
+      {/* Conflict Confirmation Dialog */}
+      <Dialog
+        open={!!conflictData?.isOpen}
+        onOpenChange={(open) => !open && setConflictData(null)}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-600 flex items-center gap-2 text-xl">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+              Booking Conflict Warning
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              A potential conflict was detected for this reservation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="p-4 rounded-md bg-amber-50 border border-amber-200">
+              <p className="text-sm font-medium text-amber-900 leading-relaxed">
+                {conflictData?.message}
+              </p>
+            </div>
+            <p className="mt-6 text-sm text-gray-600">
+              Bypassing this warning will finalize the booking despite the overlap. Are you sure you want to proceed?
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setConflictData(null)}
+              className="mt-2 sm:mt-0"
+            >
+              Cancel & Review
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors shadow-sm"
+              onClick={() => {
+                if (conflictData) {
+                  const forcedPayload = { ...conflictData.payload, isForced: true };
+                  if (conflictData.isEdit) {
+                    updateMutation.mutate(forcedPayload);
+                  } else {
+                    createMutation.mutate(forcedPayload);
+                  }
+                  setConflictData(null);
+                }
+              }}
+            >
+              Confirm & Bypass
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

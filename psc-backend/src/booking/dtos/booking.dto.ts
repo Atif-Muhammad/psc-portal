@@ -90,4 +90,6 @@ export class BookingDto {
   advanceVoucherAmount?: string | number;
   @IsOptional()
   heads?: { head: string; amount: number }[];
+  @IsOptional()
+  isForced?: boolean;
 }

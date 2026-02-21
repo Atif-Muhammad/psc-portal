@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, XCircle, Loader2, Receipt, User, NotepadText, CheckCircle, Ban, Eye } from "lucide-react";
+import { Plus, Edit, XCircle, Loader2, Receipt, User, NotepadText, CheckCircle, Ban, Eye, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -497,6 +497,13 @@ export default function HallBookings() {
   const [localSelectedHead, setLocalSelectedHead] = useState<string>("");
   const [localCustomHeadName, setLocalCustomHeadName] = useState<string>("");
   const [localHeadAmount, setLocalHeadAmount] = useState<string>("");
+  const [conflictData, setConflictData] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: string;
+    payload: any;
+    isEdit: boolean;
+  } | null>(null);
 
   const canAddHead = localSelectedHead === "Others"
     ? (localCustomHeadName.trim() !== "" && parseFloat(localHeadAmount) > 0)
@@ -802,13 +809,25 @@ export default function HallBookings() {
   // Mutations
   const createMutation = useMutation<any, Error, Record<string, any>>({
     mutationFn: (payload) => createBooking(payload),
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       toast({ title: "Hall booking created successfully" });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
       setIsAddOpen(false);
       resetForm();
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: any) => {
+      // The API now throws the full error response data if available
+      if (error?.status === 409 && error?.type?.startsWith("SOFT_")) {
+        setConflictData({
+          isOpen: true,
+          message: error.message,
+          type: error.type,
+          payload: variables,
+          isEdit: false,
+        });
+        return;
+      }
+
       toast({
         title: "Failed to create hall booking",
         description: error?.message || "Please try again",
@@ -824,7 +843,18 @@ export default function HallBookings() {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
       setEditBooking(null);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: any) => {
+      if (error?.status === 409 && error?.type?.startsWith("SOFT_")) {
+        setConflictData({
+          isOpen: true,
+          message: error.message,
+          type: error.type,
+          payload: variables,
+          isEdit: true,
+        });
+        return;
+      }
+
       toast({
         title: "Failed to update hall booking",
         description: error?.message || "Please try again",
@@ -2814,6 +2844,59 @@ export default function HallBookings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div >
+
+      {/* Conflict Confirmation Dialog */}
+      <Dialog
+        open={!!conflictData?.isOpen}
+        onOpenChange={(open) => !open && setConflictData(null)}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-600 flex items-center gap-2 text-xl">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+              Booking Conflict Warning
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              A potential conflict was detected for this reservation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="p-4 rounded-md bg-amber-50 border border-amber-200">
+              <p className="text-sm font-medium text-amber-900 leading-relaxed">
+                {conflictData?.message}
+              </p>
+            </div>
+            <p className="mt-6 text-sm text-gray-600">
+              Bypassing this warning will finalize the booking despite the overlap. Are you sure you want to proceed?
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setConflictData(null)}
+              className="mt-2 sm:mt-0"
+            >
+              Cancel & Review
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors shadow-sm"
+              onClick={() => {
+                if (conflictData) {
+                  const forcedPayload = { ...conflictData.payload, isForced: true };
+                  if (conflictData.isEdit) {
+                    updateMutation.mutate(forcedPayload);
+                  } else {
+                    createMutation.mutate(forcedPayload);
+                  }
+                  setConflictData(null);
+                }
+              }}
+            >
+              Confirm & Bypass
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

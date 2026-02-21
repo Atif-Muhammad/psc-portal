@@ -1,6 +1,6 @@
 import axios from "axios";
-const base_url = "http://localhost:3000/api";
-// const base_url = "https://admin.peshawarservicesclub.com/api";
+// const base_url = "http://localhost:3000/api";
+const base_url = "https://admin.peshawarservicesclub.com/api";
 
 export const authAdmin = async (data: any): Promise<any> => {
   try {
@@ -302,13 +302,7 @@ export const getBookings = async ({
     );
     return response.data;
   } catch (error: any) {
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      "Something went wrong";
-
-    throw { message, status: error.response?.status || 500 };
+    throw { ...(error.response?.data || {}), message: error.response?.data?.message || error.response?.data?.error || error.message || "Something went wrong", status: error.response?.status || 500 };
   }
 };
 export const createBooking = async (data: any): Promise<any> => {
@@ -321,13 +315,7 @@ export const createBooking = async (data: any): Promise<any> => {
     );
     return response.data;
   } catch (error: any) {
-    // console.log(error)
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      "Something went wrong";
-    throw { message, status: error.response?.status || 500 };
+    throw { ...(error.response?.data || {}), message: error.response?.data?.message || error.response?.data?.error || error.message || "Something went wrong", status: error.response?.status || 500 };
   }
 };
 export const updateBooking = async (data: any): Promise<any> => {
@@ -339,13 +327,7 @@ export const updateBooking = async (data: any): Promise<any> => {
     );
     return response;
   } catch (error: any) {
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      "Something went wrong";
-
-    throw { message, status: error.response?.status || 500 };
+    throw { ...(error.response?.data || {}), message: error.response?.data?.message || error.response?.data?.error || error.message || "Something went wrong", status: error.response?.status || 500 };
   }
 };
 export const cancelReqBooking = async (

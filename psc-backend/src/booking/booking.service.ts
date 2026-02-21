@@ -1774,590 +1774,6 @@ export class BookingService {
     }
   }
 
-  async cBookingRoomMember(payload: any, createdBy: string = 'member') {
-    const {
-      membershipNo,
-      entityId,
-      checkIn,
-      checkOut,
-      totalPrice,
-      paymentStatus = 'PAID',
-      pricingType,
-      paidAmount,
-      paymentMode = 'ONLINE',
-      numberOfAdults = 1,
-      numberOfChildren = 0,
-      specialRequests = '',
-      selectedRoomIds,
-      paidBy = 'MEMBER',
-      guestContact,
-      guestName,
-      remarks = '',
-      card_number,
-      check_number,
-      bank_name,
-    } = payload;
-
-    // ── VALIDATION ───────────────────────────────────────────
-    const checkInDate = parsePakistanDate(checkIn);
-    const checkOutDate = parsePakistanDate(checkOut);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (!checkIn || !checkOut || checkInDate >= checkOutDate)
-      throw new ConflictException('Check-in must be before check-out');
-    if (new Date(checkInDate).setHours(0, 0, 0, 0) < today.getTime())
-      throw new ConflictException('Check-in date cannot be in the past');
-    if (numberOfAdults < 1)
-      throw new ConflictException('At least one adult required');
-
-    if (pricingType === 'guest') {
-      if (!guestName || !guestContact) {
-        throw new ConflictException(
-          'Guest name and contact are required for guest pricing',
-        );
-      }
-    }
-
-    const member = await this.prismaService.member.findUnique({
-      where: { Membership_No: membershipNo.toString() },
-    });
-    if (!member) throw new NotFoundException('Member not found');
-
-    const roomIdsToBook =
-      selectedRoomIds && selectedRoomIds.length > 0
-        ? selectedRoomIds.map((id) => Number(id))
-        : [Number(entityId)];
-
-    if (roomIdsToBook.length === 0)
-      throw new BadRequestException('No rooms selected');
-
-    // ── PROCESS IN TRANSACTION ───────────────────────────────
-    return await this.prismaService.$transaction(async (prisma) => {
-      // Validate all rooms
-      const rooms = await prisma.room.findMany({
-        where: { id: { in: roomIdsToBook } },
-        include: {
-          roomType: true,
-          outOfOrders: {
-            where: {
-              startDate: { lt: checkOutDate },
-              endDate: { gt: checkInDate },
-            },
-          },
-          reservations: {
-            where: {
-              reservedFrom: { lt: checkOutDate },
-              reservedTo: { gt: checkInDate },
-            },
-          },
-          bookings: {
-            where: {
-              booking: {
-                checkIn: { lt: checkOutDate },
-                checkOut: { gt: checkInDate },
-              },
-            },
-          },
-        },
-      });
-
-      if (rooms.length !== roomIdsToBook.length)
-        throw new NotFoundException('Some selected rooms not found');
-      const roomNumbers = rooms.map((r) => r.roomNumber).join(', ');
-
-      for (const room of rooms) {
-        if (!room.isActive)
-          throw new ConflictException(`Room ${room.roomNumber} is not active`);
-        if (room.outOfOrders.length > 0)
-          throw new ConflictException(
-            `Room ${room.roomNumber} has maintenance`,
-          );
-        if (room.reservations.length > 0)
-          throw new ConflictException(`Room ${room.roomNumber} is reserved`);
-        if (room.bookings.length > 0)
-          throw new ConflictException(
-            `Room ${room.roomNumber} is already booked`,
-          );
-
-        const roomHold = await prisma.roomHoldings.findFirst({
-          where: {
-            roomId: room.id,
-            onHold: true,
-            OR: [
-              {
-                checkIn: { lt: checkOutDate },
-                checkOut: { gt: checkInDate },
-              },
-              {
-                checkIn: null,
-                holdExpiry: { gt: new Date() },
-              },
-            ],
-            // Exclude holds by current user
-            NOT: { holdBy: membershipNo.toString() },
-          },
-        });
-        if (roomHold)
-          throw new ConflictException(
-            `Room ${room.roomNumber} is on hold by another user`,
-          );
-      }
-
-      const nights = Math.ceil(
-        (checkOutDate.getTime() - checkInDate.getTime()) /
-        (1000 * 60 * 60 * 24),
-      );
-
-      let calculatedTotal = 0;
-      if (totalPrice) {
-        calculatedTotal = Number(totalPrice);
-      } else {
-        for (const room of rooms) {
-          const pricePerNight =
-            pricingType === 'member'
-              ? room.roomType.priceMember
-              : pricingType === 'forces'
-                ? room.roomType.priceForces || 0
-                : room.roomType.priceGuest;
-          calculatedTotal += Number(pricePerNight) * nights;
-        }
-      }
-      const total = calculatedTotal;
-
-      let paid = 0;
-      let owed = total;
-
-      let amountToBalance = 0;
-      const isToBill = paymentStatus === 'TO_BILL';
-
-      if (paymentStatus === 'PAID') {
-        paid = total;
-        owed = 0;
-      } else if (paymentStatus === 'HALF_PAID') {
-        paid = Number(paidAmount) || 0;
-        if (paid <= 0)
-          throw new ConflictException('Paid amount must be > 0 for half-paid');
-        if (paid >= total)
-          throw new ConflictException(
-            'Paid amount must be < total for half-paid',
-          );
-        owed = total - paid;
-      } else {
-        paid = Number(paidAmount) || 0;
-        owed = total - paid;
-      }
-
-      const finalOwed = isToBill ? 0 : owed;
-      amountToBalance = isToBill ? owed : 0;
-
-      // ── CREATE BOOKING ──────────────────────────────────
-      const booking = await prisma.roomBooking.create({
-        data: {
-          Membership_No: membershipNo,
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-          totalPrice: total,
-          paymentStatus: paymentStatus as PaymentStatus,
-          pricingType,
-          paidAmount: paid,
-          pendingAmount: finalOwed,
-          numberOfAdults: Number(numberOfAdults),
-          numberOfChildren: Number(numberOfChildren),
-          specialRequests,
-          paidBy,
-          guestName,
-          guestContact: guestContact?.toString(),
-          remarks,
-          // Create join table entries
-          rooms: {
-            create: rooms.map((r) => ({
-              roomId: r.id,
-              priceAtBooking:
-                pricingType === 'member'
-                  ? r.roomType.priceMember
-                  : r.roomType.priceGuest,
-            })),
-          },
-          createdBy,
-          updatedBy: '-',
-        },
-      });
-
-      // Update Member Ledger
-      const now = new Date();
-      await prisma.member.update({
-        where: { Membership_No: membershipNo },
-        data: {
-          totalBookings: { increment: 1 },
-          lastBookingDate: now,
-          bookingAmountPaid: { increment: Math.round(Number(paid)) },
-          bookingAmountDue: { increment: Math.round(Number(finalOwed)) },
-          bookingBalance: {
-            increment: Math.round(Number(paid) - Number(finalOwed)),
-          },
-          Balance: { increment: Math.round(amountToBalance) },
-          drAmount: { increment: Math.round(amountToBalance) },
-        },
-      });
-
-      // Create Voucher
-      if (paid > 0) {
-        const voucherType =
-          paymentStatus === 'PAID'
-            ? VoucherType.FULL_PAYMENT
-            : VoucherType.HALF_PAYMENT;
-        const vno = generateNumericVoucherNo();
-        await prisma.paymentVoucher.create({
-          data: {
-            consumer_number: generateConsumerNumber(Number(vno)),
-            voucher_no: vno,
-            booking_type: 'ROOM',
-            booking_id: booking.id,
-            membership_no: membershipNo,
-            amount: paid,
-            payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
-            voucher_type: voucherType,
-            status: VoucherStatus.CONFIRMED,
-            issued_by: 'system',
-            remarks: `Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Online Booking`,
-            card_number,
-            check_number,
-            bank_name,
-          } as any,
-        });
-      }
-
-      // Update Room Status if current
-      const isCurrentlyBooked = checkInDate <= now && checkOutDate > now;
-      if (isCurrentlyBooked) {
-        await prisma.room.updateMany({
-          where: { id: { in: roomIdsToBook } },
-          data: { isBooked: true },
-        });
-      }
-
-      // Create permanent hold record matching booking
-      await prisma.roomHoldings.createMany({
-        data: rooms.map((r) => ({
-          roomId: r.id,
-          onHold: true,
-          checkIn: checkInDate,
-          checkOut: checkOutDate,
-          holdExpiry: checkOutDate,
-          holdBy: membershipNo.toString(),
-        })),
-      });
-
-      // Optionally delete OLD/Temporary holds that don't match?
-      // For now, removing the deleteMany or changing it to only delete expired/temp ones?
-      // Since we just created new ones, we can clean up any 'temp' holds for this user checking in now?
-      // But we just created a hold with `membershipNo`.
-      // The old code `deleteMany({ where: { ..., holdBy: membershipNo } })` would delete what we just created if we ran it after!
-      // So we should delete BEFORE creating, or delete only those specific temp holds.
-      // Better: Delete all holds by this user for these rooms, THEN create new ones.
-      // This handles "converting" temp hold to permanent.
-
-      // Delete existing holds by this user
-      // ── CLEAR TEMPORARY HOLDS ──────────────────────────────
-      await prisma.roomHoldings.deleteMany({
-        where: {
-          roomId: { in: roomIdsToBook },
-          holdBy: membershipNo.toString(),
-        },
-      });
-
-      return {
-        success: true,
-        message: `Booked ${roomIdsToBook.length} room(s)`,
-        booking,
-        totalAmount: total,
-        paidAmount: paid,
-        pendingAmount: finalOwed,
-      };
-    });
-  }
-
-  async uBookingRoomMember(payload: any, updatedBy: string = 'member') {
-    const {
-      id,
-      membershipNo,
-      entityId,
-      selectedRoomIds,
-      checkIn,
-      checkOut,
-      totalPrice,
-      paymentStatus,
-      pricingType,
-      paidAmount,
-      paymentMode = 'ONLINE',
-      numberOfAdults = 1,
-      numberOfChildren = 0,
-      specialRequests = '',
-      paidBy = 'MEMBER',
-      guestContact,
-      guestName,
-      remarks,
-    } = payload;
-
-    if (!id || !membershipNo)
-      throw new BadRequestException('Booking ID and membership required');
-
-    const newCheckIn = parsePakistanDate(checkIn);
-    const newCheckOut = parsePakistanDate(checkOut);
-
-    if (!checkIn || !checkOut || newCheckIn >= newCheckOut)
-      throw new ConflictException('Check-in must be before check-out');
-
-    // ── FETCH EXISTING ──────────────────────────────────────
-    const booking = await this.prismaService.roomBooking.findUnique({
-      where: { id: Number(id) },
-      include: {
-        rooms: {
-          include: {
-            room: {
-              include: {
-                roomType: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    if (!booking) throw new NotFoundException('Booking not found');
-
-    const member = await this.prismaService.member.findUnique({
-      where: { Membership_No: membershipNo.toString() },
-    });
-    if (!member) throw new NotFoundException('Member not found');
-
-    // ── RESOLVE ROOM IDS ─────────────────────────────────────
-    const currentRoomIds = booking.rooms.map((r) => r.roomId);
-    const roomIdsToBook =
-      selectedRoomIds && selectedRoomIds.length > 0
-        ? selectedRoomIds.map((id) => Number(id))
-        : currentRoomIds;
-
-    const rooms = await this.prismaService.room.findMany({
-      where: { id: { in: roomIdsToBook } },
-      include: {
-        outOfOrders: {
-          where: {
-            startDate: { lt: newCheckOut },
-            endDate: { gt: newCheckIn },
-          },
-        },
-        roomType: true,
-      },
-    });
-
-    if (rooms.length === 0) throw new ConflictException('No rooms available');
-
-    const roomNumbers = rooms.map((r) => r.roomNumber).join(', ');
-
-    for (const room of rooms) {
-      if (!room.isActive)
-        throw new ConflictException(`Room ${room.roomNumber} is not available`);
-
-      // Check holdings
-      const roomHold = await this.prismaService.roomHoldings.findFirst({
-        where: {
-          roomId: room.id,
-          onHold: true,
-          OR: [
-            {
-              checkIn: { lt: newCheckOut },
-              checkOut: { gt: newCheckIn },
-            },
-            {
-              checkIn: null,
-              holdExpiry: { gt: new Date() },
-            },
-          ],
-          NOT: { holdBy: membershipNo.toString() },
-        },
-      });
-      if (roomHold)
-        throw new ConflictException(
-          `Room ${room.roomNumber} is currently on hold`,
-        );
-
-      if (room.outOfOrders.length > 0) {
-        const conflicts = room.outOfOrders
-          .map(
-            (oo) =>
-              `${formatPakistanDate(oo.startDate)} to ${formatPakistanDate(oo.endDate)}`,
-          )
-          .join(', ');
-        throw new ConflictException(
-          `Room ${room.roomNumber} has maintenance: ${conflicts}`,
-        );
-      }
-
-      const overlapping = await this.prismaService.roomBooking.findFirst({
-        where: {
-          rooms: { some: { roomId: room.id } },
-          id: { not: Number(id) },
-          checkIn: { lt: newCheckOut },
-          checkOut: { gt: newCheckIn },
-        },
-      });
-      if (overlapping)
-        throw new ConflictException(`Room ${room.roomNumber} already booked`);
-    }
-
-    // ── PAYMENT CALCULATIONS ────────────────────────────────
-    const currTotal = Number(booking.totalPrice);
-    const currPaid = Number(booking.paidAmount);
-    const currStatus = booking.paymentStatus;
-
-    // Use total from payload if provided, otherwise calculate based on all rooms
-    let calculatedTotal = 0;
-    if (totalPrice) {
-      calculatedTotal = Number(totalPrice);
-    } else {
-      const nights = Math.ceil(
-        (newCheckOut.getTime() - newCheckIn.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      for (const room of rooms) {
-        const pricePerNight =
-          pricingType === 'member'
-            ? room.roomType.priceMember
-            : room.roomType.priceGuest;
-        calculatedTotal += Number(pricePerNight) * nights;
-      }
-    }
-    const newTotal = calculatedTotal;
-    let newPaymentStatus =
-      (paymentStatus as unknown as PaymentStatus) || currStatus;
-
-    const isPriceIncrease = newTotal > currPaid;
-    // For member update, payload might differ, but logic holds.
-    // 'paidAmount' is in payload.
-    const isExplicitPayment = paidAmount !== undefined;
-    const isStatusUnchanged =
-      !paymentStatus ||
-      (paymentStatus as unknown as PaymentStatus) === currStatus;
-
-    let newPaid = currPaid;
-
-    if (
-      isPriceIncrease &&
-      !isExplicitPayment &&
-      isStatusUnchanged &&
-      currStatus === (PaymentStatus.PAID as unknown)
-    ) {
-      newPaymentStatus = PaymentStatus.HALF_PAID as unknown as PaymentStatus;
-      newPaid = currPaid;
-    } else {
-      if (newPaymentStatus === PaymentStatus.PAID) {
-        newPaid = newTotal;
-      } else if (newPaymentStatus === PaymentStatus.UNPAID) {
-        newPaid = 0;
-      } else {
-        newPaid = paidAmount !== undefined ? Number(paidAmount) : currPaid;
-      }
-    }
-
-    let newOwed = newTotal - newPaid;
-    let amountToBalance = 0;
-    if (newPaymentStatus === PaymentStatus.TO_BILL) {
-      amountToBalance = newOwed;
-      newOwed = 0;
-    }
-
-    // Handle Vouchers and get Refund Amount
-    const refundAmount = await this.handleVoucherUpdateUnified(
-      booking.id,
-      'ROOM',
-      membershipNo.toString(),
-      newTotal,
-      newPaid,
-      newPaymentStatus,
-      currTotal,
-      currPaid,
-      currStatus,
-      {
-        roomNumbers,
-        checkIn: newCheckIn,
-        checkOut: newCheckOut,
-        remarks: remarks,
-      },
-      (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
-      'member',
-    );
-
-    const paidDiff = newPaid - currPaid;
-    const owedDiff = newOwed - (currTotal - currPaid);
-
-    // ── UPDATE BOOKING ──────────────────────────────────────
-    const updated = await this.prismaService.roomBooking.update({
-      where: { id: Number(id) },
-      data: {
-        Membership_No: membershipNo ?? booking.Membership_No,
-        rooms: {
-          deleteMany: {},
-          create: rooms.map((r) => ({
-            roomId: r.id,
-            priceAtBooking:
-              pricingType === 'member'
-                ? r.roomType.priceMember
-                : r.roomType.priceGuest,
-          })),
-        },
-        checkIn: newCheckIn,
-        checkOut: newCheckOut,
-        totalPrice: newTotal,
-        paymentStatus: newPaymentStatus,
-        pricingType,
-        paidAmount: newPaid,
-        pendingAmount: newOwed,
-        numberOfAdults,
-        numberOfChildren,
-        specialRequests,
-        remarks: remarks!,
-        paidBy,
-        guestName,
-        guestContact: guestContact?.toString(),
-        refundAmount,
-        refundReturned: false,
-        updatedBy,
-      },
-    });
-
-    // ── CLEAR TEMPORARY HOLDS ────────────────────────────────
-    await this.prismaService.roomHoldings.deleteMany({
-      where: {
-        roomId: { in: roomIdsToBook },
-        holdBy: membershipNo.toString(),
-      },
-    });
-
-    // ── UPDATE MEMBER LEDGER ─────────────────────────────────
-    if (paidDiff !== 0 || owedDiff !== 0 || amountToBalance !== 0) {
-      await this.prismaService.member.update({
-        where: { Membership_No: membershipNo.toString() },
-        data: {
-          bookingAmountPaid: { increment: Math.round(Number(paidDiff)) },
-          bookingAmountDue: { increment: Math.round(Number(owedDiff)) },
-          bookingBalance: {
-            increment: Math.round(Number(paidDiff) - Number(owedDiff)),
-          },
-          lastBookingDate: new Date(),
-          Balance: { increment: Math.round(amountToBalance) },
-          drAmount: { increment: Math.round(amountToBalance) },
-        },
-      });
-    }
-
-    return {
-      success: true,
-      message: 'Booking updated',
-      booking: updated,
-      refundAmount,
-    };
-  }
-
   async cCancellationRequestRoom(bookingId: number, reason: string, requestedBy?: string) {
     // find booking with rooms before requesting
     const booking = await this.prismaService.roomBooking.findUnique({
@@ -2770,6 +2186,108 @@ export class BookingService {
     return await this.prismaService.hallBooking.findMany(args);
   }
 
+  private async validateBookingConflicts(
+    prisma: Prisma.TransactionClient,
+    category: 'Hall' | 'Lawn',
+    entityId: number,
+    normalizedDetails: { date: Date; timeSlot: string }[],
+    isForced: boolean,
+    excludeBookingId?: number,
+  ) {
+    for (const detail of normalizedDetails) {
+      const currentCheckDate = detail.date;
+      const dayStart = new Date(currentCheckDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentCheckDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      const currentSlot = detail.timeSlot.toUpperCase();
+
+      // 1. HARD BLOCK: Any Booking in Same Category on Same Date
+      let sameCategoryBookings: any[];
+      if (category === 'Hall') {
+        sameCategoryBookings = await prisma.hallBooking.findMany({
+          where: {
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
+            isCancelled: false,
+            ...(excludeBookingId ? { NOT: { id: excludeBookingId } } : {}),
+          },
+        });
+      } else {
+        sameCategoryBookings = await prisma.lawnBooking.findMany({
+          where: {
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
+            isCancelled: false,
+            ...(excludeBookingId ? { NOT: { id: excludeBookingId } } : {}),
+          },
+        });
+      }
+
+      for (const b of sameCategoryBookings) {
+        const bDetails = (b.bookingDetails as any[]) || [];
+        const hasDateConflict =
+          bDetails.length > 0
+            ? bDetails.some((d: any) => {
+              const dDate = new Date(d.date);
+              return dDate.setHours(0, 0, 0, 0) === currentCheckDate.getTime();
+            })
+            : b.bookingDate.getTime() === currentCheckDate.getTime();
+
+        if (hasDateConflict) {
+          throw new ConflictException({
+            type: 'HARD',
+            message: `A ${category} is already booked on ${formatPakistanDate(currentCheckDate)}. Only one booking is allowed per category per day.`,
+          });
+        }
+      }
+
+      // If forced, we skip soft warnings
+      if (isForced) continue;
+
+      // 2. SOFT WARNING: Other Category + Same Date
+      const otherCategory = category === 'Hall' ? 'Lawn' : 'Hall';
+      let crossConflictBooking: any;
+
+      if (otherCategory === 'Hall') {
+        crossConflictBooking = await prisma.hallBooking.findFirst({
+          where: {
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
+            isCancelled: false,
+          },
+        });
+      } else {
+        crossConflictBooking = await prisma.lawnBooking.findFirst({
+          where: {
+            bookingDate: { lte: dayEnd },
+            endDate: { gte: dayStart },
+            isCancelled: false,
+          },
+        });
+      }
+
+      if (crossConflictBooking) {
+        const bDetails = (crossConflictBooking.bookingDetails as any[]) || [];
+        const hasCrossDateConflict =
+          bDetails.length > 0
+            ? bDetails.some((d: any) => {
+              const dDate = new Date(d.date);
+              return dDate.setHours(0, 0, 0, 0) === currentCheckDate.getTime();
+            })
+            : crossConflictBooking.bookingDate.getTime() === currentCheckDate.getTime();
+
+        if (hasCrossDateConflict) {
+          throw new ConflictException({
+            type: 'SOFT_CROSS_VENUE',
+            message: `There is already a booking in the ${otherCategory} on ${formatPakistanDate(currentCheckDate)}. Do you want to proceed?`,
+          });
+        }
+      }
+    }
+  }
+
+
   async cBookingHall(payload: BookingDto, createdBy: string) {
     const {
       membershipNo,
@@ -2876,78 +2394,26 @@ export class BookingService {
       const normalizedEventTime = eventTime.toUpperCase() as
         | 'NIGHT'
         | 'DAY';
-      if (![ 'NIGHT', 'DAY'].includes(normalizedEventTime))
+      if (!['NIGHT', 'DAY'].includes(normalizedEventTime))
         throw new BadRequestException('Invalid event time');
 
-      // ── CONFLICT CHECKS ────────────────────────────────────
-      // ── CONFLICT CHECKS (Granular) ─────────────────────────
+      // ── CONFLICT CHECKS (Centralized) ──────────────────────
+      await this.validateBookingConflicts(
+        prisma,
+        'Hall',
+        hall.id,
+        normalizedDetails,
+        payload.isForced || false,
+      );
+
+      // Remaining Granular Checks (Reservations & Holdings)
       for (const detail of normalizedDetails) {
         const currentCheckDate = detail.date;
-        const currentSlot = detail.timeSlot; // e.g. "MORNING"
-
-        // 1. Check Out of Order for this specific date
-        const outOfOrderConflict = hall.outOfOrders?.find((period) => {
-          const pStart = new Date(period.startDate).setHours(0, 0, 0, 0);
-          const pEnd = new Date(period.endDate).setHours(0, 0, 0, 0);
-          return (
-            currentCheckDate.getTime() >= pStart &&
-            currentCheckDate.getTime() <= pEnd
-          );
-        });
-
-        if (outOfOrderConflict) {
-          throw new ConflictException(
-            `Hall '${hall.name}' out of order on ${currentCheckDate.toDateString()}`,
-          );
-        }
-
-        // 2. Check Existing Bookings (Robust Loop)
+        const currentSlot = detail.timeSlot;
         const dayStart = new Date(currentCheckDate);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(currentCheckDate);
         dayEnd.setHours(23, 59, 59, 999);
-
-        const existingBookings = await prisma.hallBooking.findMany({
-          where: {
-            hallId: hall.id,
-            bookingDate: { lte: dayEnd },
-            endDate: { gte: dayStart },
-            isCancelled: false,
-          },
-        });
-
-        for (const existingBooking of existingBookings) {
-          const details = existingBooking.bookingDetails as any[];
-          let hasConflict = false;
-
-          if (details && Array.isArray(details) && details.length > 0) {
-            // Check if existing booking has THIS slot on THIS date
-            const conflictDetail = details.find((d: any) => {
-              const dDate = new Date(d.date);
-              // Compare using local date string (YYYY-MM-DD)
-              return (
-                dDate.toLocaleDateString('en-PK') ===
-                currentCheckDate.toLocaleDateString('en-PK') &&
-                d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
-              );
-            });
-            if (conflictDetail) hasConflict = true;
-          } else {
-            // Legacy/Fallback: blocks its `bookingTime`
-            if (
-              existingBooking.bookingTime?.toUpperCase() ===
-              currentSlot?.toUpperCase()
-            ) {
-              hasConflict = true;
-            }
-          }
-
-          if (hasConflict) {
-            throw new ConflictException(
-              `Hall already booked for ${currentSlot} on ${currentCheckDate.toDateString()}`,
-            );
-          }
-        }
 
         // 3. Check Reservations (Inclusive of the day)
 
@@ -3061,6 +2527,7 @@ export class BookingService {
           paidBy,
           guestName,
           guestContact: guestContact?.toString(),
+          guestCNIC,
           remarks: remarks!,
           extraCharges: heads,
           createdBy,
@@ -3320,54 +2787,22 @@ export class BookingService {
         JSON.stringify(normalizedDetails);
 
       if (detailsChanged) {
-        // Granular check for each date/slot
+        // ── CONFLICT CHECKS (Centralized) ──────────────────────
+        await this.validateBookingConflicts(
+          prisma,
+          'Hall',
+          hall.id,
+          normalizedDetails,
+          payload.isForced || false,
+          Number(id),
+        );
         for (const detail of normalizedDetails) {
           const currentCheckDate = detail.date;
           const currentSlot = detail.timeSlot;
-
-          // existingBooking conflict check
           const dayStart = new Date(currentCheckDate);
           dayStart.setHours(0, 0, 0, 0);
           const dayEnd = new Date(currentCheckDate);
           dayEnd.setHours(23, 59, 59, 999);
-
-          const conflictingBookings = await prisma.hallBooking.findMany({
-            where: {
-              hallId: Number(entityId),
-              id: { not: Number(id) },
-              bookingDate: { lte: dayEnd },
-              endDate: { gte: dayStart },
-              isCancelled: false,
-            },
-          });
-
-          for (const conflictingBooking of conflictingBookings) {
-            const cDetails = conflictingBooking.bookingDetails as any[];
-            let hasConflict = false;
-            if (cDetails && Array.isArray(cDetails) && cDetails.length > 0) {
-              const conflict = cDetails.find((d: any) => {
-                const dDate = new Date(d.date);
-                return (
-                  dDate.toLocaleDateString('en-CA') ===
-                  currentCheckDate.toLocaleDateString('en-CA') &&
-                  d.timeSlot?.toUpperCase() === currentSlot?.toUpperCase()
-                );
-              });
-              if (conflict) hasConflict = true;
-            } else {
-              if (
-                conflictingBooking.bookingTime?.toUpperCase() ===
-                currentSlot?.toUpperCase()
-              )
-                hasConflict = true;
-            }
-
-            if (hasConflict) {
-              throw new ConflictException(
-                `Hall already booked for ${currentSlot} on ${currentCheckDate.toDateString()}`,
-              );
-            }
-          }
 
           // Reservation conflict check (Inclusive of the day)
 
@@ -3571,6 +3006,7 @@ export class BookingService {
           paidBy,
           guestName,
           guestContact: guestContact?.toString(),
+          guestCNIC,
           refundAmount,
           refundReturned: false,
           extraCharges: heads,
@@ -3825,10 +3261,23 @@ export class BookingService {
         );
       }
 
-      // ── CONFLICT CHECKS (Granular) ─────────────────────────
+      // ── CONFLICT CHECKS (Centralized) ──────────────────────
+      await this.validateBookingConflicts(
+        prisma,
+        'Lawn',
+        lawn.id,
+        normalizedDetails,
+        payload.isForced || false,
+      );
+
+      // Remaining Granular Checks (Reservations & Holdings)
       for (const detail of normalizedDetails) {
         const currentCheckDate = detail.date;
         const currentSlot = detail.timeSlot;
+        const dayStart = new Date(currentCheckDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(currentCheckDate);
+        dayEnd.setHours(23, 59, 59, 999);
 
         // 1. Out of Order
         const outOfOrderConflict = lawn.outOfOrders?.find((period) => {
@@ -3843,49 +3292,6 @@ export class BookingService {
           throw new ConflictException(
             `Lawn out of order on ${currentCheckDate.toDateString()}`,
           );
-        }
-
-        // 2. Existing Bookings
-        const dayStart = new Date(currentCheckDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentCheckDate);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const conflictingBookings = await prisma.lawnBooking.findMany({
-          where: {
-            lawnId: lawn.id,
-            bookingDate: { lte: dayEnd },
-            endDate: { gte: dayStart },
-            isCancelled: false,
-          },
-        });
-
-        for (const conflictingBooking of conflictingBookings) {
-          const cDetails = conflictingBooking.bookingDetails as any[];
-          let hasConflict = false;
-          if (cDetails && Array.isArray(cDetails) && cDetails.length > 0) {
-            const conflict = cDetails.find((d: any) => {
-              const dDate = new Date(d.date);
-              return (
-                dDate.toLocaleDateString('en-CA') ===
-                currentCheckDate.toLocaleDateString('en-CA') &&
-                d.timeSlot?.toUpperCase() === currentSlot.toUpperCase()
-              );
-            });
-            if (conflict) hasConflict = true;
-          } else {
-            if (
-              conflictingBooking.bookingTime?.toUpperCase() ===
-              currentSlot.toUpperCase()
-            ) {
-              hasConflict = true;
-            }
-          }
-          if (hasConflict) {
-            throw new ConflictException(
-              `Lawn already booked for ${currentSlot} on ${currentCheckDate.toDateString()}`,
-            );
-          }
         }
 
         // 3. Reservations
@@ -4242,7 +3648,17 @@ export class BookingService {
     }
 
     return await this.prismaService.$transaction(async (prisma) => {
-      // ── CONFLICT CHECKS ──
+      // ── CONFLICT CHECKS (Centralized) ──────────────────────
+      await this.validateBookingConflicts(
+        prisma,
+        'Lawn',
+        lawn.id,
+        normalizedDetails,
+        payload.isForced || false,
+        Number(id),
+      );
+
+      // Remaining Granular Checks (Reservations & Holdings)
       for (const detail of normalizedDetails) {
         const currentCheckDate = detail.date;
         const currentSlot = detail.timeSlot.toUpperCase();
@@ -4257,36 +3673,6 @@ export class BookingService {
         });
         if (outOfOrderConflict)
           throw new ConflictException('Lawn out of service');
-
-        const existingBookings = await prisma.lawnBooking.findMany({
-          where: {
-            lawnId: lawn.id,
-            id: { not: Number(id) },
-            bookingDate: { lte: currentCheckDate },
-            endDate: { gte: currentCheckDate },
-            isCancelled: false,
-          },
-        });
-
-        for (const existingBooking of existingBookings) {
-          const details = existingBooking.bookingDetails as any[];
-          let hasConflict = false;
-          if (details && Array.isArray(details) && details.length > 0) {
-            const conflictDetail = details.find((d: any) => {
-              const dDate = new Date(d.date);
-              return (
-                dDate.toLocaleDateString('en-CA') ===
-                currentCheckDate.toLocaleDateString('en-CA') &&
-                d.timeSlot?.toUpperCase() === currentSlot
-              );
-            });
-            if (conflictDetail) hasConflict = true;
-          } else {
-            if (existingBooking.bookingTime?.toUpperCase() === currentSlot)
-              hasConflict = true;
-          }
-          if (hasConflict) throw new ConflictException('Lawn already booked');
-        }
 
         const dayStart = new Date(currentCheckDate);
         dayStart.setHours(0, 0, 0, 0);
@@ -4506,7 +3892,7 @@ export class BookingService {
     });
   }
 
-  
+
 
   // helper methods
   private isCurrentlyOutOfOrder(outOfOrders: any[]): boolean {
@@ -4666,7 +4052,7 @@ export class BookingService {
     }
 
     // 5. Create Booking
-    const booking = await this.prismaService.photoshootBooking.create({
+    const booked = await this.prismaService.photoshootBooking.create({
       data: {
         memberId: member.Sno,
         photoshootId: photoshoot.id,
@@ -4720,7 +4106,7 @@ export class BookingService {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
           booking_type: 'PHOTOSHOOT',
-          booking_id: booking.id,
+          booking_id: booked.id,
           membership_no: membershipNo,
           amount: paid,
           payment_mode: paymentMode as unknown as PaymentMode,
@@ -4737,7 +4123,7 @@ export class BookingService {
       });
     }
 
-    return booking;
+    return booked;
   }
 
   async uBookingPhotoshoot(payload: Partial<BookingDto>, updatedBy: string) {
