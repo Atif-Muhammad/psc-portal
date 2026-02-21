@@ -61,9 +61,9 @@ const initialFormState: PhotoshootForm = {
 };
 
 const getTimeSlotIcon = (slot: string) => {
-  if (slot === "MORNING") return <Sun className="h-3 w-3 text-amber-500" />;
-  if (slot === "EVENING") return <Sunset className="h-3 w-3 text-orange-500" />;
-  return <Moon className="h-3 w-3 text-indigo-500" />;
+  if (slot === "MORNING") return <Sun className="h-3 w-3 text-primary" />;
+  if (slot === "EVENING") return <Sunset className="h-3 w-3 text-primary" />;
+  return <Moon className="h-3 w-3 text-primary" />;
 };
 
 const formatDate = (dateString: string) => {
@@ -97,16 +97,16 @@ const MaintenanceIndicator = ({
       {sliced.map((p, idx) => {
         const isCurrent = new Date(p.startDate).getTime() <= today && new Date(p.endDate).getTime() >= today;
         return (
-          <div key={idx} className="flex flex-col gap-0.5 bg-orange-50 p-1.5 rounded border border-orange-100 text-left">
+          <div key={idx} className="flex flex-col gap-0.5 bg-primary/5 p-1.5 rounded border border-primary/10 text-left">
             <div className="flex items-center gap-1">
               <Badge
                 variant={isCurrent ? "destructive" : "secondary"}
-                className={`text-[9px] py-0 px-1 h-3.5 ${!isCurrent ? "bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200" : ""}`}
+                className={`text-[9px] py-0 px-1 h-3.5 ${!isCurrent ? "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20" : ""}`}
               >
                 {isCurrent ? "Maintenance" : "Scheduled"}
               </Badge>
             </div>
-            <span className={`text-[10px] font-medium leading-tight ${isCurrent ? "text-red-700" : "text-orange-700"}`}>
+            <span className={`text-[10px] font-medium leading-tight ${isCurrent ? "text-destructive" : "text-primary"}`}>
               {p.reason}
             </span>
             <span className="text-[9px] text-muted-foreground italic">
@@ -142,10 +142,10 @@ const OutOfOrderPeriods = ({
   editingIndex: number | null;
 }) => {
   return (
-    <div className="space-y-4 p-4 rounded-lg border bg-slate-50/50">
+    <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
       <div className="flex items-center justify-between">
         <Label className="text-base font-semibold flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-orange-600" />
+          <CalendarIcon className="h-4 w-4 text-primary" />
           Maintenance Periods
         </Label>
         <Badge variant="outline">{periods.length} Saved</Badge>
@@ -156,11 +156,11 @@ const OutOfOrderPeriods = ({
           {periods.map((period, index) => (
             <div key={index} className="flex justify-between items-center bg-white p-2 border rounded text-xs">
               <div>
-                <span className="font-bold text-orange-800">{formatDate(period.startDate)} - {formatDate(period.endDate)}</span>
+                <span className="font-bold text-foreground">{formatDate(period.startDate)} - {formatDate(period.endDate)}</span>
                 <p className="text-muted-foreground italic">{period.reason}</p>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => onEditPeriod(index)}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-primary" onClick={() => onEditPeriod(index)}>
                   <Edit className="h-3 w-3" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onRemovePeriod(index)}>
@@ -172,22 +172,72 @@ const OutOfOrderPeriods = ({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 p-3 border-2 border-dashed rounded-md bg-orange-50/30">
-        <div className="col-span-2">
-          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Reason</Label>
-          <Input value={newPeriod.reason} onChange={(e) => onNewPeriodChange({ ...newPeriod, reason: e.target.value })} placeholder="Maintenance Reason" />
+      <div className="space-y-4 p-3 border-2 border-dashed rounded-md bg-primary/5">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label className="text-[10px] uppercase font-bold text-muted-foreground">Reason</Label>
+            <Input value={newPeriod.reason} onChange={(e) => onNewPeriodChange({ ...newPeriod, reason: e.target.value })} placeholder="Maintenance Reason" />
+          </div>
+          <div className="col-span-2 space-y-2">
+            <Label className="text-[10px] uppercase font-bold text-muted-foreground">Maintenance Period *</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal h-10 bg-white",
+                    !newPeriod.startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {newPeriod.startDate ? (
+                    newPeriod.endDate && newPeriod.endDate !== newPeriod.startDate ? (
+                      <>
+                        {format(new Date(newPeriod.startDate), "LLL dd, y")} -{" "}
+                        {format(new Date(newPeriod.endDate), "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(new Date(newPeriod.startDate), "LLL dd, y")
+                    )
+                  ) : (
+                    <span>Pick a date range</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={newPeriod.startDate ? new Date(newPeriod.startDate) : new Date()}
+                  selected={{
+                    from: newPeriod.startDate ? new Date(newPeriod.startDate) : undefined,
+                    to: newPeriod.endDate ? new Date(newPeriod.endDate) : undefined,
+                  }}
+                  onSelect={(range: DateRange | undefined) => {
+                    if (range?.from) {
+                      onNewPeriodChange({
+                        ...newPeriod,
+                        startDate: format(range.from, "yyyy-MM-dd"),
+                        endDate: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                      });
+                    } else {
+                      onNewPeriodChange({ ...newPeriod, startDate: "", endDate: "" });
+                    }
+                  }}
+                  numberOfMonths={1}
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return date < today;
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <Button className="col-span-2 h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onAddPeriod}>
+            {editingIndex !== null ? "Update Period" : "Add Maintenance Period"}
+          </Button>
         </div>
-        <div>
-          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Start</Label>
-          <Input type="date" value={newPeriod.startDate} onChange={(e) => onNewPeriodChange({ ...newPeriod, startDate: e.target.value })} />
-        </div>
-        <div>
-          <Label className="text-[10px] uppercase font-bold text-muted-foreground">End</Label>
-          <Input type="date" value={newPeriod.endDate} onChange={(e) => onNewPeriodChange({ ...newPeriod, endDate: e.target.value })} />
-        </div>
-        <Button className="col-span-2 h-8 text-xs bg-orange-600 hover:bg-orange-700" onClick={onAddPeriod}>
-          {editingIndex !== null ? "Update Period" : "Add Maintenance Period"}
-        </Button>
       </div>
     </div>
   );
@@ -653,7 +703,7 @@ export default function Photoshoot() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
                         onClick={() => setDetailPhotoshoot(item)}
                         title="View Details"
                       >

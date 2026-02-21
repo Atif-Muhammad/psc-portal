@@ -692,7 +692,7 @@ export class PaymentService {
     if (unpaidVouchers.length > 0) {
       // Fetch room bookings for these vouchers to identify their room types
       const bookingsWithRooms = await this.prismaService.roomBooking.findMany({
-        where: { id: { in: unpaidVouchers.map((v) => v.booking_id) } },
+        where: { id: { in: unpaidVouchers.map((v) => v.booking_id) }, isCancelled: false },
         select: {
           rooms: {
             select: {
