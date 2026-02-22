@@ -413,10 +413,10 @@ export class HallService {
       }
 
       // Validate time slot
-      const validTimeSlots = ['MORNING', 'EVENING', 'NIGHT'];
-      if (!validTimeSlots.includes(timeSlot)) {
+      const validTimeSlots = ['DAY', 'NIGHT'];
+      if (!validTimeSlots.includes(timeSlot.toUpperCase())) {
         throw new HttpException(
-          'Invalid time slot. Must be MORNING, EVENING, or NIGHT',
+          'Invalid time slot. Must be DAY or NIGHT',
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -428,11 +428,8 @@ export class HallService {
       // Set time based on time slot
       const setTimeForDate = (date: Date, slot: string) => {
         const newDate = new Date(date);
-        switch (slot) {
-          case 'MORNING':
-            newDate.setHours(8, 0, 0, 0); // 8:00 AM
-            break;
-          case 'EVENING':
+        switch (slot.toUpperCase()) {
+          case 'DAY':
             newDate.setHours(14, 0, 0, 0); // 2:00 PM
             break;
           case 'NIGHT':
@@ -764,11 +761,8 @@ export class HallService {
         // Set time based on time slot for precise matching
         const setTimeForDate = (date: Date, slot: string) => {
           const newDate = new Date(date);
-          switch (slot) {
-            case 'MORNING':
-              newDate.setHours(8, 0, 0, 0);
-              break;
-            case 'EVENING':
+          switch (slot.toUpperCase()) {
+            case 'DAY':
               newDate.setHours(14, 0, 0, 0);
               break;
             case 'NIGHT':

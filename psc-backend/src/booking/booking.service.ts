@@ -4009,9 +4009,9 @@ export class BookingService {
     // Validate time slot is between 9am and 6pm
     const bookingHour = startTime.getHours();
     // 9:00 (9) to 18:00 (18) — since 18:00 means ending at 20:00, usually "last slot" is 6pm start
-    if (bookingHour < 9 || bookingHour > 18) {
+    if (bookingHour < 8 || bookingHour > 21) {
       throw new BadRequestException(
-        'Photoshoot bookings are only available between 9:00 AM and 6:00 PM',
+        'Photoshoot bookings are only available between 8:00 AM and 9:00 PM',
       );
     }
 
@@ -4311,6 +4311,13 @@ export class BookingService {
         }
       }
     }
+    const bookingHour = newMainStartTime.getHours();
+    // 9:00 (9) to 18:00 (18) — since 18:00 means ending at 20:00, usually "last slot" is 6pm start
+    if (bookingHour < 8 || bookingHour > 21) {
+      throw new BadRequestException(
+        'Photoshoot bookings are only available between 8:00 AM and 9:00 PM',
+      );
+    }
 
     // ── PRICE CALCULATION ──────────────────────────────────
     const photoshoot = await this.prismaService.photoshoot.findUnique({
@@ -4473,6 +4480,34 @@ export class BookingService {
         }
       },
       orderBy: { bookingDate: 'asc' }, // The original was asc? usually desc for recent.. keeping as original
+      include: {
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+          },
+        },
+        photoshoot: true,
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.photoshootBooking.findMany(args);
+    return bookings.map(b => this.attachActiveCancellationRequest(b));
+  }
+
+  async gCancelledBookingsPhotoshoot(page?: number, limit?: number) {
+    const args: any = {
+      where: {
+        isCancelled: true,
+      },
+      orderBy: { updatedAt: 'desc' },
       include: {
         member: {
           select: {
@@ -5268,6 +5303,7 @@ export class BookingService {
         'Only pending vouchers can be cancelled/deleted',
       );
     }
+    console.log(voucher)
     const { booking_type, booking_id, membership_no } = voucher;
 
     return await this.prismaService.$transaction(async (prisma) => {

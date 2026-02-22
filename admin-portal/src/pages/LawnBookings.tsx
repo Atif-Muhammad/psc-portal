@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tansta
 import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses, updateCancellationReq, getCancelledBookings, getCancellationRequests } from "../../config/apis";
 import { FormInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
-import { format, addYears, startOfDay } from "date-fns";
+import { format, addYears, startOfDay, addDays, differenceInCalendarDays } from "date-fns";
 import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { Voucher } from "@/types/room-booking.type";
@@ -352,9 +352,18 @@ LawnPaymentSection.displayName = "LawnPaymentSection";
 // Helper function to parse date string to local Date
 const parseLocalDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
-  const pureDate = dateStr.split('T')[0];
-  const [year, month, day] = pureDate.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const str = String(dateStr);
+  if (str.includes('T')) {
+    return new Date(str);
+  }
+  const pureDate = str.split(' ')[0];
+  const parts = pureDate.split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts.map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? new Date() : fallback;
 };
 
 // Get available time slots for a lawn on a specific date
@@ -1141,46 +1150,46 @@ export default function LawnBookings() {
         .find((l: Lawn) => l.id.toString() === editBooking.lawn?.id);
 
       // Initialize bookingDetails if missing (for legacy bookings)
-      let details = (editBooking.bookingDetails as any[]) || [];
-      if (details.length === 0) {
-        const days = editBooking.numberOfDays || 1;
-        const start = new Date(editBooking.bookingDate);
-
+      const details = (() => {
+        const dts = (editBooking.bookingDetails as any[]) || [];
+        if (dts.length > 0) {
+          return dts.map(d => ({
+            date: format(parseLocalDate(d.date), "yyyy-MM-dd"),
+            timeSlot: d.timeSlot,
+            eventType: d.eventType || editBooking.eventType || "wedding"
+          }));
+        }
+        const start = parseLocalDate(editBooking.bookingDate);
+        const end = editBooking.endDate ? parseLocalDate(editBooking.endDate) : start;
+        const days = Math.abs(differenceInCalendarDays(end, start)) + 1;
+        const generated = [];
         for (let i = 0; i < days; i++) {
-          const d = new Date(start);
-          d.setDate(d.getDate() + i);
-          details.push({
-            date: format(d, "yyyy-MM-dd"),
-            timeSlot: editBooking.bookingTime || "NIGHT",
+          generated.push({
+            date: format(addDays(start, i), "yyyy-MM-dd"),
+            timeSlot: (editBooking as any).bookingTime || "DAY",
             eventType: editBooking.eventType || "wedding"
           });
         }
-      } else {
-        // Normalize dates to yyyy-MM-dd
-        details = details.map(d => ({
-          ...d,
-          date: typeof d.date === 'string' && d.date.includes('T') ? format(new Date(d.date), "yyyy-MM-dd") : d.date
-        }));
-      }
+        return generated;
+      })();
 
       // Calculate endDate if missing (for legacy bookings)
       let endDate = editBooking.endDate;
       if (!endDate && editBooking.numberOfDays && editBooking.numberOfDays > 1) {
-        const start = new Date(editBooking.bookingDate);
-        const end = new Date(start);
-        end.setDate(end.getDate() + (editBooking.numberOfDays - 1));
+        const start = parseLocalDate(editBooking.bookingDate);
+        const end = addDays(start, editBooking.numberOfDays - 1);
         endDate = format(end, "yyyy-MM-dd");
       } else if (endDate) {
-        endDate = format(new Date(endDate), "yyyy-MM-dd");
+        endDate = format(parseLocalDate(endDate), "yyyy-MM-dd");
       } else {
-        endDate = format(new Date(editBooking.bookingDate), "yyyy-MM-dd");
+        endDate = format(parseLocalDate(editBooking.bookingDate), "yyyy-MM-dd");
       }
 
       setEditForm({
         membershipNo: editBooking.member?.Membership_No || editBooking.membershipNo || "",
         lawncategoryId: lawn?.lawnCategoryId || editBooking.lawn?.lawnCategory?.id || "",
         lawnId: editBooking.lawn?.id || "",
-        bookingDate: format(new Date(editBooking.bookingDate), "yyyy-MM-dd"),
+        bookingDate: format(parseLocalDate(editBooking.bookingDate), "yyyy-MM-dd"),
         endDate: endDate,
         pricingType: editBooking.pricingType || "member",
         eventType: editBooking.eventType || "wedding",
@@ -1945,11 +1954,9 @@ export default function LawnBookings() {
                                 }} title="Edit Booking">
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                {(booking.paymentStatus != "UNPAID") && (
                                   <Button variant="ghost" size="icon" onClick={() => handleViewVouchers(booking)} title="View Vouchers">
                                     <Receipt className="h-4 w-4" />
                                   </Button>
-                                )}
                                 <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setCancelBooking(booking)} title="Cancel Booking">
                                   <XCircle className="h-4 w-4" />
                                 </Button>

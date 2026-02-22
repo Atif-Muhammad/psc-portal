@@ -44,8 +44,17 @@ export class PhotoshootService {
       },
     });
 
-    if (payload.outOfOrders && payload.outOfOrders.length > 0) {
-      const outOfOrderData = payload.outOfOrders.map((oo) => ({
+    let outOfOrders = payload.outOfOrders;
+    if (typeof outOfOrders === 'string') {
+      try {
+        outOfOrders = JSON.parse(outOfOrders);
+      } catch (e) {
+        outOfOrders = [];
+      }
+    }
+
+    if (Array.isArray(outOfOrders) && outOfOrders.length > 0) {
+      const outOfOrderData = outOfOrders.map((oo) => ({
         photoshootId: photoshoot.id,
         reason: oo.reason,
         startDate: new Date(oo.startDate),
@@ -155,13 +164,22 @@ export class PhotoshootService {
       },
     });
 
-    if (payload.outOfOrders) {
+    let outOfOrders = payload.outOfOrders;
+    if (typeof outOfOrders === 'string') {
+      try {
+        outOfOrders = JSON.parse(outOfOrders);
+      } catch (e) {
+        outOfOrders = undefined;
+      }
+    }
+
+    if (outOfOrders) {
       await this.prismaService.photoshootOutOfOrder.deleteMany({
         where: { photoshootId: Number(payload.id) },
       });
 
-      if (payload.outOfOrders.length > 0) {
-        const outOfOrderData = payload.outOfOrders.map((oo) => ({
+      if (Array.isArray(outOfOrders) && outOfOrders.length > 0) {
+        const outOfOrderData = outOfOrders.map((oo) => ({
           photoshootId: Number(payload.id),
           reason: oo.reason,
           startDate: new Date(oo.startDate),

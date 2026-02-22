@@ -1404,13 +1404,8 @@ export default function HallBookings() {
               // If date comes as ISO string from backend (e.g., 2025-12-27T19:00:00.000Z),
               // we need to parse it as a Date and format it in local time
               // because 7PM UTC = midnight next day in Pakistan (UTC+5)
-              if (typeof dateStr === 'string' && dateStr.includes('T')) {
-                const dateObj = new Date(dateStr);
-                // Format in local time (yyyy-MM-dd)
-                dateStr = format(dateObj, "yyyy-MM-dd");
-              }
               return {
-                date: dateStr,
+                date: format(parseLocalDate(dateStr), "yyyy-MM-dd"),
                 timeSlot: d.timeSlot,
                 eventType: d.eventType || editBooking.eventType
               };
@@ -2064,16 +2059,16 @@ export default function HallBookings() {
                                     <Edit className="h-4 w-4" />
                                   </Button>
                                 )}
-                                {booking.paymentStatus !== "UNPAID" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleViewVouchers(booking)}
-                                    title="View Vouchers"
-                                  >
-                                    <Receipt className="h-4 w-4" />
-                                  </Button>
-                                )}
+
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleViewVouchers(booking)}
+                                  title="View Vouchers"
+                                >
+                                  <Receipt className="h-4 w-4" />
+                                </Button>
+
                                 {activeTab === "active" && (
                                   <Button
                                     variant="ghost"

@@ -13,11 +13,18 @@ import { DateStatus } from "@/types/room-booking.type";
 export const parseLocalDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
 
-  // If it's already a full ISO string or contains time info, take just the date part for consistent local parsing
-  // or if it's already a Date object (though TS says string), handle it.
   const str = String(dateStr);
-  const datePart = str.includes('T') ? str.split('T')[0] : str;
 
+  // If it's a full ISO string (contains T), parse it directly to allow JS to handle timezone shift
+  // In our app, backend sends 00:00 PKT which might be 19:00 UTC previous day if it's sent as UTC ISO.
+  // Actually, if it contains 'T', regular new Date(str) is safest if we want the actual moment,
+  // BUT the user's issue is that 'T' strings were being stripped and parsed as local YYYY-MM-DD.
+  if (str.includes('T')) {
+    return new Date(str);
+  }
+
+  // Handle YYYY-MM-DD or similar date-only strings by splitting and creating local date
+  const datePart = str.split(' ')[0]; // Handle cases like "2025-12-27 00:00:00"
   const parts = datePart.split('-');
   if (parts.length === 3) {
     const [y, m, d] = parts.map(Number);
@@ -25,7 +32,7 @@ export const parseLocalDate = (dateStr: string): Date => {
     if (!isNaN(date.getTime())) return date;
   }
 
-  // Fallback for other formats
+  // Fallback
   const fallback = new Date(dateStr);
   return isNaN(fallback.getTime()) ? new Date() : fallback;
 };

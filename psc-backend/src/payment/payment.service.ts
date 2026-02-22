@@ -316,6 +316,7 @@ export class PaymentService {
         const total = Number(booking.totalPrice);
         const newPaid = currentPaid + voucherAmount;
 
+
         let newStatus = booking.paymentStatus;
         if (newPaid >= total) {
           newStatus = PaymentStatus.PAID;
@@ -333,6 +334,8 @@ export class PaymentService {
           pendingAmount: newPending,
           isConfirmed: true,
         };
+
+
 
         let updatedBooking: any;
         if (bTypeLabel === 'ROOM') {
@@ -911,6 +914,7 @@ export class PaymentService {
     if (member?.Status !== 'active')
       throw new UnprocessableEntityException(`Cannot book for inactive member`);
 
+
     // ── 1. VALIDATE HALL EXISTS ─────────────────────────────
     const hallExists = await this.prismaService.hall.findFirst({
       where: { id: hallId },
@@ -969,13 +973,13 @@ export class PaymentService {
 
     // ── 4. VALIDATE EVENT TIME SLOT ─────────────────────────
     const normalizedEventTime = (
-      bookingData.eventTime || 'EVENING'
-    ).toUpperCase() as 'MORNING' | 'EVENING' | 'NIGHT';
-    const validEventTimes = ['MORNING', 'EVENING', 'NIGHT'];
+      bookingData.eventTime || 'NIGHT'
+    ).toUpperCase() as 'DAY' | 'NIGHT';
+    const validEventTimes = ['DAY', 'NIGHT'];
 
     if (!validEventTimes.includes(normalizedEventTime)) {
       throw new BadRequestException(
-        'Invalid event time. Must be MORNING, EVENING, or NIGHT',
+        'Invalid event time. Must be DAY or NIGHT',
       );
     }
 
@@ -1010,7 +1014,11 @@ export class PaymentService {
       }
     }
 
-    // ── 5. CHECK IF HALL IS ON HOLD ─────────────────────────
+    // ── 5. CHECK CROSS-BOOKING DATE OVERLAPS ──────────────────
+    const requestedDates = normalizedDetails.map(d => d.date);
+    await this.checkCrossBookingOverlaps(String(bookingData.membership_no), member.Sno, requestedDates);
+
+    // ── 6. CHECK IF HALL IS ON HOLD ─────────────────────────
     if (hallExists.holdings && hallExists.holdings.length > 0) {
       const activeHold = hallExists.holdings[0];
       // Check if the hold is by a different user
@@ -1128,6 +1136,11 @@ export class PaymentService {
       // Skip error if record exists or just proceed
     }
 
+    const voucherAmount = totalPrice > 50000 ? 50000 : totalPrice;
+    const isAdvance = totalPrice > 50000;
+    const voucherType = isAdvance
+      ? VoucherType.ADVANCE_PAYMENT
+      : VoucherType.FULL_PAYMENT;
     // create temporary(unconfirmed) booking
     const bookingCreated = await this.prismaService.hallBooking.create({
       data: {
@@ -1142,29 +1155,31 @@ export class PaymentService {
         numberOfGuests: bookingData.numberOfGuests || 0,
         pricingType: bookingData.pricingType,
         totalPrice: totalPrice,
-        paymentStatus: 'UNPAID',
+        paymentStatus: PaymentStatus.UNPAID,
         paidAmount: 0,
         pendingAmount: totalPrice,
         guestName: bookingData.guestName,
         guestContact: bookingData.guestContact?.toString(),
+        guestCNIC: bookingData.guestCNIC?.toString() || "",
         isConfirmed: false,
         paidBy: 'MEMBER',
       },
     });
 
-    // create voucher as unpaid/pending
+    // create voucher as advance/pending
+
     const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
       consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'HALL',
       booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
-      amount: totalPrice,
+      amount: voucherAmount,
       payment_mode: 'ONLINE',
-      voucher_type: 'FULL_PAYMENT',
+      voucher_type: voucherType,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Hall booking: ${hallExists.name} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
+      remarks: `${isAdvance ? 'Advance payment' : 'Full payment'} for ${hallExists.name} booking: on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
       expiresAt: holdExpiry,
     });
 
@@ -1196,6 +1211,7 @@ export class PaymentService {
     });
     if (member?.Status !== 'active')
       throw new UnprocessableEntityException(`Cannot book for inactive member`);
+
 
     // ── 1. VALIDATE LAWN EXISTS ─────────────────────────────
     const lawnExists = await this.prismaService.lawn.findFirst({
@@ -1268,7 +1284,26 @@ export class PaymentService {
       );
     }
 
-    // ── 5. CHECK IF LAWN IS ACTIVE ──────────────────────────
+    // ── 5. CHECK CROSS-BOOKING DATE OVERLAPS ──────────────────
+    const requestedDates: Date[] = [];
+    if (bookingData.bookingDetails && Array.isArray(bookingData.bookingDetails) && bookingData.bookingDetails.length > 0) {
+      for (const d of bookingData.bookingDetails) {
+        const dDate = parsePakistanDate(d.date);
+        dDate.setHours(0, 0, 0, 0);
+        requestedDates.push(dDate);
+      }
+    } else {
+      for (let i = 0; i < numberOfDays; i++) {
+        const dDate = new Date(booking);
+        dDate.setDate(booking.getDate() + i);
+        dDate.setHours(0, 0, 0, 0);
+        requestedDates.push(dDate);
+      }
+    }
+
+    await this.checkCrossBookingOverlaps(String(bookingData.membership_no), member.Sno, requestedDates);
+
+    // ── 6. CHECK IF LAWN IS ACTIVE ──────────────────────────
     if (!lawnExists.isActive) {
       throw new ConflictException(
         `Lawn '${lawnExists.description}' is not active for bookings`,
@@ -1378,7 +1413,7 @@ export class PaymentService {
         eventType: bookingData.eventType || '',
         totalPrice: totalPrice,
         pricingType: bookingData.pricingType,
-        paymentStatus: 'UNPAID',
+        paymentStatus: PaymentStatus.UNPAID,
         paidAmount: 0,
         pendingAmount: totalPrice,
         guestName: bookingData.guestName,
@@ -1391,18 +1426,24 @@ export class PaymentService {
     });
 
     // create voucher as unpaid/pending
+    const voucherAmount = totalPrice > 50000 ? 50000 : totalPrice;
+    const isAdvance = totalPrice > 50000;
+    const voucherType = isAdvance
+      ? VoucherType.ADVANCE_PAYMENT
+      : VoucherType.FULL_PAYMENT;
+
     const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
       consumer_number: generateConsumerNumber(Number(vno)),
       booking_type: 'LAWN',
       booking_id: bookingCreated.id,
       membership_no: String(bookingData.membership_no),
-      amount: totalPrice,
+      amount: voucherAmount,
       payment_mode: 'ONLINE',
-      voucher_type: 'FULL_PAYMENT',
+      voucher_type: voucherType,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
-      remarks: `Lawn booking: ${lawnExists.description} on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
+      remarks: `${isAdvance ? 'Advance payment' : 'Full payment'} for ${lawnExists.description} booking: on ${booking.toLocaleDateString()}${endDate && endDate > booking ? ` to ${endDate.toLocaleDateString()}` : ''}`,
       expiresAt: holdExpiry,
     });
 
@@ -1495,9 +1536,9 @@ export class PaymentService {
       // If same day, allow minor past time (admin-like behavior)
     }
 
-    // Validate time slot is between 9am and 6pm
+    // Validate time slot is between 8 am and 9pm
     const bookingHour = startTime.getHours();
-    if (bookingHour < 9 || bookingHour > 18) {
+    if (bookingHour < 8 || bookingHour > 21) {
       throw new BadRequestException(
         'Photoshoot bookings are only available between 9:00 AM and 6:00 PM',
       );
@@ -1540,7 +1581,7 @@ export class PaymentService {
         endTime: endTime,
         totalPrice: totalPrice,
         pricingType: bookingData.pricingType,
-        paymentStatus: 'UNPAID',
+        paymentStatus: PaymentStatus.UNPAID,
         paidAmount: 0,
         pendingAmount: totalPrice,
         guestName: bookingData.guestName,
@@ -1559,8 +1600,8 @@ export class PaymentService {
       booking_id: booking.id,
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
-      payment_mode: 'ONLINE',
-      voucher_type: 'FULL_PAYMENT',
+      payment_mode: PaymentMode.ONLINE,
+      voucher_type: VoucherType.FULL_PAYMENT,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: `Photoshoot booking: ${photoshootExists.description} on ${bookingDate.toLocaleDateString()}`,
@@ -1640,6 +1681,109 @@ export class PaymentService {
         });
       });
     }
+  }
+
+  private async checkCrossBookingOverlaps(membershipNo: string, memberId: number, requestedDates: Date[]) {
+    // 1. Find active pending online vouchers (Phase 1: Pending Voucher Check)
+    const activeVouchers = await this.prismaService.paymentVoucher.findMany({
+      where: {
+        membership_no: membershipNo,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.ONLINE,
+        expiresAt: { gt: new Date() },
+        booking_type: { in: [BookingType.HALL, BookingType.LAWN] }
+      },
+    });
+
+    for (const voucher of activeVouchers) {
+      let bookingDates: Date[] = [];
+      let venueName = 'Unknown Venue';
+
+      if (voucher.booking_type === BookingType.HALL) {
+        const booking = await this.prismaService.hallBooking.findUnique({
+          where: { id: voucher.booking_id },
+          include: { hall: true },
+        });
+        if (booking) {
+          bookingDates = this.getDatesFromBooking(booking);
+          venueName = booking.hall?.name || 'Hall';
+        }
+      } else if (voucher.booking_type === BookingType.LAWN) {
+        const booking = await this.prismaService.lawnBooking.findUnique({
+          where: { id: voucher.booking_id },
+          include: { lawn: true },
+        });
+        if (booking) {
+          bookingDates = this.getDatesFromBooking(booking);
+          venueName = booking.lawn?.description || 'Lawn';
+        }
+      }
+      this.validateDateOverlaps(requestedDates, bookingDates, venueName, true);
+    }
+
+    // 2. Phase 2: Confirmed Booking Check
+    const confirmedHalls = await this.prismaService.hallBooking.findMany({
+      where: {
+        memberId: memberId,
+        isConfirmed: true,
+        isCancelled: false,
+      },
+      include: { hall: true }
+    });
+    for (const booking of confirmedHalls) {
+      const bDates = this.getDatesFromBooking(booking);
+      this.validateDateOverlaps(requestedDates, bDates, booking.hall?.name || 'Hall', false);
+    }
+
+    const confirmedLawns = await this.prismaService.lawnBooking.findMany({
+      where: {
+        memberId: memberId,
+        isConfirmed: true,
+        isCancelled: false,
+      },
+      include: { lawn: true }
+    });
+    for (const booking of confirmedLawns) {
+      const bDates = this.getDatesFromBooking(booking);
+      this.validateDateOverlaps(requestedDates, bDates, booking.lawn?.description || 'Lawn', false);
+    }
+  }
+
+  private validateDateOverlaps(requestedDates: Date[], existingDates: Date[], venueName: string, isPending: boolean) {
+    for (const rDate of requestedDates) {
+      if (existingDates.some(eDate => eDate.getTime() === rDate.getTime())) {
+        const type = isPending ? 'pending' : 'confirmed';
+        throw new BadRequestException(
+          `Conflict: You already have a ${type} booking for ${venueName} on ${rDate.toLocaleDateString()}. PSC policy allows only one booking (Hall or Lawn) per day per member.`,
+        );
+      }
+    }
+  }
+
+  private getDatesFromBooking(booking: any): Date[] {
+    const dates: Date[] = [];
+    const details = booking.bookingDetails as any[];
+
+    if (details && Array.isArray(details) && details.length > 0) {
+      details.forEach((d) => {
+        const dDate = new Date(d.date);
+        dDate.setHours(0, 0, 0, 0);
+        dates.push(dDate);
+      });
+    } else {
+      // Fallback for cases where bookingDetails is empty: use bookingDate to endDate range
+      const start = new Date(booking.bookingDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(booking.endDate || booking.bookingDate);
+      end.setHours(0, 0, 0, 0);
+
+      const curr = new Date(start);
+      while (curr <= end) {
+        dates.push(new Date(curr));
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+    return dates;
   }
 
   // check idempotency

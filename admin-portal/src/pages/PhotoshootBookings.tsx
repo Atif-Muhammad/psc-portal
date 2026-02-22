@@ -9,12 +9,13 @@ import { Plus, Edit, Trash2, X, Loader2, Receipt, User, Calendar, Clock, Notepad
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { getBookings, createBooking, updateBooking, cancelReqBooking as delBooking, getPhotoshoots, searchMembers, getVouchers } from "../../config/apis";
+import { getBookings, createBooking, updateBooking, cancelReqBooking as delBooking, getPhotoshoots, searchMembers, getVouchers, getCancelledBookings } from "../../config/apis";
 import { MemberSearchComponent } from "@/components/MemberSearch";
 import { Member, Voucher } from "@/types/room-booking.type";
 import { cn } from "@/lib/utils";
@@ -273,6 +274,7 @@ export default function PhotoshootBookings() {
   const [editBooking, setEditBooking] = useState<PhotoshootBooking | null>(null);
   const [deleteBooking, setDeleteBooking] = useState<PhotoshootBooking | null>(null);
   const [viewVouchers, setViewVouchers] = useState<PhotoshootBooking | null>(null);
+  const [activeTab, setActiveTab] = useState("active");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   // Form States
@@ -336,10 +338,15 @@ export default function PhotoshootBookings() {
     isFetchingNextPage,
     isLoading: isLoadingBookings,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "photoshoots"],
+    queryKey: ["bookings", "photoshoots", activeTab],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getBookings({ bookingsFor: "photoshoots", pageParam });
-      return res as PhotoshootBooking[];
+      if (activeTab === "active") {
+        const res = await getBookings({ bookingsFor: "photoshoots", pageParam });
+        return res as PhotoshootBooking[];
+      } else {
+        const res = await getCancelledBookings({ bookingsFor: "photoshoots", pageParam });
+        return res as PhotoshootBooking[];
+      }
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
@@ -397,7 +404,7 @@ export default function PhotoshootBookings() {
     mutationFn: createBooking,
     onSuccess: () => {
       toast({ title: "Booking created successfully" });
-      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots"] });
+      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots", "active"] });
       handleCloseAddModal();
     },
     onError: (error: any) => {
@@ -409,7 +416,7 @@ export default function PhotoshootBookings() {
     mutationFn: updateBooking,
     onSuccess: () => {
       toast({ title: "Booking updated successfully" });
-      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots"] });
+      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots", "active"] });
       setEditBooking(null);
       resetForm();
     },
@@ -423,7 +430,8 @@ export default function PhotoshootBookings() {
       delBooking("photoshoots", bookID, reason),
     onSuccess: () => {
       toast({ title: "Cancellation request sent" });
-      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots"] });
+      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots", "active"] });
+      queryClient.invalidateQueries({ queryKey: ["bookings", "photoshoots", "cancelled"] });
       setDeleteBooking(null);
     },
     onError: (error: any) => {
@@ -655,6 +663,14 @@ export default function PhotoshootBookings() {
     return format(date, "PPP");
   };
 
+  // Helper to get local HH:mm from ISO string
+  const getLocalHHMM = (isoString: string) => {
+    if (!isoString) return "09:00";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "09:00";
+    return format(date, "HH:mm");
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -748,7 +764,7 @@ export default function PhotoshootBookings() {
                               if (!filtered.find(d => d.date === dateStr)) {
                                 filtered.push({
                                   date: dateStr,
-                                  timeSlot: format(day, "yyyy-MM-dd'T'10:00:00") // Default 10 AM
+                                  timeSlot: format(day, "yyyy-MM-dd'T'09:00:00") // Default 9 AM
                                 });
                               }
                             });
@@ -777,9 +793,9 @@ export default function PhotoshootBookings() {
                           <div className="flex-1 flex items-center gap-2">
                             <Input
                               type="time"
-                              value={detail.timeSlot.includes('T') ? detail.timeSlot.split('T')[1].substring(0, 5) : "10:00"}
-                              min="09:00"
-                              max="18:00"
+                              value={getLocalHHMM(detail.timeSlot)}
+                              min="08:00"
+                              max="21:00"
                               onChange={(e) => {
                                 const time = e.target.value;
                                 const newDetails = [...bookingDetails];
@@ -792,9 +808,10 @@ export default function PhotoshootBookings() {
                             />
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
                               To: {(() => {
-                                const [h, m] = (detail.timeSlot.includes('T') ? detail.timeSlot.split('T')[1].substring(0, 5) : "10:00").split(':').map(Number);
-                                const endH = (h + 2) % 24;
-                                return `${endH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                                const date = new Date(detail.timeSlot);
+                                if (isNaN(date.getTime())) return "11:00 AM";
+                                const endDate = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+                                return format(endDate, "hh:mm a");
                               })()}
                             </span>
                           </div>
@@ -931,149 +948,228 @@ export default function PhotoshootBookings() {
           </Dialog>
         </div>
       </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="active">
+            Active Bookings
+          </TabsTrigger>
+          <TabsTrigger value="cancelled">
+            Cancelled Bookings
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="active" className="mt-0">
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Booking Information</TableHead>
+                      <TableHead>Details</TableHead>
+                      <TableHead>Price Info</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingBookings && bookings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading bookings...
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredBookings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          No bookings found matching your criteria
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredBookings.map((booking, idx) => (
+                        <TableRow key={booking.id} ref={idx === filteredBookings.length - 1 ? lastElementRef : null}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                            
+                              <div className="flex flex-col">
+                                <span className="font-bold">{booking.member.Name}</span>
+                                <span className="text-xs text-muted-foreground">{booking.member.Membership_No}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                <NotepadText className="h-3 w-3 text-primary" />
+                                {booking.photoshoot.description}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
+                                <Calendar className="h-3 w-3" />
+                                {formatDateDisplay(booking.bookingDate)}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-primary font-bold">
+                                <Clock className="h-3 w-3" />
+                                {formatTimeDisplay(booking.startTime)} - {formatTimeDisplay(booking.endTime)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">Total: PKR {Number(booking.totalPrice).toLocaleString()}</span>
+                              <span className="text-[10px] text-green-600 font-bold">Paid: {Number(booking.paidAmount).toLocaleString()}</span>
+                              <span className="text-[10px] text-red-600 font-bold">Owed: {Number(booking.pendingAmount).toLocaleString()}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {getPaymentBadge(booking.paymentStatus)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDetailBooking(booking);
+                                  setOpenDetails(true);
+                                }}
+                                title="Booking Details"
+                              >
+                                <NotepadText className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setEditBooking(booking)}
+                                title="Edit Booking"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setViewVouchers(booking)}
+                                title="View Vouchers"
+                              >
+                                <Receipt className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() => setDeleteBooking(booking)}
+                                title="Delete Booking"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* BOOKINGS TABLE */}
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Time Slot</TableHead>
-                <TableHead>Total Price</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingBookings ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin mr-2" />
-                      <span>Loading bookings...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : filteredBookings.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center">
-                      <Calendar className="h-12 w-12 mb-4 opacity-50" />
-                      <p>No bookings found</p>
-                      <p className="text-sm">Create your first photoshoot booking to get started</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredBookings.map((booking) => (
-                  <TableRow key={booking.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">
-                      <div className="flex flex-col">
-                        <div className="font-semibold">{booking.member?.Name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          #{booking.member?.Membership_No}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{booking.photoshoot?.description}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <div>{formatDateDisplay(booking.bookingDate)}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm font-medium">
-                            {formatTimeDisplay(booking.startTime)}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          to {formatTimeDisplay(booking.endTime)}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-semibold text-green-600">
-                        PKR {Number(booking.totalPrice).toLocaleString()}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Paid: PKR {Number(booking.paidAmount).toLocaleString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getPaymentBadge(booking.paymentStatus)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setDetailBooking(booking)
-                          setOpenDetails(true)
-                        }}
-                        title="Booking Details">
-                        <NotepadText />
-                      </Button>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setEditBooking(booking)}
-                          title="Edit Booking"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {(booking.paymentStatus === "PAID" || booking.paymentStatus === "HALF_PAID") && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewVouchers(booking)}
-                            title="View Vouchers"
-                          >
-                            <Receipt className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteBooking(booking)}
-                          title="Delete Booking"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          {/* Scroll Trigger & Loader */}
-          <div
-            ref={lastElementRef}
-            className="h-10 w-full flex items-center justify-center mt-4"
-          >
-            {isFetchingNextPage && (
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            )}
-            {!hasNextPage && bookings.length > 0 && (
-              <span className="text-xs text-muted-foreground">
-                No more bookings
-              </span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Edit Dialog with Calendar Time Picker */}
-      <Dialog open={!!editBooking} onOpenChange={(open) => {
+        <TabsContent value="cancelled" className="mt-0">
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Booking Information</TableHead>
+                      <TableHead>Details</TableHead>
+                      <TableHead>Price Info</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingBookings && bookings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading bookings...
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredBookings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          No cancelled bookings found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredBookings.map((booking, idx) => (
+                        <TableRow key={booking.id} ref={idx === filteredBookings.length - 1 ? lastElementRef : null}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              
+                              <div className="flex flex-col">
+                                <span className="font-bold">{booking.member.Name}</span>
+                                <span className="text-xs text-muted-foreground">{booking.member.Membership_No}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 text-sm font-medium">
+                                <NotepadText className="h-3 w-3 text-primary" />
+                                {booking.photoshoot.description}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold">
+                                <Calendar className="h-3 w-3" />
+                                {formatDateDisplay(booking.bookingDate)}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-primary font-bold">
+                                <Clock className="h-3 w-3" />
+                                {formatTimeDisplay(booking.startTime)} - {formatTimeDisplay(booking.endTime)}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">Total: PKR {Number(booking.totalPrice).toLocaleString()}</span>
+                              <span className="text-[10px] text-green-600 font-bold">Paid: {Number(booking.paidAmount).toLocaleString()}</span>
+                              <span className="text-[10px] text-red-600 font-bold">Owed: {Number(booking.pendingAmount).toLocaleString()}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="destructive">Cancelled</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDetailBooking(booking);
+                                  setOpenDetails(true);
+                                }}
+                                title="Booking Details"
+                              >
+                                <NotepadText className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      <div ref={lastElementRef} className="h-10" />
+      < Dialog open={!!editBooking} onOpenChange={(open) => {
         if (!open) handleCloseEditModal();
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1088,7 +1184,6 @@ export default function PhotoshootBookings() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="font-medium text-sm flex items-center">
-                      <User className="h-4 w-4 mr-2 text-blue-600" />
                       {editBooking?.member?.Name}
                     </div>
                     <div className="text-xs text-blue-600 mt-1">
@@ -1167,7 +1262,7 @@ export default function PhotoshootBookings() {
                           if (!filtered.find(d => d.date === dateStr)) {
                             filtered.push({
                               date: dateStr,
-                              timeSlot: format(day, "yyyy-MM-dd'T'10:00:00") // Default 10 AM
+                              timeSlot: format(day, "yyyy-MM-dd'T'09:00:00") // Default 9 AM
                             });
                           }
                         });
@@ -1196,9 +1291,9 @@ export default function PhotoshootBookings() {
                       <div className="flex-1 flex items-center gap-2">
                         <Input
                           type="time"
-                          value={detail.timeSlot.includes('T') ? detail.timeSlot.split('T')[1].substring(0, 5) : "10:00"}
-                          min="09:00"
-                          max="18:00"
+                          value={getLocalHHMM(detail.timeSlot)}
+                          min="08:00"
+                          max="21:00"
                           onChange={(e) => {
                             const time = e.target.value;
                             const newDetails = [...bookingDetails];
@@ -1211,9 +1306,10 @@ export default function PhotoshootBookings() {
                         />
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           To: {(() => {
-                            const [h, m] = (detail.timeSlot.includes('T') ? detail.timeSlot.split('T')[1].substring(0, 5) : "10:00").split(':').map(Number);
-                            const endH = (h + 2) % 24;
-                            return `${endH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                            const date = new Date(detail.timeSlot);
+                            if (isNaN(date.getTime())) return "11:00 AM";
+                            const endDate = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+                            return format(endDate, "hh:mm a");
                           })()}
                         </span>
                       </div>
@@ -1391,6 +1487,6 @@ export default function PhotoshootBookings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

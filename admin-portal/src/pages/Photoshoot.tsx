@@ -541,14 +541,14 @@ export default function Photoshoot() {
         </div>
 
         <div className="flex gap-3">
-          <Button
+          {/* <Button
             variant="outline"
             onClick={() => setReserveDialog(true)}
             className="gap-2"
           >
             <CalendarIcon className="h-4 w-4" />
             Reserve Packages
-          </Button>
+          </Button> */}
 
           {/* Add Dialog */}
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -664,6 +664,7 @@ export default function Photoshoot() {
                   <TableHead>Description</TableHead>
                   <TableHead>Member Charges</TableHead>
                   <TableHead>Guest Charges</TableHead>
+                  <TableHead>Maintenance</TableHead>
                   <TableHead>Upcoming Reservations</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -671,15 +672,12 @@ export default function Photoshoot() {
               <TableBody>
                 {photoshoots.map((item: any) => (
                   <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="font-medium max-w-md">
-                      <div className="space-y-2">
-                        <div className="space-y-1">
-                          <p className="font-semibold">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Created: {new Date(item.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <MaintenanceIndicator outOfOrders={item.outOfOrders} />
+                    <TableCell className="font-medium max-w-sm">
+                      <div className="space-y-1">
+                        <p className="font-semibold">{item.description}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Created: {new Date(item.createdAt).toLocaleDateString()}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold">
@@ -687,6 +685,9 @@ export default function Photoshoot() {
                     </TableCell>
                     <TableCell className="font-semibold">
                       PKR {Number(item.guestCharges).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <MaintenanceIndicator outOfOrders={item.outOfOrders} />
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
@@ -1024,7 +1025,7 @@ export default function Photoshoot() {
               onValueChange={setActiveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2 h-9 p-1 bg-slate-100 rounded-md">
+              <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-slate-100 rounded-md">
                 <TabsTrigger value="reservations" className="text-[11px] rounded-sm data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border border-slate-200">
                   Reservations ({detailLogs?.reservations?.length || 0})
                 </TabsTrigger>
@@ -1159,8 +1160,8 @@ export default function Photoshoot() {
                           <TableHeader className="bg-slate-50/50">
                             <TableRow className="hover:bg-transparent border-slate-100">
                               <TableHead className="text-[11px] h-9 text-slate-500">Reason</TableHead>
-                              <TableHead className="text-[11px] h-9 text-slate-500">From</TableHead>
-                              <TableHead className="text-[11px] h-9 text-slate-500">To</TableHead>
+                              <TableHead className="text-[11px] h-9 text-slate-500">Period</TableHead>
+                              <TableHead className="text-[11px] h-9 text-slate-500 text-right">Added By</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1168,13 +1169,13 @@ export default function Photoshoot() {
                               detailLogs.outOfOrders.map((oo: any) => (
                                 <TableRow key={oo.id} className="hover:bg-slate-50/50 transition-colors border-slate-50">
                                   <TableCell className="py-2">
-                                    <span className="font-semibold text-xs text-slate-700">{oo.reason}</span>
+                                    <p className="text-xs font-medium text-slate-700">{oo.reason}</p>
                                   </TableCell>
                                   <TableCell className="text-xs py-2 text-slate-600">
-                                    {format(new Date(oo.startDate), "LLL dd, y")}
+                                    {format(new Date(oo.startDate), "LLL dd, y")} - {format(new Date(oo.endDate), "LLL dd, y")}
                                   </TableCell>
-                                  <TableCell className="text-xs py-2 text-slate-600">
-                                    {format(new Date(oo.endDate), "LLL dd, y")}
+                                  <TableCell className="py-2 text-right">
+                                    <p className="text-[10px] text-slate-500">{oo.createdBy || oo.updatedBy || "-"}</p>
                                   </TableCell>
                                 </TableRow>
                               ))
@@ -1186,7 +1187,7 @@ export default function Photoshoot() {
                                 >
                                   <div className="flex flex-col items-center gap-1.5">
                                     <CalendarIcon className="h-6 w-6 opacity-10" />
-                                    <p className="text-[11px]">No maintenance periods found.</p>
+                                    <p className="text-[11px]">No maintenance logs found.</p>
                                   </div>
                                 </TableCell>
                               </TableRow>

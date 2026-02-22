@@ -179,6 +179,8 @@ export class BookingController {
       return this.bookingService.gCancelledBookingsHall(page, limit);
     if (bookingFor === 'lawns')
       return this.bookingService.gCancelledBookingsLawn(page, limit);
+    if (bookingFor === 'photoshoots')
+      return this.bookingService.gCancelledBookingsPhotoshoot(page, limit);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -203,10 +205,10 @@ export class BookingController {
     @Query('bookingFor') bookingFor: string,
     @Query('bookID') bookID: string,
     @Query('reason') reason: string,
-    @Req() req: { user: { id: string, name: string }},
+    @Req() req: { user: { id: string, name: string } },
   ) {
     const requestedBy = req.user?.name || 'Admin';
-   
+
     if (bookingFor === 'rooms')
       return this.bookingService.cCancellationRequestRoom(Number(bookID), reason, requestedBy);
     if (bookingFor === 'halls')
@@ -255,7 +257,7 @@ export class BookingController {
   // fetch unpaid online vouchers for timer
   @UseGuards(JwtAccGuard)
   @Get('vouchers/unpaid/countdown')
-  async unpaidVouchersForTimer(@Req() req: {user: {id: string}}){
+  async unpaidVouchersForTimer(@Req() req: { user: { id: string } }) {
     return await this.bookingService.unpaidTimerVouchers(req?.user?.id)
   }
 
