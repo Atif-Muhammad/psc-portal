@@ -169,6 +169,7 @@ export class AuthController {
         permissions: any[];
       };
     },
+    @Body('fcmToken') fcmToken: string,
   ) {
     if (
       req?.user?.role === RolesEnum.ADMIN ||
@@ -196,7 +197,7 @@ export class AuthController {
     }
 
     // check for fcm token match and logout if not match
-    if (activeUser?.FCMToken !== req.user?.FCMToken) {
+    if (activeUser?.FCMToken !== fcmToken) {
       throw new HttpException(
         'Your account has been logged out from another device.',
         HttpStatus.FORBIDDEN,
