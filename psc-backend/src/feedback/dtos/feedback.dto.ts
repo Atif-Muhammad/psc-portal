@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, isString, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, isString, IsString } from 'class-validator';
 import { FeedbackStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 
@@ -35,11 +35,11 @@ export class CreateFeedbackDto {
     @IsString()
     subject: string
     
-    @IsString()
+    @IsNumber()
     @Type(() => Number)
     categoryId: number
     
-    @IsString()
+    @IsNumber()
     @Type(() => Number)
     subCategoryId: number
 
