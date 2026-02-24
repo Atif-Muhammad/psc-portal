@@ -27,7 +27,7 @@ import { generateRandomNumber } from './utils/genOTP';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('create/super-admin')
   async createSuperAdmin(@Body() payload: CreateAdminDto) {
@@ -169,7 +169,7 @@ export class AuthController {
         permissions: any[];
       };
     },
-    @Body('fcmToken') fcmToken: string,
+    @Query('fcmToken') fcmToken: string,
   ) {
     if (
       req?.user?.role === RolesEnum.ADMIN ||
@@ -199,8 +199,11 @@ export class AuthController {
     // check for fcm token match and logout if not match
     if (activeUser?.FCMToken !== fcmToken) {
       throw new HttpException(
-        'Your account has been logged out from another device.',
-        HttpStatus.FORBIDDEN,
+        {
+          error: 'SESSION_EXPIRED',
+          message: 'Your account has been logged in from another device.',
+        },
+        HttpStatus.UNAUTHORIZED,
       );
     }
     return {
