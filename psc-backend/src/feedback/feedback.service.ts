@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { FeedbackStatus } from '@prisma/client';
-import { AddFeedbackRemarkDto, CreateFeedbackCategoryDto, CreateFeedbackSubCategoryDto } from './dtos/feedback.dto';
+import { AddFeedbackRemarkDto, CreateFeedbackCategoryDto, CreateFeedbackDto, CreateFeedbackSubCategoryDto } from './dtos/feedback.dto';
 
 @Injectable()
 export class FeedbackService {
@@ -102,6 +102,18 @@ export class FeedbackService {
             data: {
                 subCategoryId,
                 otherSubCategory: subCategoryId === null ? otherSubCategory || null : null
+            },
+        });
+    }
+
+    async createFeedback(dto: CreateFeedbackDto, Membership_No: string) {
+        return this.prisma.feedback.create({
+            data: {
+                memberNo: Membership_No,
+                subject: dto.subject,
+                categoryId: dto.categoryId,
+                subCategoryId: dto.subCategoryId,
+                message: dto.message,
             },
         });
     }

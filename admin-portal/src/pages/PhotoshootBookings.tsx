@@ -60,6 +60,7 @@ export interface PhotoshootBooking {
     isBooked?: any;
 
   };
+  cancellationRequests?: any[];
 }
 
 interface PhotoshootService {
@@ -389,14 +390,17 @@ export default function PhotoshootBookings() {
     enabled: false,
   });
 
-  // Fetch vouchers when viewing vouchers
+  // Fetch vouchers when viewing vouchers or details
   const {
     data: vouchers = [],
     isLoading: isLoadingVouchers,
   } = useQuery<Voucher[]>({
-    queryKey: ["photoshoot-vouchers", viewVouchers?.id],
-    queryFn: () => (viewVouchers ? getVouchers("PHOTOSHOOT", viewVouchers.id) : []),
-    enabled: !!viewVouchers,
+    queryKey: ["photoshoot-vouchers", viewVouchers?.id || detailBooking?.id],
+    queryFn: () => {
+      const bId = viewVouchers?.id || detailBooking?.id;
+      return bId ? getVouchers("PHOTOSHOOT", bId) : [];
+    },
+    enabled: !!viewVouchers || (!!detailBooking && openDetails),
   });
 
   // Mutations
@@ -992,7 +996,7 @@ export default function PhotoshootBookings() {
                         <TableRow key={booking.id} ref={idx === filteredBookings.length - 1 ? lastElementRef : null}>
                           <TableCell>
                             <div className="flex items-center gap-3">
-                            
+
                               <div className="flex flex-col">
                                 <span className="font-bold">{booking.member.Name}</span>
                                 <span className="text-xs text-muted-foreground">{booking.member.Membership_No}</span>
@@ -1110,7 +1114,7 @@ export default function PhotoshootBookings() {
                         <TableRow key={booking.id} ref={idx === filteredBookings.length - 1 ? lastElementRef : null}>
                           <TableCell>
                             <div className="flex items-center gap-3">
-                              
+
                               <div className="flex flex-col">
                                 <span className="font-bold">{booking.member.Name}</span>
                                 <span className="text-xs text-muted-foreground">{booking.member.Membership_No}</span>
@@ -1459,7 +1463,9 @@ export default function PhotoshootBookings() {
           {detailBooking && (
             <PhotoshootBookingDetailsCard
               booking={detailBooking}
-              className="rounded-none border-0 shadow-none"
+              vouchers={vouchers}
+              isLoadingVouchers={isLoadingVouchers}
+              className="rounded-none border-0 shadow-none border-none"
             />
           )}
         </DialogContent>

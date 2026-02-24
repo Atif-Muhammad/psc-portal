@@ -7,15 +7,22 @@ import {
     ParseIntPipe,
     Patch,
     Post,
+    Req,
     UseGuards,
 } from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
 import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
-import { AddFeedbackRemarkDto, UpdateFeedbackStatusDto, CreateFeedbackCategoryDto, CreateFeedbackSubCategoryDto } from './dtos/feedback.dto';
+import { AddFeedbackRemarkDto, UpdateFeedbackStatusDto, CreateFeedbackCategoryDto, CreateFeedbackSubCategoryDto, CreateFeedbackDto } from './dtos/feedback.dto';
 
 @Controller('feedback')
 export class FeedbackController {
     constructor(private feedbackService: FeedbackService) { }
+
+    @UseGuards(JwtAccGuard)
+    @Post('create')
+    async createFeedback(@Body() dto: CreateFeedbackDto, @Req() req: {user: {id: string}}) {
+        return this.feedbackService.createFeedback(dto, req.user.id);
+    }
 
     @UseGuards(JwtAccGuard)
     @Get()
@@ -96,5 +103,14 @@ export class FeedbackController {
         @Body('otherSubCategory') otherSubCategory?: string,
     ) {
         return this.feedbackService.assignSubCategory(id, subCategoryId, otherSubCategory);
+    }
+
+    @UseGuards(JwtAccGuard)
+    @Get('categories-subcategories')
+    async getCategory() {
+        const cats = await this.feedbackService.findAllCategories() || {}
+        const subCats = await this.feedbackService.findAllSubCategories() || {}
+        return { categories: cats, subCategories: subCats }
+
     }
 }
