@@ -194,6 +194,14 @@ export class AuthController {
         HttpStatus.FORBIDDEN,
       );
     }
+
+    // check for fcm token match and logout if not match
+    if (activeUser?.FCMToken !== req.user?.FCMToken) {
+      throw new HttpException(
+        'Your account has been logged out from another device.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     return {
       id: req.user?.id,
       name: req.user?.name,
