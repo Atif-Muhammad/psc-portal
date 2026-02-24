@@ -42,6 +42,7 @@ export default function AffiliatedClubs() {
     email: "",
     description: "",
     isActive: true,
+    order: 0,
   });
   const [viewRequest, setViewRequest] = useState<AffiliatedClubRequest | null>(null);
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
@@ -181,6 +182,7 @@ export default function AffiliatedClubs() {
     if (clubForm.description) formData.append("description", clubForm.description);
     // If active is boolean, convert to strong if needed or let formData handle it (usually string 'true'/'false')
     formData.append("isActive", String(clubForm.isActive ?? true));
+    formData.append("order", String(clubForm.order || 0));
 
     if (clubForm.file) {
       formData.append("image", clubForm.file);
@@ -200,6 +202,7 @@ export default function AffiliatedClubs() {
     if (clubForm.email) formData.append("email", clubForm.email);
     if (clubForm.description) formData.append("description", clubForm.description);
     formData.append("isActive", String(clubForm.isActive));
+    formData.append("order", String(clubForm.order || 0));
 
     if (clubForm.file) {
       formData.append("image", clubForm.file);
@@ -259,6 +262,7 @@ export default function AffiliatedClubs() {
       description: club.description || "",
       image: club.image || "",
       isActive: club.isActive,
+      order: club.order || 0,
     });
     setClubDialog(true);
   };
@@ -271,6 +275,7 @@ export default function AffiliatedClubs() {
       email: "",
       description: "",
       isActive: true,
+      order: 0,
     });
   };
 
@@ -734,6 +739,16 @@ export default function AffiliatedClubs() {
                   onCheckedChange={(checked) => setClubForm({ ...clubForm, isActive: checked })}
                 />
                 <Label htmlFor="isActive">Active</Label>
+              </div>
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="order">Display Order</Label>
+                <Input
+                  id="order"
+                  type="number"
+                  value={clubForm.order}
+                  onChange={(e) => setClubForm({ ...clubForm, order: Number(e.target.value) })}
+                  placeholder="0"
+                />
               </div>
             </div>
           </div>

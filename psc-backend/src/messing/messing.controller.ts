@@ -18,7 +18,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('messing')
 export class MessingController {
-  constructor(private readonly messingService: MessingService) {}
+  constructor(private readonly messingService: MessingService) { }
 
   // --- Categories ---
 
@@ -113,6 +113,7 @@ export class MessingController {
     if (body.messingSubCategoryId)
       body.messingSubCategoryId = Number(body.messingSubCategoryId);
     if (body.price) body.price = Number(body.price);
+    if (body.order) body.order = Number(body.order);
 
     return this.messingService.createItem(body, createdBy);
   }
@@ -140,6 +141,7 @@ export class MessingController {
   ) {
     const updatedBy = req.user.username || '';
     if (body.price) body.price = Number(body.price);
+    if (body.order) body.order = Number(body.order);
     return this.messingService.updateItem(id, body, updatedBy);
   }
 

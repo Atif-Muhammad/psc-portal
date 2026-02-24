@@ -7,7 +7,7 @@ export class MessingService {
   constructor(
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // --- Category CRUD ---
 
@@ -31,6 +31,7 @@ export class MessingService {
         images: uploadedImages, // Store array of { url, public_id }
         createdBy,
         updatedBy: createdBy,
+        order: Number(data.order) || 0
       },
     });
   }
@@ -43,7 +44,7 @@ export class MessingService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        order: 'asc',
       },
     });
   }
@@ -96,6 +97,7 @@ export class MessingService {
       where: { id },
       data: {
         category: data.category,
+        order: data.order !== undefined ? Number(data.order) : undefined,
         images: currentImages,
         updatedBy,
       },
@@ -125,6 +127,7 @@ export class MessingService {
     return this.prisma.messingSubCategory.create({
       data: {
         name: data.name,
+        order: Number(data.order) || 0,
         messingCategoryId: Number(data.messingCategoryId),
         createdBy,
         updatedBy: createdBy,
@@ -141,7 +144,7 @@ export class MessingService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        order: 'asc',
       },
     });
   }
@@ -163,6 +166,7 @@ export class MessingService {
       where: { id },
       data: {
         name: data.name,
+        order: data.order !== undefined ? Number(data.order) : undefined,
         updatedBy,
       },
     });
@@ -183,6 +187,7 @@ export class MessingService {
         name: data.name,
         description: data.description,
         price: data.price,
+        order: Number(data.order) || 0,
         messingSubCategoryId: Number(data.messingSubCategoryId),
         createdBy,
         updatedBy: createdBy,
@@ -197,7 +202,7 @@ export class MessingService {
     return this.prisma.messingItem.findMany({
       where: { messingSubCategoryId: subCategoryId },
       orderBy: {
-        createdAt: 'desc',
+        order: 'asc',
       },
     });
   }
@@ -213,6 +218,7 @@ export class MessingService {
 
   async updateItem(id: number, data: any, updatedBy: string) {
     await this.getItemById(id);
+    if (data.order !== undefined) data.order = Number(data.order);
     return this.prisma.messingItem.update({
       where: { id },
       data: {

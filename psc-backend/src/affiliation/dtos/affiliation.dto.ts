@@ -37,6 +37,11 @@ export class CreateAffiliatedClubDto {
   @Type(() => Boolean)
   @IsNotEmpty()
   isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  order?: number;
 }
 
 export class UpdateAffiliatedClubDto {
@@ -73,6 +78,11 @@ export class UpdateAffiliatedClubDto {
   @Type(() => Boolean)
   @IsNotEmpty()
   isActive?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  order?: number;
 }
 
 export enum RequestStatus {

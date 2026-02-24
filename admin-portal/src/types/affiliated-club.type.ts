@@ -7,6 +7,7 @@ export interface AffiliatedClub {
     description?: string;
     image?: string;
     isActive: boolean;
+    order: number;
     createdAt: string;
     updatedAt: string;
     requests?: AffiliatedClubRequest[];
@@ -40,6 +41,7 @@ export interface CreateAffiliatedClubDto {
     image?: string; // URL
     file?: File; // For upload
     isActive?: boolean;
+    order?: number;
 }
 
 export interface UpdateAffiliatedClubDto extends CreateAffiliatedClubDto {

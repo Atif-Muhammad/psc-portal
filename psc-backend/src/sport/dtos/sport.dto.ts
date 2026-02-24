@@ -79,6 +79,9 @@ export class CreateSportDto {
   @IsOptional()
   existingimgs?: string[];
 
+  @IsOptional()
+  order?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SportChargeDto)

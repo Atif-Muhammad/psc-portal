@@ -41,6 +41,7 @@ interface SportForm {
   dressCodeDonts: string;
   dos: string;
   donts: string;
+  order: number | string;
   existingImages: string[];
   newImages: File[];
 }
@@ -50,7 +51,7 @@ const timeOptions = ["12:00 AM", "12:30 AM", "01:00 AM", "01:30 AM", "02:00 AM",
 const initialDayTiming: DayTiming = { open: "09:00 AM", close: "05:00 PM", isClosed: false };
 const initialWeekTiming: WeekTiming = { monday: { ...initialDayTiming }, tuesday: { ...initialDayTiming }, wednesday: { ...initialDayTiming }, thursday: { ...initialDayTiming }, friday: { ...initialDayTiming }, saturday: { ...initialDayTiming }, sunday: { ...initialDayTiming, isClosed: true } };
 const initialChargeForm: SportChargeForm = { chargeType: "PER_DAY", memberCharges: "", spouseCharges: "", childrenCharges: "", guestCharges: "", affiliatedClubCharges: "" };
-const initialFormState: SportForm = { activity: "", description: "", isActive: true, charges: [initialChargeForm], enableGentsTiming: true, enableLadiesTiming: true, timingGents: { ...initialWeekTiming }, timingLadies: { ...initialWeekTiming }, dressCodeDos: "", dressCodeDonts: "", dos: "", donts: "", existingImages: [], newImages: [] };
+const initialFormState: SportForm = { activity: "", description: "", isActive: true, charges: [initialChargeForm], enableGentsTiming: true, enableLadiesTiming: true, timingGents: { ...initialWeekTiming }, timingLadies: { ...initialWeekTiming }, dressCodeDos: "", dressCodeDonts: "", dos: "", donts: "", order: 0, existingImages: [], newImages: [] };
 const chargeTypeOptions = [{ value: "PER_DAY", label: "Per Day" }, { value: "PER_MONTH", label: "Per Month" }, { value: "PER_GAME", label: "Per Game" }, { value: "PER_HOUR", label: "Per Hour" }];
 const quillModules = { toolbar: [[{ 'header': [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered' }, { 'list': 'bullet' }], ['link'], [{ 'color': [] }, { 'background': [] }], ['clean']] };
 const quillFormats = ['header', 'bold', 'italic', 'underline', 'strike', 'list', 'bullet', 'link', 'color', 'background'];
@@ -189,13 +190,14 @@ export default function Sports() {
     if (editSport) {
       const hasG = editSport.timing && Object.keys(editSport.timing).length > 0;
       const hasL = editSport.timingLadies && Object.keys(editSport.timingLadies).length > 0;
-      setEditForm({ activity: editSport.activity || "", description: editSport.description || "", isActive: editSport.isActive ?? true, charges: editSport.sportCharge?.length > 0 ? editSport.sportCharge.map((c: any) => ({ chargeType: c.chargeType, memberCharges: c.memberCharges?.toString() || "0", spouseCharges: c.spouseCharges?.toString() || "0", childrenCharges: c.childrenCharges?.toString() || "0", guestCharges: c.guestCharges?.toString() || "0", affiliatedClubCharges: c.affiliatedClubCharges?.toString() || "0" })) : [initialChargeForm], enableGentsTiming: hasG, enableLadiesTiming: hasL, timingGents: hasG ? editSport.timing : initialWeekTiming, timingLadies: hasL ? editSport.timingLadies : initialWeekTiming, dressCodeDos: editSport.dressCodeDos || "", dressCodeDonts: editSport.dressCodeDonts || "", dos: editSport.dos || "", donts: editSport.donts || "", existingImages: (editSport.images as string[]) || [], newImages: [] });
+      setEditForm({ activity: editSport.activity || "", description: editSport.description || "", isActive: editSport.isActive ?? true, charges: editSport.sportCharge?.length > 0 ? editSport.sportCharge.map((c: any) => ({ chargeType: c.chargeType, memberCharges: c.memberCharges?.toString() || "0", spouseCharges: c.spouseCharges?.toString() || "0", childrenCharges: c.childrenCharges?.toString() || "0", guestCharges: c.guestCharges?.toString() || "0", affiliatedClubCharges: c.affiliatedClubCharges?.toString() || "0" })) : [initialChargeForm], enableGentsTiming: hasG, enableLadiesTiming: hasL, timingGents: hasG ? editSport.timing : initialWeekTiming, timingLadies: hasL ? editSport.timingLadies : initialWeekTiming, dressCodeDos: editSport.dressCodeDos || "", dressCodeDonts: editSport.dressCodeDonts || "", dos: editSport.dos || "", donts: editSport.donts || "", order: editSport.order || 0, existingImages: (editSport.images as string[]) || [], newImages: [] });
     }
   }, [editSport]);
 
   const buildFormData = useCallback((f: SportForm, isEdit: boolean) => {
     const fd = new FormData();
     fd.append("activity", f.activity); fd.append("description", f.description || ""); fd.append("isActive", String(f.isActive));
+    fd.append("order", String(f.order || 0));
     fd.append("timing", JSON.stringify(f.enableGentsTiming ? f.timingGents : {}));
     fd.append("timingLadies", JSON.stringify(f.enableLadiesTiming ? f.timingLadies : {}));
     fd.append("dressCodeDos", f.dressCodeDos || ""); fd.append("dressCodeDonts", f.dressCodeDonts || ""); fd.append("dos", f.dos || ""); fd.append("donts", f.donts || "");
@@ -224,8 +226,9 @@ export default function Sports() {
               <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="grid w-full grid-cols-5"><TabsTrigger value="basic">Basic</TabsTrigger><TabsTrigger value="images">Images</TabsTrigger><TabsTrigger value="timing">Timing</TabsTrigger><TabsTrigger value="dresscode">Dress Code</TabsTrigger><TabsTrigger value="rules">Rules</TabsTrigger></TabsList>
                 <TabsContent value="basic" className="space-y-6 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Activity *</Label><Input value={form.activity} onChange={e => setForm(p => ({ ...p, activity: e.target.value }))} className="mt-2" /></div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-1"><Label>Activity *</Label><Input value={form.activity} onChange={e => setForm(p => ({ ...p, activity: e.target.value }))} className="mt-2" /></div>
+                    <div className="col-span-1"><Label>Display Order</Label><Input type="number" value={form.order} onChange={e => setForm(p => ({ ...p, order: e.target.value }))} className="mt-2" placeholder="0" /></div>
                     <div className="flex justify-between p-4 border rounded-lg"><div><Label>Status</Label><p className="text-sm text-muted-foreground">{form.isActive ? "Active" : "Inactive"}</p></div><Switch checked={form.isActive} onCheckedChange={c => setForm(p => ({ ...p, isActive: c }))} /></div>
                   </div>
                   <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className="mt-2" /></div>
@@ -274,8 +277,9 @@ export default function Sports() {
             <Tabs defaultValue="basic" className="w-full">
               <TabsList className="grid w-full grid-cols-5"><TabsTrigger value="basic">Basic</TabsTrigger><TabsTrigger value="images">Images</TabsTrigger><TabsTrigger value="timing">Timing</TabsTrigger><TabsTrigger value="dresscode">Dress Code</TabsTrigger><TabsTrigger value="rules">Rules</TabsTrigger></TabsList>
               <TabsContent value="basic" className="space-y-6 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Activity *</Label><Input value={editForm.activity} onChange={e => setEditForm(p => ({ ...p, activity: e.target.value }))} className="mt-2" /></div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-1"><Label>Activity *</Label><Input value={editForm.activity} onChange={e => setEditForm(p => ({ ...p, activity: e.target.value }))} className="mt-2" /></div>
+                  <div className="col-span-1"><Label>Display Order</Label><Input type="number" value={editForm.order} onChange={e => setEditForm(p => ({ ...p, order: e.target.value }))} className="mt-2" placeholder="0" /></div>
                   <div className="flex justify-between p-4 border rounded-lg"><div><Label>Status</Label><p className="text-sm text-muted-foreground">{editForm.isActive ? "Active" : "Inactive"}</p></div><Switch checked={editForm.isActive} onCheckedChange={c => setEditForm(p => ({ ...p, isActive: c }))} /></div>
                 </div>
                 <div><Label>Description</Label><Textarea value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="mt-2" /></div>

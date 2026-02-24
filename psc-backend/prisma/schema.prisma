@@ -744,6 +744,7 @@ model Sport {
   activity    String  @db.VarChar(100)
   description String? @db.VarChar(300)
   isActive    Boolean @default(true)
+  order       Int     @default(0)
   images      Json    @default("[]") // Array of image URLs, max 5
 
   // Timing for Gents: JSON object with each day of the week
@@ -804,6 +805,7 @@ model AffiliatedClub {
   contactNo   String? @db.VarChar(50)
   email       String? @db.VarChar(100)
   description String? @db.Text
+  order       Int     @default(0)
   image       String?
   isActive    Boolean @default(true)
 
@@ -872,6 +874,7 @@ model ClubRule {
 model MessingCategory {
   id        Int      @id @unique @default(autoincrement())
   category  String   @db.VarChar(200)
+  order     Int      @default(0)
   images    Json     @default("[]") // Array of image URLs, max 5
   
   subCategories MessingSubCategory[]
@@ -889,6 +892,7 @@ model MessingSubCategory {
   messingCategory   MessingCategory @relation(fields: [messingCategoryId], references: [id], onDelete: Cascade)
   
   name        String  @db.VarChar(200)
+  order       Int     @default(0)
   
   items       MessingItem[]
 
@@ -909,6 +913,7 @@ model MessingItem {
   name        String  @db.VarChar(200)
   description String? @db.Text
   price       Decimal @default(0.00) @db.Decimal(30, 2)
+  order       Int     @default(0)
   
   createdBy String @default("")
   updatedBy String @default("")

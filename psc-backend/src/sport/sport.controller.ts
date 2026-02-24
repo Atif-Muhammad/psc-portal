@@ -21,7 +21,7 @@ import { SportService } from './sport.service';
 
 @Controller('sport')
 export class SportController {
-  constructor(private sport: SportService) {}
+  constructor(private sport: SportService) { }
 
   // sports
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -73,6 +73,7 @@ export class SportController {
       dressCodeDonts: payload.dressCodeDonts,
       dos: payload.dos,
       donts: payload.donts,
+      order: payload.order !== undefined ? Number(payload.order) : 0,
       sportCharge,
     };
 
@@ -145,6 +146,7 @@ export class SportController {
       dos: payload.dos,
       donts: payload.donts,
       existingimgs,
+      order: payload.order !== undefined ? Number(payload.order) : undefined,
       sportCharge,
     };
 

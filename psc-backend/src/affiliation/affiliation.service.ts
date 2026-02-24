@@ -29,7 +29,7 @@ export class AffiliationService {
 
   async getAffiliatedClubs() {
     return await this.prismaService.affiliatedClub.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
       include: {
         requests: {
           orderBy: { createdAt: 'desc' },
@@ -41,7 +41,7 @@ export class AffiliationService {
   async getAffiliatedClubsActive() {
     return await this.prismaService.affiliatedClub.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
       include: {
         requests: {
           orderBy: { createdAt: 'desc' },
@@ -90,6 +90,7 @@ export class AffiliationService {
         description: payload.description,
         image: imageUrl ?? null,
         isActive: payload.isActive ?? true,
+        order: Number(payload.order) || 0,
         createdBy,
         updatedBy: createdBy,
       },
@@ -127,6 +128,7 @@ export class AffiliationService {
         description: payload.description,
         image: imageUrl ?? null,
         isActive: payload.isActive,
+        order: payload.order !== undefined ? Number(payload.order) : undefined,
         updatedBy,
       },
     });

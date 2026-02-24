@@ -235,6 +235,7 @@ function SubCategoriesView({ category, onBack }: { category: any; onBack: () => 
 
 function CategoryDialog({ open, onOpenChange, initialData }: any) {
     const [name, setName] = useState("");
+    const [order, setOrder] = useState<number | string>(0);
     const [existingImages, setExistingImages] = useState<any[]>([]);
     const [newFiles, setNewFiles] = useState<File[]>([]);
     const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
@@ -245,9 +246,11 @@ function CategoryDialog({ open, onOpenChange, initialData }: any) {
     useEffect(() => {
         if (initialData) {
             setName(initialData.category);
+            setOrder(initialData.order || 0);
             setExistingImages(initialData.images || []);
         } else {
             setName("");
+            setOrder(0);
             setExistingImages([]);
         }
         setNewFiles([]);
@@ -309,6 +312,7 @@ function CategoryDialog({ open, onOpenChange, initialData }: any) {
 
         const formData = new FormData();
         formData.append("category", name);
+        formData.append("order", String(order));
 
         newFiles.forEach(file => {
             formData.append("files", file);
@@ -331,9 +335,15 @@ function CategoryDialog({ open, onOpenChange, initialData }: any) {
                     <DialogTitle>{initialData ? "Edit Category" : "Add Category"}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-6 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="name">Name</Label>
-                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Breakfast, Lunch" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="name">Name</Label>
+                            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Breakfast, Lunch" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="order">Display Order</Label>
+                            <Input id="order" type="number" value={order} onChange={(e) => setOrder(e.target.value)} placeholder="0" />
+                        </div>
                     </div>
 
                     <div className="grid gap-2">
@@ -384,6 +394,7 @@ function CategoryDialog({ open, onOpenChange, initialData }: any) {
 
 function SubCategoryDialog({ open, onOpenChange, initialData, categoryId }: any) {
     const [name, setName] = useState("");
+    const [order, setOrder] = useState<number | string>(0);
 
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -391,8 +402,10 @@ function SubCategoryDialog({ open, onOpenChange, initialData, categoryId }: any)
     useEffect(() => {
         if (initialData) {
             setName(initialData.name);
+            setOrder(initialData.order || 0);
         } else {
             setName("");
+            setOrder(0);
         }
     }, [initialData, open]);
 
@@ -421,6 +434,7 @@ function SubCategoryDialog({ open, onOpenChange, initialData, categoryId }: any)
 
         const payload = {
             name,
+            order: Number(order),
             messingCategoryId: categoryId
         };
 
@@ -438,9 +452,15 @@ function SubCategoryDialog({ open, onOpenChange, initialData, categoryId }: any)
                     <DialogTitle>{initialData ? "Edit Sub-Category" : "Add Sub-Category"}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="subcat-name">Name</Label>
-                        <Input id="subcat-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Eggs, Breads" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="subcat-name">Name</Label>
+                            <Input id="subcat-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Eggs, Breads" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="subcat-order">Order</Label>
+                            <Input id="subcat-order" type="number" value={order} onChange={(e) => setOrder(e.target.value)} placeholder="0" />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
@@ -595,6 +615,7 @@ function ItemDialog({ open, onOpenChange, initialData, subCategoryId }: any) {
         name: initialData?.name || "",
         description: initialData?.description || "",
         price: initialData?.price || "",
+        order: initialData?.order || 0,
     });
 
     useEffect(() => {
@@ -603,9 +624,10 @@ function ItemDialog({ open, onOpenChange, initialData, subCategoryId }: any) {
                 name: initialData.name,
                 description: initialData.description || "",
                 price: initialData.price,
+                order: initialData.order || 0,
             });
         } else if (open && !initialData) {
-            setForm({ name: "", description: "", price: "" });
+            setForm({ name: "", description: "", price: "", order: 0 });
         }
     }, [open, initialData]);
 
@@ -660,9 +682,15 @@ function ItemDialog({ open, onOpenChange, initialData, subCategoryId }: any) {
                         <Label htmlFor="item-name">Name</Label>
                         <Input id="item-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Item Name" />
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="item-price">Price (PKR)</Label>
-                        <Input id="item-price" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="item-price">Price (PKR)</Label>
+                            <Input id="item-price" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0.00" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="item-order">Display Order</Label>
+                            <Input id="item-order" type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="0" />
+                        </div>
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="item-desc">Description</Label>

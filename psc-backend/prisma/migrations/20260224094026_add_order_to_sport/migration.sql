@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `sport` ADD COLUMN `order` INTEGER NOT NULL DEFAULT 0;

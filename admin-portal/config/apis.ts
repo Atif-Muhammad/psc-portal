@@ -1,6 +1,6 @@
 import axios from "axios";
-const base_url = "http://localhost:3000/api";
-// const base_url = "https://admin.peshawarservicesclub.com/api";
+// const base_url = "http://localhost:3000/api";
+const base_url = "https://admin.peshawarservicesclub.com/api";
 
 export const authAdmin = async (data: any): Promise<any> => {
   try {

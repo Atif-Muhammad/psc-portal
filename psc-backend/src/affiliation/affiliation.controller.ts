@@ -58,7 +58,7 @@ export class AffiliationController {
   ) {
     const adminName = req.user?.name || 'system';
     return await this.affiliationService.createAffiliatedClub(
-      body,
+      { ...body, order: body.order ? Number(body.order) : 0 },
       adminName,
       file,
     );
@@ -74,7 +74,7 @@ export class AffiliationController {
   ) {
     const adminName = req.user?.name || 'system';
     return await this.affiliationService.updateAffiliatedClub(
-      body,
+      { ...body, order: body.order ? Number(body.order) : undefined },
       adminName,
       file,
     );

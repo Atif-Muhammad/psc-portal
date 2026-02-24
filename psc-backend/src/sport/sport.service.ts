@@ -8,13 +8,13 @@ export class SportService {
   constructor(
     private prismaService: PrismaService,
     private cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // --------------------------- SPORTS ---------------------------------
   async getSports() {
     return await this.prismaService.sport.findMany({
       include: { sportCharge: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { order: 'asc' },
     });
   }
 
@@ -35,6 +35,7 @@ export class SportService {
         activity: payload.activity,
         description: payload.description,
         isActive: Boolean(payload.isActive),
+        order: Number(payload.order) || 0,
         images: uploadedImages,
         timing: payload.timing || {},
         timingLadies: payload.timingLadies || {},
@@ -114,6 +115,7 @@ export class SportService {
         activity: payload.activity,
         description: payload.description,
         isActive: payload.isActive,
+        order: payload.order !== undefined ? Number(payload.order) : undefined,
         images: finalImages,
         timing: payload.timing,
         timingLadies: payload.timingLadies,
