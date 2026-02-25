@@ -213,7 +213,7 @@ export class AuthService {
     return otpSaved;
   }
 
-  async loginMember(memberID: string, otp: number) {
+  async loginMember(memberID: string, otp: number, FCMToken: string) {
     // check otp against the memberID
     const member = await this.prisma.member.findFirst({
       where: { Membership_No: String(memberID), otp },
@@ -229,7 +229,7 @@ export class AuthService {
 
     await this.prisma.member.update({
       where: { Membership_No: String(memberID) },
-      data: { otp: null, otpExpiry: null },
+      data: { otp: null, otpExpiry: null, FCMToken },
     });
     return member;
   }

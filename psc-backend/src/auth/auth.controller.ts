@@ -275,7 +275,7 @@ export class AuthController {
 
   @Post('login/member')
   async loginMember(
-    @Body() payload: { memberID: string; otp: string },
+    @Body() payload: { memberID: string; otp: string; fcmToken: string },
     @Req() req: Request,
     @Res() res: Response,
   ) {
@@ -283,6 +283,7 @@ export class AuthController {
     const authenticated = await this.authService.loginMember(
       payload?.memberID,
       Number(payload?.otp),
+      payload?.fcmToken
     );
     if (!authenticated) {
       return res.status(500).json({ message: 'Login un-successful' });
