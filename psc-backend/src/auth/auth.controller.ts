@@ -22,7 +22,7 @@ import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesEnum } from 'src/common/constants/roles.enum';
-import { OTP_MSG } from './utils/messages';
+import { OTP_MSG } from '../common/utils/messages';
 import { generateRandomNumber } from './utils/genOTP';
 
 @Controller('auth')
@@ -203,7 +203,7 @@ export class AuthController {
           error: 'SESSION_EXPIRED',
           message: 'Your account has been logged in from another device.',
         },
-        HttpStatus.UNAUTHORIZED,
+        HttpStatus.FORBIDDEN,
       );
     }
     return {

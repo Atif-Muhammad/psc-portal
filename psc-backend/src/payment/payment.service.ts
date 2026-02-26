@@ -394,6 +394,9 @@ export class PaymentService {
         if (booking) await updateCommonBooking(prisma, booking, 'PHOTOSHOOT');
       }
 
+
+      // put check here for member or an affiliated club?
+      
       // Update Member Ledger
       const paidAmount = Number(voucher.amount);
       await prisma.member.update({

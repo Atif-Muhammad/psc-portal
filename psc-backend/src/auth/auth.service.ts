@@ -190,6 +190,7 @@ export class AuthService {
         Membership_No,
         OR: [{ Status: 'active' }, { Status: 'deactivated' }],
       },
+      select: {FCMToken: true}
     });
   }
 
@@ -217,6 +218,7 @@ export class AuthService {
     // check otp against the memberID
     const member = await this.prisma.member.findFirst({
       where: { Membership_No: String(memberID), otp },
+      select: {Membership_No: true, Name: true, Status: true, Email: true, otp: true, otpExpiry: true, FCMToken: true}
     });
     if (!member) {
       throw new HttpException("OTP Didn't match", HttpStatus.NOT_ACCEPTABLE);
@@ -226,6 +228,9 @@ export class AuthService {
     if (member.otpExpiry && new Date() > member.otpExpiry) {
       throw new HttpException('OTP Expired', HttpStatus.NOT_ACCEPTABLE);
     }
+
+    console.log("Requested FCM:", FCMToken)
+    console.log("Member FCM:", member?.FCMToken)
 
     await this.prisma.member.update({
       where: { Membership_No: String(memberID) },
