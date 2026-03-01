@@ -57,7 +57,7 @@ export const VouchersDialog = React.memo(({
         </DialogHeader>
         <div className="py-4">
           <p className="text-sm text-muted-foreground mb-4">
-            Vouchers for booking #{viewVouchers?.id} - {viewVouchers?.memberName}
+            Vouchers for booking #{viewVouchers?.id} - {viewVouchers?.memberName || viewVouchers?.guestName || viewVouchers?.member?.Name}
           </p>
 
           {isLoadingVouchers ? (
@@ -135,7 +135,7 @@ export const VouchersDialog = React.memo(({
                         {new Date(voucher.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
-                    {voucher.paid_at && (
+                    {voucher.paid_at && voucher.payment_mode !== "ONLINE" && voucher.payment_mode !== "KUICKPAY" && (
                       <div>
                         <div className="font-medium">Paid At</div>
                         <div className="text-xs">
@@ -147,7 +147,7 @@ export const VouchersDialog = React.memo(({
                   </div>
 
                   {/* Payment Details */}
-                  {(voucher.card_number || voucher.check_number || voucher.bank_name) && (
+                  {(voucher.card_number || voucher.check_number || voucher.bank_name || voucher.transaction_id || (voucher.paid_at && (voucher.payment_mode === "ONLINE" || voucher.payment_mode === "KUICKPAY"))) && (
                     <div className="mt-3 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-sm">
                       <div className="font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
                         <Receipt className="h-3.5 w-3.5" />
@@ -172,15 +172,21 @@ export const VouchersDialog = React.memo(({
                             <span>{voucher.bank_name}</span>
                           </div>
                         )}
-                      </div>
-                    </div>
-                  )}
-
-                  {voucher.transaction_id && (
-                    <div className="mt-2 text-sm">
-                      <div className="font-medium">Transaction ID</div>
-                      <div className="font-mono text-muted-foreground">
-                        {voucher.transaction_id}
+                        {voucher.transaction_id && (
+                          <div className="col-span-2 flex justify-between border-b border-blue-100 pb-1">
+                            <span className="text-blue-700 font-medium">Transaction ID:</span>
+                            <span className="font-mono">{voucher.transaction_id}</span>
+                          </div>
+                        )}
+                        {voucher.paid_at && (voucher.payment_mode === "ONLINE" || voucher.payment_mode === "KUICKPAY") && (
+                          <div className="col-span-2 flex justify-between border-b border-blue-100 pb-1">
+                            <span className="text-blue-700 font-medium">Paid Date:</span>
+                            <span>
+                              {new Date(voucher.paid_at).toLocaleDateString()} {" "}
+                              {new Date(voucher.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

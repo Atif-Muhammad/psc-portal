@@ -84,7 +84,7 @@ model Member {
 
   lastBookingDate DateTime?
 
-  vouchers PaymentVoucher[]
+  // vouchers PaymentVoucher[]
   feedbacks Feedback[]
 
   otp       Int? //temp otp
@@ -145,6 +145,7 @@ model RoomBooking {
 
   member Member @relation(fields: [Membership_No], references: [Membership_No])
   // room   Room   @relation(fields: [roomId], references: [id]) // Removed direct single relation mapping validation, logic handled in service
+
 
   createdBy String?
   updatedBy String? 
@@ -307,7 +308,7 @@ model PaymentVoucher {
   booking_id   Int
 
   membership_no String
-  member        Member @relation(fields: [membership_no], references: [Membership_No], onDelete: Cascade)
+  // member        Member @relation(fields: [membership_no], references: [Membership_No], onDelete: Cascade)
 
   amount Decimal @db.Decimal(12, 2)
 
@@ -426,6 +427,7 @@ model Room {
   bookings     RoomOnBooking[]
   reservations RoomReservation[]
   holdings roomHoldings[]
+  affBookings AffClubBookingRoom[]
 
   createdBy String @default("")
   updatedBy String @default("")
@@ -809,7 +811,8 @@ model AffiliatedClub {
   image       String?
   isActive    Boolean @default(true)
 
-  requests AffiliatedClubRequest[]
+  requests     AffiliatedClubRequest[]
+  affBookings  AffClubBooking[]
   createdBy String @default("")
   updatedBy String @default("")
 
@@ -1110,4 +1113,77 @@ model PhotoshootCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+}
+
+// ==================== Affiliated Club Bookings ====================
+
+model AffClubBooking {
+  id                     Int           @id @default(autoincrement())
+  affiliatedClubId       Int
+  affiliatedClub         AffiliatedClub @relation(fields: [affiliatedClubId], references: [id])
+  affiliatedMembershipNo String        @db.VarChar(100)
+
+  rooms AffClubBookingRoom[]
+
+  checkIn  DateTime
+  checkOut DateTime
+
+  totalPrice    Decimal       @default(0.00) @db.Decimal(30, 2)
+  paymentStatus PaymentStatus @default(UNPAID)
+  paidAmount    Decimal       @default(0.00) @db.Decimal(30, 2)
+  pendingAmount Decimal       @default(0.00) @db.Decimal(30, 2)
+  paymentMode   String        @default("CASH")
+
+  numberOfAdults   Int @default(1)
+  numberOfChildren Int @default(0)
+
+  guestName    String? @db.Text
+  guestContact String? @db.Text
+  guestCNIC    String? @db.Text
+
+  specialRequests String? @db.Text
+  remarks         String? @db.Text
+
+  extraCharges Json? @default("[]")
+
+  isCancelled    Boolean @default(false)
+  isConfirmed    Boolean @default(false)
+  refundAmount   Decimal @default(0.00) @db.Decimal(30, 2)
+  refundReturned Boolean @default(false)
+
+  cancellationRequests AffClubCancellationRequest[]
+
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([affiliatedClubId])
+}
+
+model AffClubCancellationRequest {
+  id        Int      @id @default(autoincrement())
+  bookingId Int
+  booking   AffClubBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason    String?  @db.Text
+  requestedBy String?  @db.Text
+  status    RequestStatus @default(PENDING)
+  adminRemarks String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model AffClubBookingRoom {
+  id             Int            @id @default(autoincrement())
+  bookingId      Int
+  booking        AffClubBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  roomId         Int
+  room           Room           @relation(fields: [roomId], references: [id])
+  priceAtBooking Decimal        @db.Decimal(30, 2)
+
+  @@index([bookingId])
+  @@index([roomId])
 }

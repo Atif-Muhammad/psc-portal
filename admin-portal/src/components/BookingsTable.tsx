@@ -74,7 +74,7 @@ export const BookingsTable = React.memo(({
             {bookings.map((booking: Booking) => (
               <TableRow key={booking.id}>
                 <TableCell className="font-medium">
-                  {booking.Membership_No}
+                  {booking.Membership_No || booking.affiliatedMembershipNo}
                 </TableCell>
                 <TableCell>
                   {booking.rooms && booking.rooms.length > 0 ? (

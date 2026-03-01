@@ -211,6 +211,8 @@ export class BookingController {
 
     if (bookingFor === 'rooms')
       return this.bookingService.cCancellationRequestRoom(Number(bookID), reason, requestedBy);
+    if (bookingFor === 'room_aff')
+      return this.bookingService.cCancellationRequestRoomAff(Number(bookID), reason, requestedBy);
     if (bookingFor === 'halls')
       return this.bookingService.cCancellationRequestHall(Number(bookID), reason, requestedBy);
     if (bookingFor === 'lawns')

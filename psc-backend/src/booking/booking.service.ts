@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   HttpStatus,
   Injectable,
   InternalServerErrorException,
@@ -118,21 +119,23 @@ export class BookingService {
         issued_at: 'desc'
       },
       take: 3,
-      include: {
-        member: {
+    });
+
+    const enhancedVouchers = await Promise.all(vouchers.map(async (voucher) => {
+      let bookingData: any = null;
+      let roomType: any = null;
+
+      const member = voucher.membership_no && voucher.membership_no !== 'AFFILIATED'
+        ? await this.prismaService.member.findUnique({
+          where: { Membership_No: voucher.membership_no },
           select: {
             Membership_No: true,
             Name: true,
             Email: true,
             Contact_No: true,
           }
-        }
-      }
-    });
-
-    const enhancedVouchers = await Promise.all(vouchers.map(async (voucher) => {
-      let bookingData: any = null;
-      let roomType: any = null;
+        })
+        : null;
 
       if (voucher.booking_type === 'ROOM') {
         const booking = await this.prismaService.roomBooking.findUnique({
@@ -182,10 +185,10 @@ export class BookingService {
               issue_date: voucher.issued_at,
               due_date: voucher.expiresAt,
               membership: {
-                no: voucher.member.Membership_No,
-                name: voucher.member.Name,
-                email: voucher.member.Email,
-                contact: voucher.member.Contact_No
+                no: member?.Membership_No || 'N/A',
+                name: member?.Name || 'N/A',
+                email: member?.Email || 'N/A',
+                contact: member?.Contact_No || 'N/A'
               },
               voucher: {
                 ...voucher,
@@ -198,10 +201,10 @@ export class BookingService {
             bookingData,
             roomType,
             memberDetails: {
-              memberName: voucher.member.Name,
-              membershipNo: voucher.member.Membership_No,
-              email: voucher.member.Email,
-              contact: voucher.member.Contact_No
+              memberName: member?.Name || 'N/A',
+              membershipNo: member?.Membership_No || 'N/A',
+              email: member?.Email || 'N/A',
+              contact: member?.Contact_No || 'N/A'
             },
             isGuest: booking.paidBy !== 'MEMBER'
           };
@@ -215,10 +218,10 @@ export class BookingService {
           issue_date: voucher.issued_at,
           due_date: voucher.expiresAt,
           membership: {
-            no: voucher.member.Membership_No,
-            name: voucher.member.Name,
-            email: voucher.member.Email,
-            contact: voucher.member.Contact_No
+            no: member?.Membership_No || 'N/A',
+            name: member?.Name || 'N/A',
+            email: member?.Email || 'N/A',
+            contact: member?.Contact_No || 'N/A'
           },
           voucher: {
             ...voucher,
@@ -231,10 +234,10 @@ export class BookingService {
         bookingData: null,
         roomType: null,
         memberDetails: {
-          memberName: voucher.member.Name,
-          membershipNo: voucher.member.Membership_No,
-          email: voucher.member.Email,
-          contact: voucher.member.Contact_No
+          memberName: member?.Name || 'N/A',
+          membershipNo: member?.Membership_No || 'N/A',
+          email: member?.Email || 'N/A',
+          contact: member?.Contact_No || 'N/A'
         },
         isGuest: false
       };
@@ -346,6 +349,15 @@ export class BookingService {
             },
           },
         },
+        affBookings: {
+          where: {
+            booking: {
+              checkIn: { lt: checkOutDate },
+              checkOut: { gt: checkInDate },
+              isCancelled: false,
+            },
+          },
+        },
         roomType: true,
       },
     });
@@ -402,11 +414,18 @@ export class BookingService {
           `Room ${room.roomNumber} is already booked during this period`,
         );
       }
+
+      if ((room as any).affBookings && (room as any).affBookings.length > 0) {
+        throw new ConflictException(
+          `Room ${room.roomNumber} is booked by an affiliated club during this period`,
+        );
+      }
     }
 
     const total = Number(totalPrice);
     let intendedPaid = 0;
 
+    const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
     const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
     if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
@@ -427,9 +446,9 @@ export class BookingService {
       intendedPaid = 0;
     }
 
-    // For ONLINE, initial paid amount is 0 as we want pending vouchers.
-    // For others (even HALF_PAID), it is CONFIRMED immediately, so paid is intendedPaid.
-    const paid = (isOnline) ? 0 : intendedPaid;
+    // For KUICKPAY, initial paid amount is 0 as we want pending vouchers.
+    // For others (even HALF_PAID or manual ONLINE), it is CONFIRMED immediately, so paid is intendedPaid.
+    const paid = (isKuickpay) ? 0 : intendedPaid;
     const owed = total - paid;
 
     const isHalfPaid =
@@ -518,7 +537,7 @@ export class BookingService {
     // For TO_BILL status, we still create a payment voucher if some amount was actually PAID
     if (intendedPaid > 0) {
       let voucherType: VoucherType;
-      let status: VoucherStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+      let status: VoucherStatus = isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
 
       if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
         voucherType = VoucherType.FULL_PAYMENT;
@@ -547,12 +566,15 @@ export class BookingService {
           voucher_type: voucherType as VoucherType,
           status: status,
           issued_by: createdBy || 'admin',
-          paid_at: status === VoucherStatus.CONFIRMED ? new Date() : null,
+          paid_at: status === VoucherStatus.CONFIRMED
+            ? (payload.paid_at ? new Date(payload.paid_at) : new Date())
+            : null,
           card_number: card_number,
           check_number: check_number,
-          bank_name: bank_name,
-          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
-          remarks: `${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Guests: ${numberOfAdults}A/${numberOfChildren}C${specialRequests ? ` | ${specialRequests}` : ''}`,
+          bank_name: (payload as any).bank_name || null,
+          transaction_id: (payload as any).transaction_id || null,
+          expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
+          remarks: `${isKuickpay ? 'KUICKPAY ' : ''}${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Guests: ${numberOfAdults}A/${numberOfChildren}C${specialRequests ? ` | ${specialRequests}` : ''}`,
         } as any,
       });
       mainVoucherCreated = true;
@@ -643,6 +665,8 @@ export class BookingService {
       card_number,
       check_number,
       bank_name,
+      transaction_id,
+      paid_at,
       generateAdvanceVoucher,
       advanceVoucherAmount,
       heads,
@@ -743,6 +767,15 @@ export class BookingService {
             },
           },
         },
+        affBookings: {
+          where: {
+            booking: {
+              checkIn: { lt: newCheckOut },
+              checkOut: { gt: newCheckIn },
+              isCancelled: false,
+            },
+          },
+        },
         roomType: true,
       },
     });
@@ -795,6 +828,11 @@ export class BookingService {
         throw new ConflictException(
           `Room ${room.roomNumber} is already booked`,
         );
+
+      if ((room as any).affBookings && (room as any).affBookings.length > 0)
+        throw new ConflictException(
+          `Room ${room.roomNumber} is booked by an affiliated club during this period`,
+        );
     }
 
     // ── PAYMENT CALCULATIONS ────────────────────────────────
@@ -827,14 +865,15 @@ export class BookingService {
       newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
     }
 
-    // ── CRITICAL: For ONLINE payments, don't add amount to booking yet ──
-    // The amount will be added by /bill-payment when voucher is confirmed
-    // This prevents double-adding: once here and once in /bill-payment
-    const isOnline =
-      paymentMode === (PaymentMode.ONLINE as unknown) ||
-      String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
+    const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
 
-    let dbPaid = isOnline ? currPaid : newPaid;
+    // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
+    // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
+    let dbPaid = newPaid;
+    if (isKuickpay && newPaid > currPaid) {
+      dbPaid = currPaid;
+    }
 
     // ── HANDLE TO_BILL STATUS TRANSITION ──────────────────────
     const isCurrentlyToBill = currStatus === (PaymentStatus.TO_BILL as unknown) || String(currStatus) === 'TO_BILL';
@@ -899,7 +938,7 @@ export class BookingService {
       dbPaid, // Use actual cash paid, not bookingPaidAmount (settlement amount)
       newPaymentStatus,
       currTotal,
-      oldActualCash, // Use actual cashpaid from before the update
+      oldActualCash, // Use actual cash paid from before the update
       currStatus,
       {
         roomNumbers,
@@ -909,6 +948,9 @@ export class BookingService {
         generateAdvanceVoucher,
         advanceVoucherAmount: Number(advanceVoucherAmount),
         roomCount: targetRoomIds.length,
+        transaction_id: transaction_id,
+        paid_at: paid_at,
+        bank_name: bank_name,
       },
       (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
       'admin',
@@ -930,7 +972,7 @@ export class BookingService {
     const updated = await this.prismaService.roomBooking.update({
       where: { id: booking.id },
       data: {
-        Membership_No: membershipNo ?? booking.Membership_No,
+        // membershipNo: membershipNo ?? booking.Membership_No,
         // Update rooms relation using join table
         rooms: {
           deleteMany: {},
@@ -965,7 +1007,7 @@ export class BookingService {
         refundAmount,
         refundReturned: false,
         updatedBy,
-      },
+      } as any,
     });
 
     // ── UPDATE DATES IN VOUCHERS ────────────────────────────
@@ -1049,11 +1091,14 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
       },
     };
-
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -1087,6 +1132,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1099,7 +1148,7 @@ export class BookingService {
     }
 
     const bookings = await this.prismaService.roomBooking.findMany(args);
-    return bookings.map(b => this.attachActiveCancellationRequest(b));
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
   async gCancellationRequestsRoom(page?: number, limit?: number) {
@@ -1132,6 +1181,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1144,7 +1197,7 @@ export class BookingService {
     }
 
     const bookings = await this.prismaService.roomBooking.findMany(args);
-    return bookings.map(b => this.attachActiveCancellationRequest(b));
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
   async gCancelledBookingsHall(page?: number, limit?: number) {
@@ -1158,6 +1211,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1191,6 +1248,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1219,6 +1280,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1254,6 +1319,10 @@ export class BookingService {
             Membership_No: true,
             Name: true,
             Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
           },
         },
         cancellationRequests: true,
@@ -1268,7 +1337,6 @@ export class BookingService {
     const bookings = await this.prismaService.lawnBooking.findMany(args);
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
-
 
   private formatLawnBookingRemarks(
     lawnName: string,
@@ -1326,6 +1394,9 @@ export class BookingService {
       advanceVoucherAmount?: number;
       remarks?: string;
       roomCount?: number;
+      transaction_id?: string;
+      paid_at?: string;
+      bank_name?: string;
     },
     paymentMode: PaymentMode = PaymentMode.CASH,
     issuedBy: string = 'admin',
@@ -1501,13 +1572,16 @@ export class BookingService {
       const isToBillStatus =
         newStatus === (PaymentStatus.TO_BILL as unknown) ||
         newStatus === 'TO_BILL';
+      const isKuickpay =
+        paymentMode === ((PaymentMode as any).KUICKPAY as unknown) ||
+        String(paymentMode) === 'KUICKPAY';
       const isOnline =
         paymentMode === (PaymentMode.ONLINE as unknown) ||
         String(paymentMode) === 'ONLINE';
 
-      if (isAdvanceStatus || isOnline) {
-        vType = VoucherType.ADVANCE_PAYMENT;
-        vStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+      if (isAdvanceStatus || isKuickpay || isOnline) {
+        vType = (isKuickpay || isOnline) ? VoucherType.FULL_PAYMENT : VoucherType.ADVANCE_PAYMENT;
+        vStatus = isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
       } else if (isToBillStatus) {
         vType = VoucherType.TO_BILL;
         vStatus = VoucherStatus.CONFIRMED;
@@ -1521,19 +1595,22 @@ export class BookingService {
           amount: paidDiff,
           voucher_type: vType,
           status: vStatus,
-          paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
+          paid_at: vStatus === VoucherStatus.CONFIRMED
+            ? (details.paid_at ? new Date(details.paid_at) : new Date())
+            : null,
           card_number: card_number,
           check_number: check_number,
-          bank_name: bank_name,
-          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
-          remarks: `${baseRemarks} | UPDATE: ${updateText}`,
+          bank_name: details.bank_name || bank_name || null,
+          transaction_id: details.transaction_id || null,
+          expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
+          remarks: `${baseRemarks} | UPDATE: ${updateText}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
         } as any,
       });
 
       // Mark that we created a voucher and track the amount and type
       voucherCreatedForPaymentIncrease = true;
       voucherAmountCreated = paidDiff;
-      voucherCreatedIsOnline = isOnline;
+      voucherCreatedIsOnline = isKuickpay;
 
       await appendUpdateRemark(updateText);
     }
@@ -1881,6 +1958,25 @@ export class BookingService {
       }
       return { success: true, message: 'Cancellation request rejected' };
     }
+    if (bookingFor === 'room_aff') {
+      const pendingRequest = await this.prismaService.affClubCancellationRequest.findFirst({
+        where: { bookingId: bookingId, status: 'PENDING' },
+      });
+
+      await this.prismaService.affClubCancellationRequest.updateMany({
+        where: { bookingId: bookingId, status: 'PENDING' },
+        data: {
+          status: status,
+          adminRemarks: remarks || 'Action taken by admin',
+        },
+      });
+
+      if (status === 'APPROVED' && pendingRequest) {
+        return await this.cancelRoomAffBookingInternal(bookingId, pendingRequest.createdAt);
+      }
+      return { success: true, message: 'Cancellation request rejected' };
+    }
+    return { success: false, message: 'Invalid booking type' };
   }
 
   private async cancelRoomBookingInternal(bookingId: number, requestCreatedAt?: Date) {
@@ -1905,6 +2001,25 @@ export class BookingService {
       refundAmount = result.refundAmount;
       deductionAmount = result.deductionAmount;
     }
+
+    // Mark pending vouchers as cancelled
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.ROOM,
+        status: VoucherStatus.PENDING,
+      },
+      data: { status: VoucherStatus.CANCELLED },
+    });
+
+    // Clear room holdings if any
+    const roomIds = booking.rooms.map((r) => r.roomId);
+    await this.prismaService.roomHoldings.deleteMany({
+      where: {
+        roomId: { in: roomIds },
+        holdBy: booking.Membership_No,
+      },
+    });
 
     await Promise.all(
       booking.rooms.map((rob) =>
@@ -1976,6 +2091,24 @@ export class BookingService {
       deductionAmount = result.deductionAmount;
     }
 
+    // Mark pending vouchers as cancelled
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.HALL,
+        status: VoucherStatus.PENDING,
+      },
+      data: { status: VoucherStatus.CANCELLED },
+    });
+
+    // Clear hall holdings if any
+    await this.prismaService.hallHoldings.deleteMany({
+      where: {
+        hallId: booking.hallId,
+        holdBy: booking.member.Membership_No,
+      },
+    });
+
     if (refundAmount > 0) {
       await this.createRefundVoucher(
         bookingId,
@@ -2025,6 +2158,16 @@ export class BookingService {
     // Free lawn holdings if any
     await this.prismaService.lawnHoldings.deleteMany({
       where: { lawnId: booking.lawnId, holdBy: booking.memberId.toString() }, // holdBy is String, memberId is Int
+    });
+
+    // Mark pending vouchers as cancelled
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.LAWN,
+        status: VoucherStatus.PENDING,
+      },
+      data: { status: VoucherStatus.CANCELLED },
     });
 
     let refundAmount = 0;
@@ -2103,6 +2246,16 @@ export class BookingService {
       deductionAmount = result.deductionAmount;
     }
 
+    // Mark pending vouchers as cancelled
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.PHOTOSHOOT,
+        status: VoucherStatus.PENDING,
+      },
+      data: { status: VoucherStatus.CANCELLED },
+    });
+
     if (refundAmount > 0) {
       await this.createRefundVoucher(
         bookingId,
@@ -2138,6 +2291,76 @@ export class BookingService {
       data: {
         isCancelled: true,
         refundAmount: refundAmount,
+      },
+    });
+  }
+
+  async cCancellationRequestRoomAff(bookingId: number, reason: string, requestedBy?: string) {
+    const booking = await this.prismaService.affClubBooking.findUnique({
+      where: { id: bookingId },
+      include: {
+        cancellationRequests: {
+          where: { OR: [{ status: 'PENDING' }, { status: "APPROVED" }] },
+        }
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Affiliated Booking not found');
+
+    if (booking.cancellationRequests && booking.cancellationRequests.length > 0) {
+      throw new BadRequestException('A cancellation request is already pending for this booking');
+    }
+
+    return await this.prismaService.affClubCancellationRequest.create({
+      data: {
+        bookingId: booking.id,
+        reason: reason || 'Booking cancellation requested by admin',
+        requestedBy: requestedBy || 'Admin',
+        status: 'PENDING',
+      },
+    });
+  }
+
+  private async cancelRoomAffBookingInternal(bookingId: number, requestCreatedAt?: Date) {
+    const booking = await this.prismaService.affClubBooking.findUnique({
+      where: { id: bookingId },
+      include: { rooms: { include: { room: true } } },
+    });
+    if (!booking) throw new NotFoundException('Affiliated Booking not found');
+
+    // Mark pending vouchers as cancelled
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.ROOM,
+        status: VoucherStatus.PENDING,
+      },
+      data: { status: VoucherStatus.CANCELLED },
+    });
+
+    // Clear room holdings if any
+    const roomIds = booking.rooms.map((r) => r.roomId);
+    await this.prismaService.roomHoldings.deleteMany({
+      where: {
+        roomId: { in: roomIds },
+        holdBy: booking.affiliatedMembershipNo,
+      },
+    });
+
+    // Free rooms
+    await Promise.all(
+      booking.rooms.map((rob) =>
+        this.prismaService.room.update({
+          where: { id: rob.room.id },
+          data: { isBooked: false },
+        }),
+      ),
+    );
+
+    return await this.prismaService.affClubBooking.update({
+      where: { id: bookingId },
+      data: {
+        isCancelled: true,
       },
     });
   }
@@ -2202,11 +2425,12 @@ export class BookingService {
       dayEnd.setHours(23, 59, 59, 999);
       const currentSlot = detail.timeSlot.toUpperCase();
 
-      // 1. HARD BLOCK: Any Booking in Same Category on Same Date
+      // 1. HARD BLOCK: Any Booking for Same Entity on Same Date
       let sameCategoryBookings: any[];
       if (category === 'Hall') {
         sameCategoryBookings = await prisma.hallBooking.findMany({
           where: {
+            hallId: entityId,
             bookingDate: { lte: dayEnd },
             endDate: { gte: dayStart },
             isCancelled: false,
@@ -2216,6 +2440,7 @@ export class BookingService {
       } else {
         sameCategoryBookings = await prisma.lawnBooking.findMany({
           where: {
+            lawnId: entityId,
             bookingDate: { lte: dayEnd },
             endDate: { gte: dayStart },
             isCancelled: false,
@@ -2237,7 +2462,7 @@ export class BookingService {
         if (hasDateConflict) {
           throw new ConflictException({
             type: 'HARD',
-            message: `A ${category} is already booked on ${formatPakistanDate(currentCheckDate)}. Only one booking is allowed per category per day.`,
+            message: `This ${category} is already booked on ${formatPakistanDate(currentCheckDate)}. Only one booking is allowed per ${category.toLowerCase()} per day.`,
           });
         }
       }
@@ -2491,8 +2716,9 @@ export class BookingService {
         intendedPaid = 0;
       }
 
-      // For ONLINE, initial paid amount is 0 as we want pending vouchers
-      const paid = isOnline ? 0 : intendedPaid;
+      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
+      // For KUICKPAY, initial paid amount is 0 as we want pending vouchers
+      const paid = isKuickpay ? 0 : intendedPaid;
       const owed = total - paid;
 
       const isHalfPaid =
@@ -2568,7 +2794,7 @@ export class BookingService {
 
       if (intendedPaid > 0) {
         let voucherType: VoucherType;
-        let status: VoucherStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+        let status: VoucherStatus = isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
 
         if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
           voucherType = VoucherType.FULL_PAYMENT;
@@ -2596,12 +2822,15 @@ export class BookingService {
             voucher_type: voucherType as VoucherType,
             status: status,
             issued_by: createdBy || 'admin',
-            paid_at: status === VoucherStatus.CONFIRMED ? new Date() : null,
+            paid_at: status === VoucherStatus.CONFIRMED
+              ? ((payload as any).paid_at ? new Date((payload as any).paid_at) : new Date())
+              : null,
             card_number: card_number,
             check_number: check_number,
-            bank_name: bank_name,
-            expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
-            remarks: `${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}${this.formatHallBookingRemarks(
+            bank_name: (payload as any).bank_name || null,
+            transaction_id: (payload as any).transaction_id || null,
+            expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
+            remarks: `${isKuickpay ? 'KUICKPAY ' : ''}${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}${this.formatHallBookingRemarks(
               hall.name,
               booking,
               endDate,
@@ -2777,14 +3006,22 @@ export class BookingService {
       if (!['NIGHT', 'DAY'].includes(normalizedEventTime))
         throw new BadRequestException('Invalid event time');
 
-      // Check for conflicts only if details changed
+      // Normalize both to YYYY-MM-DD for comparison
+      const normalizeDate = (d: Date | string) => new Date(d).toISOString().split('T')[0];
+      const normalizeDetailsForComp = (details: any[]) =>
+        (details || [])
+          .map((d) => `${normalizeDate(d.date)}|${d.timeSlot?.toUpperCase()}`)
+          .sort()
+          .join(',');
+
+      // Check for conflicts only if scheduling details changed
       const detailsChanged =
         existing.hallId !== Number(entityId) ||
-        existing.bookingDate.getTime() !== booking.getTime() ||
-        existing.endDate.getTime() !== endDate.getTime() || // Check endDate change
+        normalizeDate(existing.bookingDate) !== normalizeDate(booking) ||
+        normalizeDate(existing.endDate) !== normalizeDate(endDate) ||
         existing.bookingTime !== normalizedEventTime ||
-        JSON.stringify(existing.bookingDetails) !==
-        JSON.stringify(normalizedDetails);
+        normalizeDetailsForComp(existing.bookingDetails as any[]) !==
+        normalizeDetailsForComp(normalizedDetails);
 
       if (detailsChanged) {
         // ── CONFLICT CHECKS (Centralized) ──────────────────────
@@ -2885,13 +3122,15 @@ export class BookingService {
         newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
       }
 
-      // ── CRITICAL: For ONLINE payments, don't add amount to booking yet ──
-      // The amount will be added by /bill-payment when voucher is confirmed
-      const isOnline =
-        paymentMode === (PaymentMode.ONLINE as unknown) ||
-        String(paymentMode) === 'ONLINE';
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
+      const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
 
-      let dbPaid = isOnline ? currPaid : newPaid;
+      // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
+      // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
+      let dbPaid = newPaid;
+      if (isKuickpay && newPaid > currPaid) {
+        dbPaid = currPaid;
+      }
 
       // ── HANDLE TO_BILL STATUS TRANSITION ──────────────────────
       const isCurrentlyToBill = currStatus === (PaymentStatus.TO_BILL as unknown) || String(currStatus) === 'TO_BILL';
@@ -2947,16 +3186,15 @@ export class BookingService {
       const bookingPaidAmount = isToBillStatus ? newTotal : dbPaid;
       const bookingPendingAmount = isToBillStatus ? 0 : newOwed;
 
-      // Handle Vouchers and get Refund Amount
       const refundAmount = await this.handleVoucherUpdateUnified(
         Number(id),
         'HALL',
         membershipNo,
         newTotal,
-        dbPaid, // Use actual cash paid, not bookingPaidAmount (settlement amount)
+        dbPaid,
         newPaymentStatus,
         currTotal,
-        oldActualCash, // Use actual cash paid from before the update
+        oldActualCash,
         currStatus,
         {
           hallName: hall.name,
@@ -2968,6 +3206,9 @@ export class BookingService {
           remarks: remarks,
           generateAdvanceVoucher: payload.generateAdvanceVoucher,
           advanceVoucherAmount: Number(payload.advanceVoucherAmount),
+          transaction_id: (payload as any).transaction_id,
+          paid_at: (payload as any).paid_at,
+          bank_name: bank_name,
         },
         (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
         'admin',
@@ -3351,8 +3592,8 @@ export class BookingService {
         : Number(basePrice) * numberOfDays;
       let intendedPaid = 0;
 
-      const isOnline =
-        paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
       if (
         String(paymentStatus) === 'PAID' ||
@@ -3373,7 +3614,7 @@ export class BookingService {
         intendedPaid = 0;
       }
 
-      const paid = isOnline ? 0 : intendedPaid;
+      const paid = isKuickpay ? 0 : intendedPaid;
       const owed = total - paid;
 
       const isHalfPaid =
@@ -3440,7 +3681,7 @@ export class BookingService {
       let mainVoucherCreated = false;
       if (intendedPaid > 0) {
         let voucherType: VoucherType;
-        let status: VoucherStatus = isOnline
+        let status: VoucherStatus = isKuickpay
           ? VoucherStatus.PENDING
           : VoucherStatus.CONFIRMED;
 
@@ -3473,12 +3714,15 @@ export class BookingService {
             voucher_type: voucherType as VoucherType,
             status: status,
             issued_by: createdBy || 'admin',
-            paid_at: status === VoucherStatus.CONFIRMED ? new Date() : null,
-            card_number,
-            check_number,
-            bank_name,
-            expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
-            remarks: `${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}${this.formatLawnBookingRemarks(
+            paid_at: status === VoucherStatus.CONFIRMED
+              ? (payload.paid_at ? new Date(payload.paid_at) : new Date())
+              : null,
+            card_number: card_number,
+            check_number: check_number,
+            bank_name: (payload as any).bank_name || null,
+            transaction_id: (payload as any).transaction_id || null,
+            expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
+            remarks: `${isKuickpay ? 'KUICKPAY ' : ''}${isOnline ? 'ONLINE ' : ''}${isHalfPaid || isToBill ? 'PARTIAL PAYMENT ' : ''}${this.formatLawnBookingRemarks(
               lawn.description || 'Lawn',
               normalizedDetails,
               booking,
@@ -3647,16 +3891,34 @@ export class BookingService {
       throw new BadRequestException('Invalid event time. Must be DAY or NIGHT');
     }
 
+    // Normalize comparison values
+    const normalizeDate = (d: Date | string) => new Date(d).toISOString().split('T')[0];
+    const normalizeDetailsForComp = (details: any[]) =>
+      (details || [])
+        .map((d) => `${normalizeDate(d.date)}|${d.timeSlot?.toUpperCase()}`)
+        .sort()
+        .join(',');
+
+    const detailsChanged =
+      existing.lawnId !== Number(entityId) ||
+      normalizeDate(existing.bookingDate) !== normalizeDate(booking) ||
+      normalizeDate(existing.endDate) !== normalizeDate(endDate) ||
+      existing.bookingTime !== normalizedEventTime ||
+      normalizeDetailsForComp(existing.bookingDetails as any[]) !==
+      normalizeDetailsForComp(normalizedDetails);
+
     return await this.prismaService.$transaction(async (prisma) => {
-      // ── CONFLICT CHECKS (Centralized) ──────────────────────
-      await this.validateBookingConflicts(
-        prisma,
-        'Lawn',
-        lawn.id,
-        normalizedDetails,
-        payload.isForced || false,
-        Number(id),
-      );
+      if (detailsChanged) {
+        // ── CONFLICT CHECKS (Centralized) ──────────────────────
+        await this.validateBookingConflicts(
+          prisma,
+          'Lawn',
+          lawn.id,
+          normalizedDetails,
+          payload.isForced || false,
+          Number(id),
+        );
+      }
 
       // Remaining Granular Checks (Reservations & Holdings)
       for (const detail of normalizedDetails) {
@@ -3753,12 +4015,13 @@ export class BookingService {
           paidAmount !== undefined ? Number(paidAmount) : currPaid;
       }
 
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
       const isOnline =
-        paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+        paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
 
-      // For ONLINE increases, dbPaid stays same (awaiting pending voucher)
+      // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
       let bookingPaidAmount = intendedPaid;
-      if (isOnline && intendedPaid > currPaid) {
+      if (isKuickpay && intendedPaid > currPaid) {
         bookingPaidAmount = currPaid;
       }
 
@@ -3792,6 +4055,9 @@ export class BookingService {
           eventTime: normalizedEventTime,
           remarks: remarks,
           bookingDetails: normalizedDetails,
+          transaction_id: (payload as any).transaction_id,
+          paid_at: (payload as any).paid_at,
+          bank_name: bank_name,
         },
         (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
         'admin',
@@ -4027,29 +4293,32 @@ export class BookingService {
       ? Number(totalPrice)
       : Number(basePrice) * slotsCount;
 
-    let paid = 0;
-    let owed = total;
+    const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
+    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+
+    let intendedPaid = 0;
     let amountToBalance = 0;
-    const isToBill = (paymentStatus as unknown as string) === 'TO_BILL';
+    const isToBill = paymentStatus === (PaymentStatus.TO_BILL as unknown) || String(paymentStatus) === 'TO_BILL';
 
     if (paymentStatus === (PaymentStatus.PAID as unknown) || String(paymentStatus) === 'PAID') {
-      paid = total;
-      owed = 0;
+      intendedPaid = total;
     } else if (
       paymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
       String(paymentStatus) === 'HALF_PAID' ||
       paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
       String(paymentStatus) === 'ADVANCE_PAYMENT'
     ) {
-      paid = Number(paidAmount) || 0;
-      owed = total - paid;
+      intendedPaid = Number(paidAmount) || 0;
     } else if (isToBill) {
-      amountToBalance = owed;
-      owed = 0;
+      amountToBalance = total;
+      intendedPaid = 0;
     } else {
-      paid = 0;
-      owed = total;
+      intendedPaid = 0;
     }
+
+    const paid = isKuickpay ? 0 : intendedPaid;
+    const owed = isToBill ? 0 : total - paid;
+    amountToBalance = isToBill ? total : 0;
 
     // 5. Create Booking
     const booked = await this.prismaService.photoshootBooking.create({
@@ -4088,17 +4357,18 @@ export class BookingService {
     });
 
     // 7. Create Voucher
-    if (paid > 0) {
+    if (intendedPaid > 0) {
       let voucherType: VoucherType | null = null;
       if (paymentStatus === (PaymentStatus.PAID as unknown) || String(paymentStatus) === 'PAID')
         voucherType = VoucherType.FULL_PAYMENT;
       else if (paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) || String(paymentStatus) === 'ADVANCE_PAYMENT')
         voucherType = VoucherType.ADVANCE_PAYMENT;
+      else if (isToBill)
+        voucherType = VoucherType.TO_BILL;
       else
         voucherType = VoucherType.HALF_PAYMENT;
 
-      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
-      const vStatus = isOnline ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
+      const vStatus = isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
 
       const vno = generateNumericVoucherNo();
       await this.prismaService.paymentVoucher.create({
@@ -4109,16 +4379,19 @@ export class BookingService {
           booking_id: booked.id,
           membership_no: membershipNo,
           amount: paid,
-          payment_mode: paymentMode as unknown as PaymentMode,
+          payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
           voucher_type: voucherType!,
           status: vStatus,
-          issued_by: 'admin',
-          paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
-          expiresAt: isOnline ? new Date(Date.now() + 60 * 60 * 1000) : null,
-          remarks: `Photoshoot | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}`,
+          issued_by: createdBy || 'admin',
+          paid_at: vStatus === VoucherStatus.CONFIRMED
+            ? (payload.paid_at ? new Date(payload.paid_at) : new Date())
+            : null,
+          expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
+          remarks: `Photoshoot | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
           card_number,
           check_number,
-          bank_name,
+          bank_name: payload.bank_name || null,
+          transaction_id: payload.transaction_id || null,
         } as any,
       });
     }
@@ -4382,17 +4655,20 @@ export class BookingService {
       }
     }
 
-    // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is ONLINE
+    // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
+    // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
     let dbPaid = newPaid;
-    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
+    const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
 
-    if (isOnline && newPaid > currPaid) {
+    if (isKuickpay && newPaid > currPaid) {
       dbPaid = currPaid;
     }
 
     let newOwed = newTotal - dbPaid;
     let amountToBalance = 0;
-    if (newPaymentStatus === PaymentStatus.TO_BILL) {
+    const isToBill = newPaymentStatus === (PaymentStatus.TO_BILL as unknown) || String(newPaymentStatus) === 'TO_BILL';
+    if (isToBill) {
       amountToBalance = newOwed;
       newOwed = 0;
     }
@@ -4413,6 +4689,9 @@ export class BookingService {
         eventTime: newMainStartTime.toLocaleTimeString(),
         bookingDetails: normalizedDetails,
         remarks: remarks,
+        transaction_id: payload.transaction_id || undefined,
+        bank_name: (payload as any).bank_name || bank_name || undefined,
+        paid_at: (payload as any).paid_at || undefined,
       },
       (paymentMode as unknown as PaymentMode) || PaymentMode.CASH,
       'admin',
@@ -4617,33 +4896,37 @@ export class BookingService {
       const total = totalPrice ? Number(totalPrice) : Number(basePrice);
 
       // ── 7. PAYMENT CALCULATIONS ───────────────────────────
-      let paid = 0;
-      let owed = total;
+      let calculatedPaid = 0;
+      let calculatedOwed = total;
 
+      let intendedPaid = 0;
       let amountToBalance = 0;
       const isToBill = paymentStatus === 'TO_BILL';
+      const isKuickpay = (paymentMode as any) === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
+      const isOnline = (paymentMode as any) === (PaymentMode as any).ONLINE || String(paymentMode) === 'ONLINE';
 
       if (paymentStatus === 'PAID') {
-        paid = total;
-        owed = 0;
+        intendedPaid = total;
       } else if (paymentStatus === 'HALF_PAID') {
-        paid = Number(paidAmount) || 0;
-        if (paid <= 0) {
+        intendedPaid = Number(paidAmount) || 0;
+        if (intendedPaid <= 0) {
           throw new ConflictException(
             'Paid amount must be greater than 0 for half-paid status',
           );
         }
-        if (paid >= total) {
+        if (intendedPaid >= total) {
           throw new ConflictException(
             'Paid amount must be less than total price for half-paid status',
           );
         }
-        owed = total - paid;
       }
 
+      calculatedPaid = isKuickpay ? 0 : intendedPaid;
+      calculatedOwed = total - calculatedPaid;
+
       if (isToBill) {
-        amountToBalance = owed;
-        owed = 0;
+        amountToBalance = calculatedOwed;
+        calculatedOwed = 0;
       }
 
       // ── 8. CREATE BOOKING ───────────────────────────────
@@ -4657,8 +4940,8 @@ export class BookingService {
           totalPrice: total,
           paymentStatus: paymentStatus,
           pricingType,
-          paidAmount: paid,
-          pendingAmount: owed,
+          paidAmount: calculatedPaid,
+          pendingAmount: calculatedOwed,
           paidBy,
           guestName,
           guestContact,
@@ -4686,10 +4969,10 @@ export class BookingService {
         data: {
           totalBookings: { increment: 1 },
           lastBookingDate: new Date(),
-          bookingAmountPaid: { increment: Math.round(Number(paid)) },
-          bookingAmountDue: { increment: Math.round(Number(owed)) },
+          bookingAmountPaid: { increment: Math.round(Number(calculatedPaid)) },
+          bookingAmountDue: { increment: Math.round(Number(calculatedOwed)) },
           bookingBalance: {
-            increment: Math.round(Number(paid) - Number(owed)),
+            increment: Math.round(Number(calculatedPaid) - Number(calculatedOwed)),
           },
           Balance: { increment: Math.round(amountToBalance) },
           drAmount: { increment: Math.round(amountToBalance) },
@@ -4697,13 +4980,14 @@ export class BookingService {
       });
 
       // ── 10. CREATE PAYMENT VOUCHER ───────────────────────
-      if (paid > 0) {
+      if (intendedPaid > 0) {
         let voucherType: VoucherType | null = null;
         if (paymentStatus === ('PAID' as unknown))
           voucherType = VoucherType.FULL_PAYMENT;
         else if (paymentStatus === ('HALF_PAID' as unknown))
           voucherType = VoucherType.HALF_PAYMENT;
 
+        const vStatus = isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED;
         const vno = generateNumericVoucherNo();
         await prisma.paymentVoucher.create({
           data: {
@@ -4712,12 +4996,13 @@ export class BookingService {
             booking_type: 'PHOTOSHOOT',
             booking_id: booked.id,
             membership_no: membershipNo.toString(),
-            amount: paid,
+            amount: intendedPaid,
             payment_mode: paymentMode as unknown as PaymentMode,
             voucher_type: voucherType!,
-            status: VoucherStatus.CONFIRMED,
+            status: vStatus,
             issued_by: 'member',
-            remarks: `Photoshoot: ${photoshoot.description} | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}${specialRequests ? ` | Requests: ${specialRequests}` : ''}`,
+            paid_at: vStatus === VoucherStatus.CONFIRMED ? new Date() : null,
+            remarks: `Photoshoot: ${photoshoot.description} | ${startTime.toLocaleDateString()} ${startTime.toLocaleTimeString()}${specialRequests ? ` | Requests: ${specialRequests}` : ''}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
             card_number,
             check_number,
             bank_name,
@@ -4737,8 +5022,8 @@ export class BookingService {
           timeSlot: `${startTime.toLocaleTimeString()} - ${endTime.toLocaleTimeString()}`,
           duration: '2 hours',
           totalAmount: total,
-          paidAmount: paid,
-          pendingAmount: owed,
+          paidAmount: calculatedPaid,
+          pendingAmount: calculatedOwed,
           paymentStatus: paymentStatus,
         },
         receipt: {
@@ -4747,8 +5032,8 @@ export class BookingService {
           date: startTime.toLocaleDateString(),
           time: startTime.toLocaleTimeString(),
           total: total,
-          paid: paid,
-          balance: owed,
+          paid: calculatedPaid,
+          balance: calculatedOwed,
         },
       };
     });
@@ -4872,9 +5157,24 @@ export class BookingService {
       newPaid = paidAmount !== undefined ? Number(paidAmount) : currPaid;
     }
 
-    let newOwed = newTotal - newPaid;
+    const isKuickpay =
+      paymentMode === ((PaymentMode as any).KUICKPAY as unknown) ||
+      String(paymentMode) === 'KUICKPAY';
+    const isOnline =
+      paymentMode === (PaymentMode.ONLINE as unknown) ||
+      String(paymentMode) === 'ONLINE';
+
+    // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is KUICKPAY or ONLINE
+    let dbPaid = newPaid;
+    if ((isKuickpay || isOnline) && newPaid > currPaid) {
+      dbPaid = currPaid;
+    }
+
+    let newOwed = newTotal - dbPaid;
     let amountToBalance = 0;
-    if (newPaymentStatus === PaymentStatus.TO_BILL) {
+    const isToBill = newPaymentStatus === (PaymentStatus.TO_BILL as unknown) || String(newPaymentStatus) === 'TO_BILL';
+
+    if (isToBill) {
       amountToBalance = newOwed;
       newOwed = 0;
     }
@@ -4894,12 +5194,16 @@ export class BookingService {
         bookingDate: booking,
         eventTime: newStartTime.toLocaleTimeString(),
         remarks: remarks,
+        transaction_id: (payload as any).transaction_id,
+        bank_name: (payload as any).bank_name,
+        paid_at: (payload as any).paid_at,
       },
-      paymentMode || PaymentMode.ONLINE,
+      (paymentMode as any) || PaymentMode.ONLINE,
       'member',
+      updatedBy,
     );
 
-    const paidDiff = newPaid - currPaid;
+    const paidDiff = dbPaid - currPaid;
     const owedDiff = newOwed - (currTotal - currPaid);
 
     // ── UPDATE BOOKING ───────────────────────────────────────
@@ -4914,7 +5218,7 @@ export class BookingService {
         totalPrice: newTotal,
         paymentStatus: newPaymentStatus,
         pricingType,
-        paidAmount: newPaid,
+        paidAmount: dbPaid,
         pendingAmount: newOwed,
         refundAmount,
         paidBy,
@@ -5489,7 +5793,7 @@ export class BookingService {
   private async createToBillVoucher(
     bookingId: number,
     bookingType: BookingType,
-    membershipNo: string,
+    membershipNo: string | null,
     amount: number,
     remarks: string,
   ) {
@@ -5509,5 +5813,519 @@ export class BookingService {
         remarks: remarks,
       } as any,
     });
+  }
+
+  // ==================== AFFILIATED CLUB ROOM BOOKINGS ====================
+
+  async cBookingRoomAff(payload: any, createdBy: string) {
+    console.log('cBookingRoomAff Payload:', JSON.stringify(payload, null, 2));
+    const {
+      affiliatedClubId,
+      affiliatedMembershipNo,
+      selectedRoomIds,
+      checkIn,
+      checkOut,
+      totalPrice,
+      paymentStatus,
+      paidAmount,
+      paymentMode,
+      numberOfAdults = 1,
+      numberOfChildren = 0,
+      specialRequests = '',
+      guestContact,
+      guestName,
+      guestCNIC,
+      heads,
+      card_number,
+      check_number,
+      bank_name: payload_bank_name,
+    } = payload;
+
+    // ── VALIDATION ───────────────────────────────────────────
+    const checkInDate = parsePakistanDate(checkIn!);
+    const checkOutDate = parsePakistanDate(checkOut!);
+    const now = getPakistanDate();
+    now.setHours(0, 0, 0, 0);
+
+    const normalizedCheckIn = new Date(checkInDate);
+    normalizedCheckIn.setHours(0, 0, 0, 0);
+
+    if (!checkIn || !checkOut || checkInDate >= checkOutDate)
+      throw new HttpException('Check-in must be before check-out', HttpStatus.CONFLICT);
+    if (normalizedCheckIn < now)
+      throw new HttpException('Check-in date cannot be in the past', HttpStatus.CONFLICT);
+
+    const roomIdsToBook = selectedRoomIds?.map(Number) || [];
+    if (roomIdsToBook.length === 0) {
+      throw new HttpException('No rooms selected for booking', HttpStatus.BAD_REQUEST);
+    }
+
+    // ── ROOM VALIDATION LOOP ─────────────────────────────────
+    const rooms = await this.prismaService.room.findMany({
+      where: { id: { in: roomIdsToBook } },
+      include: {
+        reservations: {
+          where: {
+            reservedFrom: { lt: checkOutDate },
+            reservedTo: { gt: checkInDate },
+          },
+        },
+        outOfOrders: {
+          where: {
+            startDate: { lt: checkOutDate },
+            endDate: { gt: checkInDate },
+          },
+        },
+        bookings: {
+          where: {
+            booking: {
+              checkIn: { lt: checkOutDate },
+              checkOut: { gt: checkInDate },
+              isCancelled: false,
+            },
+          },
+        },
+        affBookings: {
+          where: {
+            booking: {
+              checkIn: { lt: checkOutDate },
+              checkOut: { gt: checkInDate },
+              isCancelled: false,
+            },
+          },
+        },
+        roomType: true,
+      },
+    });
+
+    if (rooms.length !== roomIdsToBook.length) {
+      throw new HttpException('Some selected rooms were not found', HttpStatus.NOT_FOUND);
+    }
+
+    const roomNumbers = rooms.map((r) => r.roomNumber).join(', ');
+
+    for (const room of rooms) {
+      if (!room.isActive)
+        throw new HttpException(`Room ${room.roomNumber} is not active`, HttpStatus.CONFLICT);
+
+      // Check holdings with exact dates
+      const roomHold = await this.prismaService.roomHoldings.findFirst({
+        where: {
+          roomId: room.id,
+          onHold: true,
+          // For affiliated bookings, we don't necessarily have a membership number to exclude
+          // but if we do (e.g. affiliatedMembershipNo), we could add it.
+          // For now, simple check like uBookingRoom but without NOT { holdBy } unless we have it.
+          OR: [
+            {
+              // Check for exact date overlap
+              checkIn: { lt: checkOutDate },
+              checkOut: { gt: checkInDate },
+            },
+            {
+              // Fallback for legacy holds (only expiry)
+              checkIn: null,
+              holdExpiry: { gt: new Date() },
+            },
+          ],
+        },
+      });
+      if (roomHold)
+        throw new HttpException(
+          `Room ${room.roomNumber} is currently on hold`,
+          HttpStatus.CONFLICT,
+        );
+
+      if (room.outOfOrders && room.outOfOrders.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} has maintenance during this period`, HttpStatus.CONFLICT);
+
+      if (room.reservations && room.reservations.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} is reserved during this period`, HttpStatus.CONFLICT);
+
+      if ((room.bookings && room.bookings.length > 0) || (room.affBookings && room.affBookings.length > 0))
+        throw new HttpException(`Room ${room.roomNumber} is already booked during this period`, HttpStatus.CONFLICT);
+    }
+
+    // ── PAYMENT CALCULATIONS ────────────────────────────────
+    const total = Number(totalPrice);
+    let intendedPaid = 0;
+
+    if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
+      intendedPaid = total;
+    } else if (
+      String(paymentStatus) === 'HALF_PAID' ||
+      paymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
+      String(paymentStatus) === 'ADVANCE_PAYMENT' ||
+      paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+    ) {
+      intendedPaid = Number(paidAmount) || 0;
+    }
+
+    const paid = intendedPaid;
+    const owed = total - paid;
+
+    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY');
+    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || String(paymentMode) === 'ONLINE');
+
+    const isHalfPaid =
+      String(paymentStatus) === 'HALF_PAID' ||
+      paymentStatus === (PaymentStatus.HALF_PAID as unknown);
+
+    // For KUICKPAY, stagnate booking paidAmount (awaiting confirmation).
+    // For ONLINE, update immediately (confirmed payment).
+    const bookingPaidAmount = isKuickpay ? 0 : paid;
+    const bookingPendingAmount = total - bookingPaidAmount;
+
+    // ── CREATE BOOKING ───────────────────────────────────────
+    const booking = await this.prismaService.affClubBooking.create({
+      data: {
+        createdAt: getPakistanDate(),
+        affiliatedClubId: Number(affiliatedClubId),
+        affiliatedMembershipNo,
+        rooms: {
+          create: rooms.map((r) => ({
+            roomId: r.id,
+            priceAtBooking: r.roomType.priceGuest,
+          })),
+        },
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        totalPrice: total,
+        paymentStatus: paymentStatus as unknown as PaymentStatus,
+        paymentMode: paymentMode || 'CASH',
+        paidAmount: bookingPaidAmount,
+        pendingAmount: bookingPendingAmount,
+        numberOfAdults,
+        numberOfChildren,
+        specialRequests,
+        guestName,
+        guestContact: guestContact?.toString(),
+        guestCNIC,
+        extraCharges: heads || [],
+        createdBy,
+        updatedBy: '-',
+      },
+    });
+
+    // ── UPDATE ROOM STATUS ───────────────────────────────────
+    if (checkInDate <= now && checkOutDate > now) {
+      await this.prismaService.room.updateMany({
+        where: { id: { in: roomIdsToBook } },
+        data: { isBooked: true },
+      });
+    }
+
+    // ── CREATE PAYMENT VOUCHER ───────────────────────────────
+    if (intendedPaid > 0) {
+      let voucherType: VoucherType;
+
+      if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
+        voucherType = VoucherType.FULL_PAYMENT;
+      } else if (
+        String(paymentStatus) === 'ADVANCE_PAYMENT' ||
+        paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+      ) {
+        voucherType = VoucherType.ADVANCE_PAYMENT;
+      } else {
+        voucherType = VoucherType.HALF_PAYMENT;
+      }
+
+      const vno = generateNumericVoucherNo();
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          booking_type: 'ROOM',
+          booking_id: booking.id,
+          membership_no: `AFFILIATED (${affiliatedMembershipNo})`,
+          amount: intendedPaid,
+          payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
+          voucher_type: voucherType as VoucherType,
+          status: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY') ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
+          issued_by: createdBy || 'admin',
+          paid_at: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY')
+            ? null
+            : (payload.paid_at ? new Date(payload.paid_at) : new Date()),
+          transaction_id: payload.transaction_id || null,
+          bank_name: payload.bank_name || payload_bank_name || null,
+          card_number: card_number,
+          check_number: check_number,
+          remarks: `AFFILIATED BOOKING${isHalfPaid ? ' PARTIAL PAYMENT' : ''} - Rooms: ${roomNumbers} | ${formatPakistanDate(checkInDate)} → ${formatPakistanDate(checkOutDate)} | Club ID: ${affiliatedClubId}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
+        } as any,
+      });
+    }
+
+    // Removed TO_BILL voucher creation
+
+    return booking;
+  }
+
+  async uBookingRoomAff(payload: any, updatedBy: string) {
+    const { id, ...updateData } = payload;
+    if (!id) throw new HttpException('Booking ID required', HttpStatus.BAD_REQUEST);
+
+    // ── FETCH EXISTING ──────────────────────────────────────
+    const booking = await this.prismaService.affClubBooking.findUnique({
+      where: { id: Number(id) },
+      include: {
+        rooms: {
+          include: {
+            room: {
+              include: {
+                roomType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!booking) throw new HttpException('Booking not found', HttpStatus.UNPROCESSABLE_ENTITY);
+
+    const {
+      affiliatedClubId,
+      affiliatedMembershipNo,
+      selectedRoomIds,
+      checkIn,
+      checkOut,
+      totalPrice,
+      paymentStatus,
+      paidAmount,
+      paymentMode,
+      numberOfAdults,
+      numberOfChildren,
+      specialRequests,
+      guestContact,
+      guestName,
+      guestCNIC,
+      heads,
+      card_number,
+      check_number,
+      bank_name,
+    } = updateData;
+
+    // ── DATA PREP ──────────────────────────────────────────
+    const currentRoomIds = booking.rooms.map((r) => r.roomId);
+    const newCheckIn = checkIn ? parsePakistanDate(checkIn) : booking.checkIn;
+    const newCheckOut = checkOut ? parsePakistanDate(checkOut) : booking.checkOut;
+
+    if (newCheckIn >= newCheckOut)
+      throw new HttpException('Check-in must be before check-out', HttpStatus.CONFLICT);
+
+    // ── ROOM SELECTION ──────────────────────────────────────
+    let targetRoomIds: number[] = [];
+    if (selectedRoomIds && selectedRoomIds.length > 0) {
+      targetRoomIds = selectedRoomIds.map(Number);
+    } else {
+      targetRoomIds = currentRoomIds;
+    }
+
+    if (targetRoomIds.length === 0)
+      throw new HttpException('No rooms part of this booking', HttpStatus.BAD_REQUEST);
+
+    // ── ROOM VALIDATION ─────────────────────────────────────
+    const rooms = await this.prismaService.room.findMany({
+      where: { id: { in: targetRoomIds } },
+      include: {
+        outOfOrders: {
+          where: {
+            startDate: { lt: newCheckOut },
+            endDate: { gt: newCheckIn },
+          },
+        },
+        reservations: {
+          where: {
+            reservedFrom: { lt: newCheckOut },
+            reservedTo: { gt: newCheckIn },
+          },
+        },
+        bookings: {
+          where: {
+            booking: {
+              checkIn: { lt: newCheckOut },
+              checkOut: { gt: newCheckIn },
+              isCancelled: false,
+            },
+          },
+        },
+        affBookings: {
+          where: {
+            bookingId: { not: booking.id }, // Exclude current booking
+            booking: {
+              checkIn: { lt: newCheckOut },
+              checkOut: { gt: newCheckIn },
+              isCancelled: false,
+            },
+          },
+        },
+        roomType: true,
+      },
+    });
+
+    if (rooms.length !== targetRoomIds.length)
+      throw new HttpException('Some rooms not found', HttpStatus.NOT_FOUND);
+
+    const roomNumbers = rooms.map((r) => r.roomNumber).join(', ');
+
+    for (const room of rooms) {
+      if (!room.isActive)
+        throw new HttpException(`Room ${room.roomNumber} not active`, HttpStatus.CONFLICT);
+
+      // Check holdings with exact dates
+      const roomHold = await this.prismaService.roomHoldings.findFirst({
+        where: {
+          roomId: room.id,
+          onHold: true,
+          OR: [
+            {
+              // Check for exact date overlap
+              checkIn: { lt: newCheckOut },
+              checkOut: { gt: newCheckIn },
+            },
+            {
+              // Fallback for legacy holds (only expiry)
+              checkIn: null,
+              holdExpiry: { gt: new Date() },
+            },
+          ],
+          // Exclude holds by this affiliated club if possible, but affiliatedMembershipNo 
+          // might be null/empty in some cases. Using membership string as identifier.
+          // NOT: { holdBy: affiliatedMembershipNo }
+        },
+      });
+      if (roomHold)
+        throw new HttpException(
+          `Room ${room.roomNumber} is currently on hold`,
+          HttpStatus.CONFLICT,
+        );
+
+      if (room.outOfOrders.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} has maintenance`, HttpStatus.CONFLICT);
+      if (room.reservations.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} is reserved`, HttpStatus.CONFLICT);
+      if (room.bookings.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} is already booked`, HttpStatus.CONFLICT);
+      if (room.affBookings && room.affBookings.length > 0)
+        throw new HttpException(`Room ${room.roomNumber} is booked by an affiliated club`, HttpStatus.CONFLICT);
+    }
+
+    // ── PAYMENT CALCULATIONS ────────────────────────────────
+    const currTotal = Number(booking.totalPrice);
+    const currPaid = Number(booking.paidAmount);
+    const currStatus = booking.paymentStatus;
+
+    const newPaymentStatus: PaymentStatus =
+      (paymentStatus as unknown as PaymentStatus) || currStatus;
+    const newTotal = totalPrice !== undefined ? Number(totalPrice) : currTotal;
+
+    let newPaid = currPaid;
+    const isExplicitPaidAmount = paidAmount !== undefined;
+    if (String(newPaymentStatus) === 'PAID') {
+      newPaid = isExplicitPaidAmount ? Number(paidAmount) : Math.max(newTotal, currPaid);
+    } else if (String(newPaymentStatus) === 'UNPAID') {
+      newPaid = 0;
+    } else {
+      newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
+    }
+
+    const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID' || newPaymentStatus === (PaymentStatus.HALF_PAID as unknown);
+    const newOwed = newTotal - newPaid;
+
+    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY');
+    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || paymentMode === 'ONLINE');
+
+    // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
+    let dbPaid = newPaid;
+    if (isKuickpay && newPaid > currPaid) {
+      dbPaid = currPaid;
+    }
+
+    const bookingPaidAmount = dbPaid;
+    const bookingPendingAmount = newTotal - dbPaid;
+
+    // ── VOUCHER HANDLING ────────────────────────────────────
+    // Determine if a new payment amount was provided
+    const paidDiff = newPaid - currPaid;
+    if (paidDiff > 0) {
+      let voucherType: VoucherType;
+      if (String(newPaymentStatus) === 'PAID') {
+        voucherType = VoucherType.FULL_PAYMENT;
+      } else if (
+        String(newPaymentStatus) === 'ADVANCE_PAYMENT' ||
+        newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+      ) {
+        voucherType = VoucherType.ADVANCE_PAYMENT;
+      } else {
+        voucherType = VoucherType.HALF_PAYMENT;
+      }
+
+      const vno = generateNumericVoucherNo();
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          booking_type: 'ROOM',
+          booking_id: booking.id,
+          membership_no: `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`,
+          amount: paidDiff,
+          payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
+          voucher_type: voucherType as VoucherType,
+          status: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY') ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
+          issued_by: updatedBy || 'admin',
+          paid_at: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY')
+            ? null
+            : (updateData.paid_at ? new Date(updateData.paid_at) : new Date()),
+          transaction_id: updateData.transaction_id || null,
+          bank_name: updateData.bank_name || bank_name || null,
+          card_number: card_number,
+          check_number: check_number,
+          remarks: `AFFILIATED BOOKING UPDATE${isHalfPaid ? ' PARTIAL' : ''} - Rooms: ${roomNumbers} | ${formatPakistanDate(newCheckIn)} → ${formatPakistanDate(newCheckOut)} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
+        } as any,
+      });
+    }
+
+    // Removed TO_BILL voucher creation for update
+
+    // ── UPDATE BOOKING ──────────────────────────────────────
+    const updated = await this.prismaService.affClubBooking.update({
+      where: { id: Number(id) },
+      data: {
+        affiliatedClubId: affiliatedClubId ? Number(affiliatedClubId) : undefined,
+        affiliatedMembershipNo: affiliatedMembershipNo ?? undefined,
+        rooms: targetRoomIds !== currentRoomIds ? {
+          deleteMany: {},
+          create: rooms.map((r) => ({
+            roomId: r.id,
+            priceAtBooking: r.roomType.priceGuest,
+          })),
+        } : undefined,
+        checkIn: newCheckIn,
+        checkOut: newCheckOut,
+        totalPrice: newTotal,
+        paymentStatus: newPaymentStatus,
+        paymentMode: paymentMode ?? booking.paymentMode,
+        paidAmount: bookingPaidAmount,
+        pendingAmount: bookingPendingAmount,
+        numberOfAdults: numberOfAdults ?? booking.numberOfAdults,
+        numberOfChildren: numberOfChildren ?? booking.numberOfChildren,
+        specialRequests: specialRequests ?? booking.specialRequests,
+        guestName: guestName ?? booking.guestName,
+        guestContact: guestContact?.toString() ?? booking.guestContact,
+        guestCNIC: guestCNIC ?? booking.guestCNIC,
+        extraCharges: heads || booking.extraCharges || [],
+        updatedBy,
+      },
+    });
+
+    // ── UPDATE ROOM STATUS ───────────────────────────────────
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    if (newCheckIn <= currentDate && newCheckOut > currentDate) {
+      await this.prismaService.room.updateMany({
+        where: { id: { in: targetRoomIds } },
+        data: { isBooked: true },
+      });
+    }
+
+    return updated;
   }
 }

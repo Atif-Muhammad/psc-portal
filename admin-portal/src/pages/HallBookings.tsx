@@ -220,16 +220,17 @@ const HallPaymentSection = React.memo(
                   <SelectItem value="CARD">Card</SelectItem>
                   <SelectItem value="CHECK">Check</SelectItem>
                   <SelectItem value="ONLINE">Online</SelectItem>
+                  <SelectItem value="KUICKPAY">KuickPay</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {form.paymentMode === "CARD" && (
               <div>
-                <Label>Card Number (Last 4) *</Label>
+                <Label>Card Number *</Label>
                 <Input
                   className="mt-2"
-                  placeholder="e.g. 1234"
+                  placeholder="Enter card number"
                   value={form.card_number || ""}
                   onChange={(e) => onChange("card_number", e.target.value)}
                 />
@@ -248,7 +249,7 @@ const HallPaymentSection = React.memo(
               </div>
             )}
 
-            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK") && (
+            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK" || form.paymentMode === "ONLINE") && (
               <div className="col-span-2">
                 <Label>Bank Name *</Label>
                 <Input
@@ -258,6 +259,29 @@ const HallPaymentSection = React.memo(
                   onChange={(e) => onChange("bank_name", e.target.value)}
                 />
               </div>
+            )}
+
+            {form.paymentMode === "ONLINE" && (
+              <>
+                <div>
+                  <Label>Transaction ID *</Label>
+                  <Input
+                    className="mt-2"
+                    placeholder="Enter transaction ID"
+                    value={form.transaction_id || ""}
+                    onChange={(e) => onChange("transaction_id", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Paid Date & Time</Label>
+                  <Input
+                    type="datetime-local"
+                    className="mt-2"
+                    value={form.paid_at || ""}
+                    onChange={(e) => onChange("paid_at", e.target.value)}
+                  />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1177,6 +1201,8 @@ export default function HallBookings() {
       card_number: form.card_number,
       check_number: form.check_number,
       bank_name: form.bank_name,
+      transaction_id: form.transaction_id,
+      paid_at: form.paid_at,
       paidBy: form.paidBy,
       guestName: form.guestName,
       guestContact: form.guestContact,
@@ -1238,26 +1264,41 @@ export default function HallBookings() {
       return;
     }
 
-    // Final conflict check before submission
-    const conflict = checkHallConflicts(
-      editForm.hallId,
-      editForm.bookingDate,
-      editForm.endDate || editForm.bookingDate,
-      editForm.eventTime,
-      bookings,
-      halls,
-      reservations,
-      editBooking?.id?.toString(),
-      editForm.bookingDetails
-    );
+    // Optimization: Only run conflict check if hall or dates changed
+    const normalizeDate = (d: string | Date | undefined) => (d ? new Date(d).toISOString().split('T')[0] : '');
+    const normalizeDetails = (details: any[] | undefined) =>
+      (details || [])
+        .map((d: any) => `${normalizeDate(d.date)}|${d.timeSlot?.toUpperCase()}`)
+        .sort()
+        .join(',');
 
-    if (conflict.hasConflict) {
-      toast({
-        title: "Booking Conflict",
-        description: conflict.message,
-        variant: "destructive",
-      });
-      return;
+    const schedulingChanged =
+      editBooking?.hallId?.toString() !== editForm.hallId?.toString() ||
+      normalizeDate(editBooking?.bookingDate) !== normalizeDate(editForm.bookingDate) ||
+      normalizeDate(editBooking?.endDate || editBooking?.bookingDate) !== normalizeDate(editForm.endDate || editForm.bookingDate) ||
+      normalizeDetails(editBooking?.bookingDetails as any[]) !== normalizeDetails(editForm.bookingDetails);
+
+    if (schedulingChanged) {
+      const conflict = checkHallConflicts(
+        editForm.hallId,
+        editForm.bookingDate,
+        editForm.endDate || editForm.bookingDate,
+        editForm.eventTime,
+        bookings,
+        halls,
+        reservations,
+        editBooking?.id?.toString(),
+        editForm.bookingDetails
+      );
+
+      if (conflict.hasConflict) {
+        toast({
+          title: "Booking Conflict",
+          description: conflict.message,
+          variant: "destructive",
+        });
+        return;
+      }
     }
     const payload = {
       id: editBooking?.id?.toString(),
@@ -1278,6 +1319,8 @@ export default function HallBookings() {
       card_number: editForm.card_number,
       check_number: editForm.check_number,
       bank_name: editForm.bank_name,
+      transaction_id: editForm.transaction_id,
+      paid_at: editForm.paid_at,
       paidBy: editForm.paidBy,
       guestName: editForm.guestName,
       guestContact: editForm.guestContact,
@@ -1388,6 +1431,8 @@ export default function HallBookings() {
         card_number: (editBooking as any).card_number || "",
         check_number: (editBooking as any).check_number || "",
         bank_name: (editBooking as any).bank_name || "",
+        transaction_id: (editBooking as any).transaction_id || "",
+        paid_at: (editBooking as any).paid_at || "",
         paidBy: editBooking.paidBy,
         guestName: editBooking.guestName,
         guestContact: editBooking.guestContact,

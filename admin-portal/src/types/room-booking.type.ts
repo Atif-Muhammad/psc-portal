@@ -13,6 +13,7 @@ export interface Member {
   createdAt?: string;
   updatedAt?: string;
   memberType?: "CIVILIAN" | "ARMED_FORCES";
+  Status?: string;
 }
 
 export interface RoomType {
@@ -60,10 +61,12 @@ export interface Booking {
   checkOut: string;
   totalPrice: number;
   paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL";
-  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK" | "KUICKPAY";
+  transaction_id?: string;
+  bank_name?: string;
+  paid_at?: string;
   card_number?: string;
   check_number?: string;
-  bank_name?: string;
   pricingType: "member" | "guest" | "forces" | "forces-self" | "forces-guest";
   paidBy: "MEMBER" | "GUEST",
   guestContact: "",
@@ -109,6 +112,8 @@ export interface Booking {
   numberOfChildren: number;
   specialRequests?: string;
   remarks?: string;
+  affiliatedClubId?: number;
+  affiliatedMembershipNo?: string;
 }
 
 export interface BookingForm {
@@ -130,10 +135,12 @@ export interface BookingForm {
   paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL" | "ADVANCE_PAYMENT";
   paidAmount: number;
   pendingAmount: number;
-  paymentMode: "CASH" | "CARD" | "CHECK" | "ONLINE";
+  paymentMode: "CASH" | "CARD" | "CHECK" | "ONLINE" | "KUICKPAY";
   card_number?: string;
   check_number?: string;
   bank_name?: string;
+  transaction_id?: string;
+  paid_at?: string;
   numberOfAdults: number;
   numberOfChildren: number;
   specialRequests?: string;
@@ -151,7 +158,7 @@ export interface Voucher {
   booking_id: number;
   membership_no: string;
   amount: string | number;
-  payment_mode: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  payment_mode: "CASH" | "ONLINE" | "CARD" | "CHECK" | "KUICKPAY";
   card_number?: string;
   check_number?: string;
   bank_name?: string;

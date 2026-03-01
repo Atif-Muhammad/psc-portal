@@ -920,6 +920,8 @@ export default function RoomBookings() {
       card_number: form.card_number,
       check_number: form.check_number,
       bank_name: form.bank_name,
+      transaction_id: form.transaction_id,
+      paid_at: form.paid_at,
     };
 
     createMutation.mutate(payload);
@@ -978,6 +980,8 @@ export default function RoomBookings() {
       card_number: editForm.card_number,
       check_number: editForm.check_number,
       bank_name: editForm.bank_name,
+      transaction_id: editForm.transaction_id,
+      paid_at: editForm.paid_at,
     };
 
     updateMutation.mutate(payload);
@@ -1127,8 +1131,8 @@ export default function RoomBookings() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-4">
           <TabsTrigger value="active">Active Bookings</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
           <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="m-0">

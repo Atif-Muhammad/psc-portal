@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsNotEmpty,
 } from 'class-validator';
+import { PaymentMode, PaymentStatus } from '@prisma/client';
 
 export class CreateAffiliatedClubDto {
   @IsString()
@@ -110,4 +111,100 @@ export class UpdateRequestStatusDto {
 
   @IsEnum(RequestStatus)
   status: RequestStatus;
+}
+
+export class CreateAffClubBookingCancellationDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class UpdateAffClubBookingCancellationDto {
+  @IsEnum(RequestStatus)
+  status: RequestStatus;
+
+  @IsOptional()
+  @IsString()
+  adminRemarks?: string;
+}
+export class AffiliatedRoomBookingDto {
+  @IsNotEmpty({ message: 'Affiliated club must be selected' })
+  @Type(() => Number)
+  @IsNumber()
+  affiliatedClubId: number;
+
+  @IsNotEmpty({ message: 'Affiliated membership number must be provided' })
+  @IsString()
+  affiliatedMembershipNo: string;
+
+  @IsNotEmpty({ message: 'Total Price must be specified' })
+  totalPrice: string;
+
+  @IsEnum(PaymentStatus, {
+    message: 'Payment status must be UNPAID, HALF_PAID, PAID, or TO_BILL',
+  })
+  paymentStatus: PaymentStatus;
+
+  @IsEnum(PaymentMode, { message: 'payment mode must be provided' })
+  paymentMode: PaymentMode;
+
+  @IsOptional()
+  paidAmount: string | number;
+
+  @IsOptional()
+  @IsString()
+  checkIn?: string;
+
+  @IsOptional()
+  @IsString()
+  checkOut?: string;
+
+  @IsOptional()
+  selectedRoomIds?: string[];
+
+  @IsOptional()
+  numberOfAdults?: number;
+
+  @IsOptional()
+  numberOfChildren?: number;
+
+  @IsOptional()
+  specialRequests?: string;
+
+  @IsOptional()
+  guestName?: string;
+
+  @IsOptional()
+  guestContact?: string;
+
+  @IsOptional()
+  guestCNIC?: string;
+
+  @IsOptional()
+  heads?: { head: string; amount: number }[];
+
+  @IsOptional()
+  @IsString()
+  transaction_id?: string;
+  @IsOptional()
+  @IsString()
+  bank_name?: string;
+  @IsOptional()
+  @IsString()
+  paid_at?: string;
+
+  @IsOptional()
+  @IsString()
+  card_number?: string;
+
+  @IsOptional()
+  @IsString()
+  check_number?: string;
+}
+
+export class UpdateAffiliatedRoomBookingDto extends AffiliatedRoomBookingDto {
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsNumber()
+  id: number;
 }

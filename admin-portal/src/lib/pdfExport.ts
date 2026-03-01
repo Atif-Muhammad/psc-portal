@@ -214,13 +214,21 @@ export const exportVoucherPDF = (voucher: any) => {
     }
   }
 
-  // Transaction ID for online payments
-  if (voucher.transaction_id && voucher.payment_mode === 'ONLINE') {
+  // Transaction ID and Paid Date for online payments
+  if (voucher.transaction_id && (voucher.payment_mode === 'ONLINE' || voucher.payment_mode === 'KUICKPAY')) {
     yPos += 8;
     doc.setFont('helvetica', 'bold');
     doc.text("Transaction ID:", leftCol, yPos);
     doc.setFont('helvetica', 'normal');
     doc.text(voucher.transaction_id, leftCol + 30, yPos);
+  }
+
+  if (voucher.paid_at && (voucher.payment_mode === 'ONLINE' || voucher.payment_mode === 'KUICKPAY')) {
+    yPos += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text("Payment Date:", leftCol, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDateTime(voucher.paid_at), leftCol + 30, yPos);
   }
 
   yPos += 10;

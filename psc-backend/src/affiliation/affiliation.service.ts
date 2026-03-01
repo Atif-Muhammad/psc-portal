@@ -21,6 +21,8 @@ export class AffiliationService {
     private cloudinary: CloudinaryService,
   ) { }
 
+
+
   // -------------------- AFFILIATED CLUBS --------------------
 
   async getAffiliatedClubs() {
@@ -274,5 +276,99 @@ export class AffiliationService {
         requestCount: stat._count.id,
       }))
       .sort((a, b) => b.requestCount - a.requestCount);
+  }
+
+  async getAffiliatedBookingStats(from?: string, to?: string) {
+    const where: any = {
+      isCancelled: false,
+    };
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+
+    const stats = await this.prismaService.affClubBooking.groupBy({
+      by: ['affiliatedClubId'],
+      where,
+      _count: {
+        id: true,
+      },
+      _sum: {
+        totalPrice: true,
+      },
+    });
+
+    const clubs = await this.prismaService.affiliatedClub.findMany({
+      where: {
+        id: { in: stats.map((s) => s.affiliatedClubId) },
+      },
+      select: { id: true, name: true },
+    });
+
+    return stats
+      .map((stat) => ({
+        clubName:
+          clubs.find((c) => c.id === stat.affiliatedClubId)?.name || 'Unknown',
+        bookingCount: stat._count.id,
+        totalRevenue: Number(stat._sum.totalPrice) || 0,
+      }))
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+  }
+
+  // -------------------- AFFILIATED CLUB ROOM BOOKINGS --------------------
+
+  async getAffiliatedRoomBookings(page = 1, limit = 10, clubId?: number, status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS') {
+    const where: any = {};
+    if (clubId) where.affiliatedClubId = clubId;
+
+    if (status === 'ACTIVE') {
+      where.isCancelled = false;
+      where.cancellationRequests = {
+        none: { status: 'PENDING' },
+      };
+    } else if (status === 'CANCELLED') {
+      where.isCancelled = true;
+    } else if (status === 'REQUESTS') {
+      // Fetch NON-CANCELLED bookings that have PENDING cancellation requests
+      where.isCancelled = false;
+      where.cancellationRequests = {
+        some: { status: 'PENDING' },
+      };
+    }
+
+    const [total, data] = await Promise.all([
+      this.prismaService.affClubBooking.count({ where }),
+      this.prismaService.affClubBooking.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          affiliatedClub: true,
+          cancellationRequests: true,
+          rooms: {
+            include: {
+              room: {
+                include: {
+                  roomType: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
   }
 }

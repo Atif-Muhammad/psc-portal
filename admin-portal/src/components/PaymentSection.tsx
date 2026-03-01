@@ -12,6 +12,7 @@ interface PaymentSectionProps {
   onChange: (field: keyof BookingForm, value: any) => void;
   isEdit?: boolean;
   roomCount?: number;
+  isAffiliated?: boolean;
 }
 
 export const PaymentSection = React.memo(({
@@ -19,6 +20,7 @@ export const PaymentSection = React.memo(({
   onChange,
   isEdit = false,
   roomCount = 0,
+  isAffiliated = false,
 }: PaymentSectionProps) => {
   // Calculate accounting values in real-time
   const calculateRealTimeAccounting = () => {
@@ -136,7 +138,7 @@ export const PaymentSection = React.memo(({
             <SelectItem value="UNPAID">Unpaid</SelectItem>
             <SelectItem value="HALF_PAID">Half Paid</SelectItem>
             <SelectItem value="PAID">Paid</SelectItem>
-            <SelectItem value="TO_BILL">To Bill</SelectItem>
+            {!isAffiliated && <SelectItem value="TO_BILL">To Bill</SelectItem>}
             <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
           </SelectContent>
         </Select>
@@ -195,17 +197,52 @@ export const PaymentSection = React.memo(({
                 <SelectItem value="CASH">Cash</SelectItem>
                 <SelectItem value="CARD">Card</SelectItem>
                 <SelectItem value="CHECK">Cheque</SelectItem>
-                <SelectItem value="ONLINE">Online</SelectItem>
+                <SelectItem value="KUICKPAY">Kuickpay</SelectItem>
+                <SelectItem value="ONLINE">Online (Manual)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
+          {form.paymentMode === "ONLINE" && (
+            <>
+              <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Transaction ID (Trx ID) *</Label>
+                  <Input
+                    className="mt-2"
+                    placeholder="Enter transaction ID"
+                    value={form.transaction_id || ""}
+                    onChange={(e) => onChange("transaction_id", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Bank Name *</Label>
+                  <Input
+                    className="mt-2"
+                    placeholder="Enter bank name"
+                    value={form.bank_name || ""}
+                    onChange={(e) => onChange("bank_name", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="col-span-2">
+                <Label>Paid At (Date & Time) *</Label>
+                <Input
+                  className="mt-2"
+                  type="datetime-local"
+                  value={form.paid_at || ""}
+                  onChange={(e) => onChange("paid_at", e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
           {form.paymentMode === "CARD" && (
             <div>
-              <Label>Card Number (Last 4) *</Label>
+              <Label>Card Number *</Label>
               <Input
                 className="mt-2"
-                placeholder="e.g. 1234"
+                placeholder="Enter card number"
                 value={form.card_number || ""}
                 onChange={(e) => onChange("card_number", e.target.value)}
               />
@@ -285,7 +322,7 @@ export const PaymentSection = React.memo(({
           </div>
         </div>
       )}
-      {form.paymentStatus === "TO_BILL" && (
+      {form.paymentStatus === "TO_BILL" && !isAffiliated && (
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex items-center">
             <Receipt className="h-4 w-4 text-blue-600 mr-2" />

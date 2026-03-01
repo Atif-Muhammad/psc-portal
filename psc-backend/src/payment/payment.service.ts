@@ -159,42 +159,76 @@ export class PaymentService {
   // Kuickpay Integration Logic
 
   async getBillInquiry(consumerNumber: string): Promise<BillInquiryResponse> {
-    console.log(consumerNumber)
     const voucher = await this.prismaService.paymentVoucher.findUnique({
       where: { consumer_number: consumerNumber },
-      include: {
-        member: true,
-      },
     });
 
-    if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
-      // if (!voucher || voucher.voucher_type === VoucherType.REFUND || voucher.voucher_type === VoucherType.TO_BILL || voucher.voucher_type === VoucherType.ADJUSTMENT) {
+    if (
+      !voucher ||
+      voucher.voucher_type === VoucherType.REFUND ||
+      voucher.status === VoucherStatus.CANCELLED ||
+      voucher.voucher_type === VoucherType.TO_BILL ||
+      voucher.voucher_type === VoucherType.ADJUSTMENT
+    ) {
       return {
-        response_Code: '01',
+        response_Code: '02',
         consumer_Detail: 'Voucher not found',
+        bill_status: 'B',
       } as any;
     }
 
-    // Check if voucher is a REFUND voucher - should not be payable
+    const isAffiliated = voucher.membership_no?.startsWith('AFFILIATED');
 
-    // Check if voucher has expired
+    const member = voucher.membership_no && !isAffiliated && voucher.membership_no !== 'AFFILIATED'
+      ? await this.prismaService.member.findUnique({
+        where: { Membership_No: voucher.membership_no },
+      })
+      : null;
+
+    let booking: any = null;
+    if (voucher.booking_type === 'ROOM') {
+      booking = await this.prismaService.roomBooking.findUnique({
+        where: { id: voucher.booking_id },
+      });
+    } else if (voucher.booking_type === 'HALL') {
+      booking = await this.prismaService.hallBooking.findUnique({
+        where: { id: voucher.booking_id },
+      });
+    } else if (voucher.booking_type === 'LAWN') {
+      booking = await this.prismaService.lawnBooking.findUnique({
+        where: { id: voucher.booking_id },
+      });
+    } else if (voucher.booking_type === 'PHOTOSHOOT') {
+      booking = await this.prismaService.photoshootBooking.findUnique({
+        where: { id: voucher.booking_id },
+      });
+    }
+
     const now = new Date();
-    if (voucher.expiresAt && voucher.expiresAt < now && voucher.status === VoucherStatus.PENDING) {
+    if (
+      (voucher.expiresAt &&
+        voucher.expiresAt < now &&
+        voucher.status === VoucherStatus.PENDING) ||
+      booking?.isCancelled === true
+    ) {
       return {
         response_Code: '02',
         consumer_Detail: 'Voucher has been expired/blocked',
         bill_status: 'B',
       } as any;
-
     }
 
-
     const bookingDate = voucher.issued_at;
-    const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(bookingDate.getMonth() + 1).toString().padStart(2, '0')}`;
+    const billingMonth = `${bookingDate.getFullYear().toString().slice(-2)}${(
+      bookingDate.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, '0')}`;
 
     let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
-    else if (voucher.status === VoucherStatus.CANCELLED as string) billStatus = 'B';
+    else if (voucher.status === VoucherStatus.CANCELLED as string)
+      billStatus = 'B';
 
     const amountStr = this.formatAmountForKuickpay(
       Number(voucher.amount),
@@ -202,39 +236,49 @@ export class PaymentService {
       true,
     );
 
-    return billStatus === 'B' ? {
-      response_Code: '02',
-      consumer_Detail: 'Voucher has been expired/blocked',
-      bill_status: 'B',
-    } as any : {
-      response_Code: '00',
-      consumer_Detail: (voucher.member?.Name || 'N/A')
-        .toUpperCase()
-        .slice(0, 30)
-        .padEnd(30, ' '),
-      bill_status: billStatus,
-      due_date: this.formatDateToYYYYMMDD(
-        voucher.expiresAt || voucher.issued_at,
-      ),
-      amount_within_dueDate: amountStr,
-      amount_after_dueDate: amountStr,
-      email_address: (voucher.member?.Email || 'N/A').slice(0, 30),
-      contact_number: (voucher.member?.Contact_No || 'N/A').slice(0, 15),
-      billing_month: billingMonth,
-      date_paid:
-        voucher.status === VoucherStatus.CONFIRMED
-          ? this.formatDateToYYYYMMDD(voucher.issued_at)
-          : '',
-      amount_paid:
-        voucher.status === VoucherStatus.CONFIRMED
-          ? this.formatAmountForKuickpay(Number(voucher.amount), 12, false)
-          : '',
-      tran_auth_Id:
-        voucher.status === VoucherStatus.CONFIRMED
-          ? (voucher.transaction_id || '000000').slice(0, 6)
-          : '',
-      reserved: '',
-    };
+    const consumerName = isAffiliated
+      ? booking?.guestName || 'N/A'
+      : member?.Name || 'N/A';
+    const consumerContact = isAffiliated
+      ? booking?.guestContact || 'N/A'
+      : member?.Contact_No || 'N/A';
+    const consumerEmail = isAffiliated ? 'N/A' : member?.Email || 'N/A';
+
+    return billStatus === 'B'
+      ? ({
+        response_Code: '02',
+        consumer_Detail: 'Voucher has been expired/blocked',
+        bill_status: 'B',
+      } as any)
+      : {
+        response_Code: '00',
+        consumer_Detail: consumerName
+          .toUpperCase()
+          .slice(0, 30)
+          .padEnd(30, ' '),
+        bill_status: billStatus,
+        due_date: this.formatDateToYYYYMMDD(
+          voucher.expiresAt || voucher.issued_at,
+        ),
+        amount_within_dueDate: amountStr,
+        amount_after_dueDate: amountStr,
+        email_address: consumerEmail.slice(0, 30),
+        contact_number: consumerContact.slice(0, 15),
+        billing_month: billingMonth,
+        date_paid:
+          voucher.status === VoucherStatus.CONFIRMED
+            ? this.formatDateToYYYYMMDD(voucher.issued_at)
+            : '',
+        amount_paid:
+          voucher.status === VoucherStatus.CONFIRMED
+            ? this.formatAmountForKuickpay(Number(voucher.amount), 12, false)
+            : '',
+        tran_auth_Id:
+          voucher.status === VoucherStatus.CONFIRMED
+            ? (voucher.transaction_id || '000000').slice(0, 6)
+            : '',
+        reserved: '',
+      };
   }
 
   async processBillPayment(
@@ -243,8 +287,11 @@ export class PaymentService {
     return await this.prismaService.$transaction(async (prisma) => {
       const voucher = await prisma.paymentVoucher.findUnique({
         where: { consumer_number: paymentData.consumer_number },
-        include: { member: true },
       });
+
+      const member = voucher?.membership_no && voucher.membership_no !== 'AFFILIATED'
+        ? await prisma.member.findUnique({ where: { Membership_No: voucher.membership_no } })
+        : null;
 
       if (!voucher) {
         return {
@@ -280,7 +327,7 @@ export class PaymentService {
           return {
             response_Code: '03',
             Identification_parameter:
-              voucher.member?.Email || (voucher as any).consumer_number,
+              member?.Email || (voucher as any).consumer_number,
             reserved: 'Duplicate ignored',
           };
         }
@@ -396,27 +443,29 @@ export class PaymentService {
 
 
       // put check here for member or an affiliated club?
-      
-      // Update Member Ledger
-      const paidAmount = Number(voucher.amount);
-      await prisma.member.update({
-        where: { Membership_No: voucher.membership_no },
-        data: {
-          bookingAmountPaid: { increment: Math.round(paidAmount) },
-          bookingAmountDue: { decrement: Math.round(paidAmount) },
-          bookingBalance: { increment: Math.round(paidAmount) },
-          lastBookingDate: getPakistanDate(),
-        },
-      });
+
+      // Update Member Ledger if member exists
+      if (member) {
+        const paidAmount = Number(voucher.amount);
+        await prisma.member.update({
+          where: { Membership_No: voucher.membership_no },
+          data: {
+            bookingAmountPaid: { increment: Math.round(paidAmount) },
+            bookingAmountDue: { decrement: Math.round(paidAmount) },
+            bookingBalance: { increment: Math.round(paidAmount) },
+            lastBookingDate: getPakistanDate(),
+          },
+        });
+      }
 
       const response = {
         response_Code: '00',
-        Identification_parameter: (voucher as any).member?.Email || (voucher as any).consumer_number,
+        Identification_parameter: member?.Email || (voucher as any).consumer_number,
         reserved: '',
       };
 
       // Trigger asynchronous notifications after transaction success
-      this.triggerNotifications(voucher, paymentData).catch((err) =>
+      this.triggerNotifications(voucher, paymentData, member).catch((err) =>
         console.error('Failed to trigger notifications:', err),
       );
 
@@ -427,10 +476,11 @@ export class PaymentService {
   private async triggerNotifications(
     voucher: any,
     paymentData: BillPaymentRequestDto,
+    member?: any,
   ) {
     const consumer_number = voucher.consumer_number;
-    const email = voucher.member?.Email;
-    const name = voucher.member?.Name || 'Member';
+    const email = member?.Email;
+    const name = member?.Name || 'Member';
     const amount = Number(voucher.amount);
 
     // 1. Real-time update
@@ -738,7 +788,18 @@ export class PaymentService {
           none: {
             holdBy: { not: bookingData.membership_no.toString() },
             onHold: true,
-            holdExpiry: { gt: new Date() },
+            OR: [
+              {
+                // Check for exact date overlap
+                checkIn: { lt: checkOut },
+                checkOut: { gt: checkIn },
+              },
+              {
+                // Fallback for legacy holds (only expiry)
+                checkIn: null,
+                holdExpiry: { gt: new Date() },
+              },
+            ],
           },
         },
         // No reservations during requested period
@@ -758,13 +819,21 @@ export class PaymentService {
             },
           },
         },
+        // No affiliated club bookings during requested period
+        affBookings: {
+          none: {
+            booking: {
+              checkIn: { lt: checkOut },
+              checkOut: { gt: checkIn },
+              isCancelled: false,
+            },
+          },
+        },
         // No out-of-order periods during requested period
         outOfOrders: {
           none: {
-            AND: [
-              { startDate: { lte: checkOut } },
-              { endDate: { gte: checkIn } },
-            ],
+            startDate: { lt: checkOut },
+            endDate: { gt: checkIn },
           },
         },
       },
@@ -916,6 +985,22 @@ export class PaymentService {
     });
     if (member?.Status !== 'active')
       throw new UnprocessableEntityException(`Cannot book for inactive member`);
+
+    // ── CHECK RECENT BOOKINGS (24h Limit) ──────────────────
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentHall = await this.prismaService.hallBooking.findFirst({
+      where: { memberId: member.Sno, createdAt: { gte: twentyFourHoursAgo }, isCancelled: false },
+    });
+    const recentLawn = await this.prismaService.lawnBooking.findFirst({
+      where: { memberId: member.Sno, createdAt: { gte: twentyFourHoursAgo }, isCancelled: false },
+    });
+
+    if (recentHall || recentLawn) {
+      const type = recentHall ? 'Hall' : 'Lawn';
+      throw new BadRequestException(
+        `You have already made a ${type} booking within the last 24 hours. PSC policy allows only one Hall or Lawn booking every 24 hours.`,
+      );
+    }
 
 
     // ── 1. VALIDATE HALL EXISTS ─────────────────────────────
@@ -1214,6 +1299,22 @@ export class PaymentService {
     });
     if (member?.Status !== 'active')
       throw new UnprocessableEntityException(`Cannot book for inactive member`);
+
+    // ── CHECK RECENT BOOKINGS (24h Limit) ──────────────────
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentHall = await this.prismaService.hallBooking.findFirst({
+      where: { memberId: member.Sno, createdAt: { gte: twentyFourHoursAgo }, isCancelled: false },
+    });
+    const recentLawn = await this.prismaService.lawnBooking.findFirst({
+      where: { memberId: member.Sno, createdAt: { gte: twentyFourHoursAgo }, isCancelled: false },
+    });
+
+    if (recentHall || recentLawn) {
+      const type = recentHall ? 'Hall' : 'Lawn';
+      throw new BadRequestException(
+        `You have already made a ${type} booking within the last 24 hours. PSC policy allows only one Hall or Lawn booking every 24 hours.`,
+      );
+    }
 
 
     // ── 1. VALIDATE LAWN EXISTS ─────────────────────────────
@@ -1636,9 +1737,6 @@ export class PaymentService {
   async getMemberVouchers(membershipNo: string) {
     return await this.prismaService.paymentVoucher.findMany({
       where: { membership_no: membershipNo },
-      include: {
-        member: true,
-      },
       orderBy: { issued_at: 'desc' },
     });
   }

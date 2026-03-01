@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, User, Check, XCircle, Loader2 } from "lucide-react";
 import { Member } from "@/types/room-booking.type";
+import { cn } from "@/lib/utils";
 
 interface MemberSearchComponentProps {
   searchTerm: string;
@@ -93,7 +94,21 @@ export const MemberSearchComponent = React.memo(({
                 <User className="h-4 w-4 text-muted-foreground mr-3" />
                 <div className="flex-1">
                   <div className="font-medium text-sm flex items-center justify-between">
-                    <span>{member.Name}</span>
+                    <div className="flex items-center">
+                      <span>{member.Name}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "ml-2 text-[8px] h-3 px-1 uppercase font-bold",
+                          member.Status?.toLowerCase() === "active" ? "bg-green-50 text-green-700 border-green-200" :
+                            member.Status?.toLowerCase() === "inactive" ? "bg-red-50 text-red-700 border-red-200" :
+                              member.Status?.toLowerCase() === "suspended" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                "bg-slate-50 text-slate-700 border-slate-200"
+                        )}
+                      >
+                        {member.Status}
+                      </Badge>
+                    </div>
                     {member.Balance !== undefined && (
                       <Badge
                         variant={
@@ -129,14 +144,44 @@ export const MemberSearchComponent = React.memo(({
 
       {/* Selected Member Display */}
       {selectedMember && (
-        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+        <div className={cn(
+          "mt-2 p-3 border rounded-md shadow-sm transition-all animate-in fade-in slide-in-from-top-1",
+          selectedMember.Status?.toLowerCase() === "active" ? "bg-green-50 border-green-200" :
+            selectedMember.Status?.toLowerCase() === "inactive" ? "bg-red-50 border-red-200" :
+              selectedMember.Status?.toLowerCase() === "suspended" ? "bg-amber-50 border-amber-200" :
+                "bg-slate-50 border-slate-200"
+        )}>
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="font-medium text-sm flex items-center">
-                <User className="h-4 w-4 mr-2 text-green-600" />
+                <User className={cn(
+                  "h-4 w-4 mr-2",
+                  selectedMember.Status?.toLowerCase() === "active" ? "text-green-600" :
+                    selectedMember.Status?.toLowerCase() === "inactive" ? "text-red-600" :
+                      selectedMember.Status?.toLowerCase() === "suspended" ? "text-amber-600" :
+                        "text-slate-600"
+                )} />
                 {selectedMember.Name}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "ml-2 text-[10px] h-4 px-1.5 uppercase font-bold",
+                    selectedMember.Status?.toLowerCase() === "active" ? "bg-green-100 text-green-700 border-green-200" :
+                      selectedMember.Status?.toLowerCase() === "inactive" ? "bg-red-100 text-red-700 border-red-200" :
+                        selectedMember.Status?.toLowerCase() === "suspended" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                          "bg-slate-100 text-slate-700 border-slate-200"
+                  )}
+                >
+                  {selectedMember.Status || "Unknown"}
+                </Badge>
               </div>
-              <div className="text-xs text-green-600 mt-1">
+              <div className={cn(
+                "text-xs mt-1",
+                selectedMember.Status?.toLowerCase() === "active" ? "text-green-600" :
+                  selectedMember.Status?.toLowerCase() === "inactive" ? "text-red-600" :
+                    selectedMember.Status?.toLowerCase() === "suspended" ? "text-amber-600" :
+                      "text-slate-600"
+              )}>
                 {selectedMember.Membership_No &&
                   `Membership: #${selectedMember.Membership_No}`}
                 {selectedMember.membershipNumber &&

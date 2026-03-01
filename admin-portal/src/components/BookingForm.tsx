@@ -39,6 +39,7 @@ interface BookingFormProps {
   // Multi-room support
   selectedRoomIds?: string[];
   onRoomSelection?: (roomId: string) => void;
+  isAffiliated?: boolean;
 }
 
 export const BookingFormComponent = React.memo(({
@@ -63,6 +64,7 @@ export const BookingFormComponent = React.memo(({
   // Multi-room support
   selectedRoomIds,
   onRoomSelection,
+  isAffiliated = false,
 }: BookingFormProps) => {
 
   const [localSelectedHead, setLocalSelectedHead] = React.useState<string>("");
@@ -79,7 +81,7 @@ export const BookingFormComponent = React.memo(({
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-1">
 
       {/* Row 1: Member Search & Basic Config */}
-      {!isEdit && (
+      {!isEdit && !isAffiliated && (
         <MemberSearchComponent
           className="col-span-12 md:col-span-4"
           label="Member *"
@@ -121,29 +123,31 @@ export const BookingFormComponent = React.memo(({
         )}
       </div>
 
-      <div className={cn("col-span-12", !isEdit ? "md:col-span-4" : "md:col-span-6")}>
-        <Label className="text-sm font-semibold text-slate-700">Pricing Type</Label>
-        <Select
-          value={form.pricingType}
-          onValueChange={(val) => onChange("pricingType", val)}
-        >
-          <SelectTrigger className="mt-2 bg-white border-slate-200 focus:ring-blue-50 focus:border-blue-400">
-            <SelectValue placeholder="Select pricing" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="member" disabled={isArmedForces}>Member</SelectItem>
-            <SelectItem value="guest">Guest</SelectItem>
-            {isArmedForces ? (
-              <>
-                <SelectItem value="forces-self">Forces -- Self</SelectItem>
-                <SelectItem value="forces-guest">Forces -- Guest</SelectItem>
-              </>
-            ) : (
-              <SelectItem value="forces">Forces</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      </div>
+      {!isAffiliated && (
+        <div className={cn("col-span-12", !isEdit ? "md:col-span-4" : "md:col-span-6")}>
+          <Label className="text-sm font-semibold text-slate-700">Pricing Type</Label>
+          <Select
+            value={form.pricingType}
+            onValueChange={(val) => onChange("pricingType", val)}
+          >
+            <SelectTrigger className="mt-2 bg-white border-slate-200 focus:ring-blue-50 focus:border-blue-400">
+              <SelectValue placeholder="Select pricing" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="member" disabled={isArmedForces}>Member</SelectItem>
+              <SelectItem value="guest">Guest</SelectItem>
+              {isArmedForces ? (
+                <>
+                  <SelectItem value="forces-self">Forces -- Self</SelectItem>
+                  <SelectItem value="forces-guest">Forces -- Guest</SelectItem>
+                </>
+              ) : (
+                <SelectItem value="forces">Forces</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Row 2: Room Selection (Full Width) */}
       <div className="col-span-12">
@@ -239,21 +243,23 @@ export const BookingFormComponent = React.memo(({
               placeholder="00000-0000000-0"
             />
           </div>
-          <div className="col-span-1 md:col-span-3">
-            <Label className="text-sm font-medium mb-1 block">Who will Pay?</Label>
-            <Select
-              value={form.paidBy}
-              onValueChange={(val) => onChange("paidBy", val)}
-            >
-              <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Who will pay?" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MEMBER">Member</SelectItem>
-                <SelectItem value="GUEST">Guest</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {!isAffiliated && (
+            <div className="col-span-1 md:col-span-3">
+              <Label className="text-sm font-medium mb-1 block">Who will Pay?</Label>
+              <Select
+                value={form.paidBy}
+                onValueChange={(val) => onChange("paidBy", val)}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Who will pay?" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MEMBER">Member</SelectItem>
+                  <SelectItem value="GUEST">Guest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       )}
 
@@ -501,6 +507,7 @@ export const BookingFormComponent = React.memo(({
           onChange={onChange}
           isEdit={isEdit}
           roomCount={selectedRoomIds?.length || (form.roomId ? 1 : 0)}
+          isAffiliated={isAffiliated}
         />
       </div>
 

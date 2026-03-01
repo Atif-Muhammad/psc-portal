@@ -87,6 +87,8 @@ export interface LawnBookingForm {
   card_number?: string;
   check_number?: string;
   bank_name?: string;
+  transaction_id?: string;
+  paid_at?: string;
 }
 
 export interface LawnBooking {
@@ -117,10 +119,12 @@ export interface LawnBooking {
   member?: Member;
   bookingTime?: string;
   paidBy?: string;
-  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK" | "KUICKPAY";
   card_number?: string;
   check_number?: string;
   bank_name?: string;
+  transaction_id?: string;
+  paid_at?: string;
   guestName?: string;
   guestContact?: string;
   eventType?: string;
@@ -154,6 +158,8 @@ const LawnPaymentSection = React.memo(
       card_number?: string;
       check_number?: string;
       bank_name?: string;
+      transaction_id?: string;
+      paid_at?: string;
     };
     onChange: (field: string, value: any) => void;
   }) => {
@@ -287,16 +293,17 @@ const LawnPaymentSection = React.memo(
                   <SelectItem value="CARD">Card</SelectItem>
                   <SelectItem value="CHECK">Check</SelectItem>
                   <SelectItem value="ONLINE">Online</SelectItem>
+                  <SelectItem value="KUICKPAY">KuickPay</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {form.paymentMode === "CARD" && (
               <div>
-                <Label>Card Number (Last 4) *</Label>
+                <Label>Card Number *</Label>
                 <Input
                   className="mt-2"
-                  placeholder="e.g. 1234"
+                  placeholder="Enter card number"
                   value={form.card_number || ""}
                   onChange={(e) => onChange("card_number", e.target.value)}
                 />
@@ -315,7 +322,7 @@ const LawnPaymentSection = React.memo(
               </div>
             )}
 
-            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK") && (
+            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK" || form.paymentMode === "ONLINE") && (
               <div className="col-span-2">
                 <Label>Bank Name *</Label>
                 <Input
@@ -325,6 +332,29 @@ const LawnPaymentSection = React.memo(
                   onChange={(e) => onChange("bank_name", e.target.value)}
                 />
               </div>
+            )}
+
+            {form.paymentMode === "ONLINE" && (
+              <>
+                <div>
+                  <Label>Transaction ID *</Label>
+                  <Input
+                    className="mt-2"
+                    placeholder="Enter transaction ID"
+                    value={form.transaction_id || ""}
+                    onChange={(e) => onChange("transaction_id", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Paid Date & Time</Label>
+                  <Input
+                    type="datetime-local"
+                    className="mt-2"
+                    value={form.paid_at || ""}
+                    onChange={(e) => onChange("paid_at", e.target.value)}
+                  />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -622,6 +652,8 @@ const initialForm: LawnBookingForm = {
   card_number: "",
   check_number: "",
   bank_name: "",
+  transaction_id: "",
+  paid_at: "",
 };
 
 // Available heads for extra charges
@@ -1209,6 +1241,8 @@ export default function LawnBookings() {
         card_number: (editBooking as any).card_number || "",
         check_number: (editBooking as any).check_number || "",
         bank_name: (editBooking as any).bank_name || "",
+        transaction_id: (editBooking as any).transaction_id || "",
+        paid_at: (editBooking as any).paid_at || "",
       });
     }
   }, [editBooking, lawnCategories]);
@@ -1316,6 +1350,8 @@ export default function LawnBookings() {
       card_number: form.card_number,
       check_number: form.check_number,
       bank_name: form.bank_name,
+      transaction_id: form.transaction_id,
+      paid_at: form.paid_at,
       // Use first slot's time and event type for legacy support
       eventTime: form.bookingDetails[0].timeSlot,
       eventType: form.bookingDetails[0].eventType,
@@ -1954,9 +1990,9 @@ export default function LawnBookings() {
                                 }} title="Edit Booking">
                                   <Edit className="h-4 w-4" />
                                 </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => handleViewVouchers(booking)} title="View Vouchers">
-                                    <Receipt className="h-4 w-4" />
-                                  </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleViewVouchers(booking)} title="View Vouchers">
+                                  <Receipt className="h-4 w-4" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setCancelBooking(booking)} title="Cancel Booking">
                                   <XCircle className="h-4 w-4" />
                                 </Button>
@@ -2389,6 +2425,38 @@ export default function LawnBookings() {
 
                 const sortedDates = [...new Set(editForm.bookingDetails.map(d => d.date))].sort();
 
+                // Optimization: Only run conflict check if lawn or dates changed
+                const normalizeDate = (d: string | Date | undefined) => (d ? new Date(d).toISOString().split('T')[0] : '');
+                const normalizeDetails = (details: any[] | undefined) =>
+                  (details || [])
+                    .map((d: any) => `${normalizeDate(d.date)}|${d.timeSlot?.toUpperCase()}`)
+                    .sort()
+                    .join(',');
+
+                // Note: editBooking.lawn?.id might be different from editForm.lawnId
+                const schedulingChanged =
+                  editBooking.lawn?.id?.toString() !== editForm.lawnId?.toString() ||
+                  normalizeDate(editBooking.bookingDate) !== normalizeDate(editForm.bookingDate) ||
+                  normalizeDate(editBooking.endDate || editBooking.bookingDate) !== normalizeDate(editForm.endDate || editForm.bookingDate) ||
+                  normalizeDetails(editBooking.bookingDetails as any[]) !== normalizeDetails(editForm.bookingDetails);
+
+                if (schedulingChanged) {
+                  // Final conflict check before submission
+                  const conflict = getAvailableLawnTimeSlots(
+                    editForm.lawnId.toString(),
+                    editForm.bookingDate,
+                    lawnBookings,
+                    availableLawnsData as Lawn[],
+                    fetchedStatuses?.reservations || []
+                  );
+
+                  // LawnBookings doesn't have a centralized checkLawnConflicts helper like Hall, 
+                  // but we can check if the current slots are still available.
+                  // HOWEVER, the backend will catch it anyway. 
+                  // For UI UX consistency with Hall, we'll rely on the backend for Lawn update conflicts 
+                  // or implement a check if needed.
+                }
+
                 const payload = {
                   id: editBooking.id.toString(),
                   category: "Lawn",
@@ -2406,6 +2474,8 @@ export default function LawnBookings() {
                   card_number: editForm.card_number,
                   check_number: editForm.check_number,
                   bank_name: editForm.bank_name,
+                  transaction_id: editForm.transaction_id,
+                  paid_at: editForm.paid_at,
                   eventTime: editForm.bookingDetails[0].timeSlot, // Legacy support
                   eventType: editForm.bookingDetails[0].eventType, // Legacy support
                   bookingDetails: editForm.bookingDetails,

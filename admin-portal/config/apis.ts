@@ -1677,6 +1677,24 @@ export const getAffiliatedClubStats = async (from?: string, to?: string): Promis
   }
 };
 
+export const getAffiliatedBookingStats = async (from?: string, to?: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/affiliation/booking-stats`, {
+      params: { from, to },
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch booking stats";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
 export const updateAffiliatedClubRequestStatus = async (data: { id: number, status: string }): Promise<any> => {
   try {
     const response = await axios.patch(
@@ -1711,9 +1729,76 @@ export const deleteAffiliatedClubRequest = async (id: number): Promise<any> => {
       "Failed to delete request";
 
     throw { message, status: error.response?.status || 500 };
+    error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to create affiliated room booking";
+
+    throw { message, status: error.response?.status || 500 };
   }
 };
 
+export const createAffiliatedRoomBooking = async (data: any): Promise<any> => {
+  try {
+    const response = await axios.post(`${base_url}/affiliation/booking`, data, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to create affiliated room booking";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const updateAffiliatedRoomBooking = async (id: number, data: any): Promise<any> => {
+  try {
+    const response = await axios.patch(`${base_url}/affiliation/booking/${id}`, data, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to update affiliated room booking";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getAffiliatedRoomBookings = async ({
+  page = 1,
+  limit = 10,
+  clubId,
+  status,
+}: {
+  page?: number;
+  limit?: number;
+  clubId?: number;
+  status?: string;
+}): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/affiliation/bookings`, {
+      params: { page, limit, clubId, status },
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch affiliated room bookings";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
 
 
 // member bookings

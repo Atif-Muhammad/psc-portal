@@ -314,29 +314,47 @@ export function BookingDetailsCard({
 
               {/* Right Column - Member & Guest Info */}
               <div className="space-y-4">
-                {/* Member Information */}
+                {/* Member / Affiliated Information */}
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                     <User className="h-4 w-4" />
-                    Member Information
+                    {booking.member ? "Member Information" : "Affiliated Information"}
                   </h3>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className={`p-3 border rounded-md ${booking.member ? "bg-blue-50 border-blue-200" : "bg-indigo-50 border-indigo-200"}`}>
                     <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-medium">{booking.member.Name}</div>
-                        <div className="text-sm text-gray-600">
-                          Membership: #{booking.member.Membership_No}
+                      {booking.member ? (
+                        <>
+                          <div>
+                            <div className="font-medium">{booking.member.Name}</div>
+                            <div className="text-sm text-gray-600">
+                              Membership: #{booking.member.Membership_No}
+                            </div>
+                          </div>
+                          {booking.member.Balance !== undefined && (
+                            <div className={`text-sm font-bold ${getMemberBalanceColor(booking.member.Balance)}`}>
+                              Balance: {formatPrice(booking.member.Balance.toString())}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="font-medium">Affiliated Club Member</div>
+                          <div className="text-sm text-indigo-600 font-medium">
+                            Membership: {booking.affiliatedMembershipNo || "N/A"}
+                          </div>
+                          {booking.affiliatedClubId && (
+                            <div className="text-xs text-indigo-400">
+                              Club ID: {booking.affiliatedClubId}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className={`text-sm font-bold ${getMemberBalanceColor(booking.member.Balance)}`}>
-                        Balance: {formatPrice(booking.member.Balance.toString())}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Guest / Forces Information (if applicable) */}
-                {(booking.pricingType === "guest" || booking.pricingType === "forces" || booking.pricingType === "forces-guest") && (
+                {(booking.pricingType === "guest" || booking.pricingType === "forces" || booking.pricingType === "forces-guest" || booking.affiliatedClubId) && (
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                       <Users className="h-4 w-4" />

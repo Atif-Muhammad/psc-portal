@@ -558,12 +558,12 @@ export default function Photoshoot() {
                 Add Package
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Photoshoot Package</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="md:col-span-2">
                   <Label>Description</Label>
                   <Textarea
                     value={form.description}
@@ -593,7 +593,7 @@ export default function Photoshoot() {
                     className="mt-2"
                   />
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <Label>Package Images (Max 5, Max 5MB each)</Label>
                   <div className="mt-2">
                     <ImageUpload
@@ -616,7 +616,7 @@ export default function Photoshoot() {
                     />
                   </div>
                 </div>
-                <div className="col-span-2">
+                <div className="md:col-span-2">
                   <OutOfOrderPeriods
                     periods={form.outOfOrders}
                     newPeriod={newOutOfOrder}
@@ -1209,12 +1209,12 @@ export default function Photoshoot() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editPhotoshoot} onOpenChange={() => setEditPhotoshoot(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Photoshoot Package</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="md:col-span-2">
               <Label>Description</Label>
               <Textarea
                 value={editForm.description}
@@ -1241,7 +1241,7 @@ export default function Photoshoot() {
                 className="mt-2"
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <Label>Package Images (Max 5, Max 5MB each)</Label>
               <div className="mt-2">
                 <ImageUpload
@@ -1287,7 +1287,7 @@ export default function Photoshoot() {
                 />
               </div>
             </div>
-            <div className="col-span-2">
+            <div className="md:col-span-2">
               <OutOfOrderPeriods
                 periods={editForm.outOfOrders}
                 newPeriod={editNewOutOfOrder}
@@ -1299,7 +1299,7 @@ export default function Photoshoot() {
               />
             </div>
             {editPhotoshoot?.isBooked && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="md:col-span-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-sm text-amber-800">
                   <strong>Note:</strong> This package is currently booked and cannot be modified until the booking is completed.
                 </p>

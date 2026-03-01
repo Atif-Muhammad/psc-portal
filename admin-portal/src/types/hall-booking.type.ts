@@ -23,10 +23,12 @@ export interface HallBooking {
   updatedBy?: string;
   numberOfGuests: number;
   paidBy?: "MEMBER" | "GUEST";
-  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK" | "KUICKPAY";
   card_number?: string;
   check_number?: string;
   bank_name?: string;
+  transaction_id?: string;
+  paid_at?: string;
   guestName?: "";
   guestContact?: "";
   guestCNIC?: "";
@@ -97,7 +99,7 @@ export interface Hall {
   guestName?: string;
   guestContact?: string;
   guestCNIC?: string;
-  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK";
+  paymentMode?: "CASH" | "ONLINE" | "CARD" | "CHECK" | "KUICKPAY";
   card_number?: string;
   check_number?: string;
   bank_name?: string;
@@ -132,6 +134,8 @@ export interface HallBookingForm {
   card_number?: string;
   check_number?: string;
   bank_name?: string;
+  transaction_id?: string;
+  paid_at?: string;
   paidBy?: "MEMBER" | "GUEST";
   guestName?: "";
   guestContact?: "";
@@ -152,6 +156,7 @@ export enum PaymentMode {
   ONLINE = "ONLINE",
   CARD = "CARD",
   CHECK = "CHECK",
+  KUICKPAY = "KUICKPAY",
 }
 
 export enum Channel {

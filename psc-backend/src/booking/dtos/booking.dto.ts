@@ -92,4 +92,8 @@ export class BookingDto {
   heads?: { head: string; amount: number }[];
   @IsOptional()
   isForced?: boolean;
+  @IsOptional()
+  transaction_id?: string;
+  @IsOptional()
+  paid_at?: string;
 }

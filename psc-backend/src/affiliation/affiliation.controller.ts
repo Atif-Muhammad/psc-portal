@@ -14,19 +14,25 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { AffiliationService } from './affiliation.service';
+import { BookingService } from 'src/booking/booking.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   CreateAffiliatedClubDto,
   UpdateAffiliatedClubDto,
   CreateAffiliatedClubRequestDto,
   UpdateRequestStatusDto,
+  AffiliatedRoomBookingDto,
+  UpdateAffiliatedRoomBookingDto,
 } from './dtos/affiliation.dto';
 import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { PermissionsGuard } from 'src/common/guards/permission.guard';
 
 @Controller('affiliation')
 export class AffiliationController {
-  constructor(private affiliationService: AffiliationService) { }
+  constructor(
+    private affiliationService: AffiliationService,
+    private bookingService: BookingService,
+  ) { }
 
   // -------------------- AFFILIATED CLUBS --------------------
 
@@ -118,11 +124,45 @@ export class AffiliationController {
   }
 
   @UseGuards(JwtAccGuard)
-  @Get('stats')
-  async getAffiliatedClubStats(
+  @Get('booking-stats')
+  async getAffiliatedBookingStats(
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return await this.affiliationService.getAffiliatedClubStats(from, to);
+    return await this.affiliationService.getAffiliatedBookingStats(from, to);
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Get('bookings')
+  async getRoomBookings(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('clubId') clubId?: string,
+    @Query('status') status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS',
+  ) {
+    return await this.affiliationService.getAffiliatedRoomBookings(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
+      clubId ? Number(clubId) : undefined,
+      status,
+    );
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Post('booking')
+  async createRoomBooking(@Body() body: AffiliatedRoomBookingDto, @Req() req: any) {
+    const adminName = req.user?.name || 'system';
+    return await this.bookingService.cBookingRoomAff(body, adminName);
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Patch('booking/:id')
+  async updateRoomBooking(
+    @Param('id') id: string,
+    @Body() body: UpdateAffiliatedRoomBookingDto,
+    @Req() req: any,
+  ) {
+    const adminName = req.user?.name || 'system';
+    return await this.bookingService.uBookingRoomAff({ ...body, id: Number(id) }, adminName);
   }
 }
