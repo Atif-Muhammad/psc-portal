@@ -425,8 +425,8 @@ export class BookingService {
     const total = Number(totalPrice);
     let intendedPaid = 0;
 
-    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
-    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
     if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
       intendedPaid = total;
@@ -865,8 +865,8 @@ export class BookingService {
       newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
     }
 
-    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
-    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
     // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
     // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
@@ -935,7 +935,7 @@ export class BookingService {
       'ROOM',
       membershipNo ?? booking.Membership_No,
       newTotal,
-      dbPaid, // Use actual cash paid, not bookingPaidAmount (settlement amount)
+      newPaid, // Use intended total paid for voucher calculation
       newPaymentStatus,
       currTotal,
       oldActualCash, // Use actual cash paid from before the update
@@ -1458,7 +1458,11 @@ export class BookingService {
       booking_id: bookingId,
       booking_type: bookingType,
       membership_no: membershipNo,
-      payment_mode: paymentMode,
+      payment_mode: (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY')
+        ? PaymentMode.KUICKPAY
+        : ((paymentMode === (PaymentMode as any).ONLINE || String(paymentMode).toUpperCase() === 'ONLINE')
+          ? PaymentMode.ONLINE
+          : (paymentMode as PaymentMode) || PaymentMode.CASH),
       issued_by: issuedBy,
       card_number,
       check_number,
@@ -1576,8 +1580,8 @@ export class BookingService {
       const isToBillStatus =
         newStatus === (PaymentStatus.TO_BILL as unknown) ||
         newStatus === 'TO_BILL';
-      const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
-      const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+      const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+      const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
       if (isAdvanceStatus || isKuickpay || isOnline) {
         vType = (isKuickpay || isOnline) ? VoucherType.FULL_PAYMENT : VoucherType.ADVANCE_PAYMENT;
@@ -2699,7 +2703,7 @@ export class BookingService {
         : Number(basePrice) * numberOfDays;
       let intendedPaid = 0;
 
-      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
       if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
         intendedPaid = total;
@@ -2718,7 +2722,7 @@ export class BookingService {
         intendedPaid = 0;
       }
 
-      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
+      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
       // For KUICKPAY, initial paid amount is 0 as we want pending vouchers
       const paid = isKuickpay ? 0 : intendedPaid;
       const owed = total - paid;
@@ -3124,8 +3128,8 @@ export class BookingService {
         newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
       }
 
-      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
-      const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+      const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode).toUpperCase() === 'ONLINE';
 
       // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
       // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
@@ -3193,7 +3197,7 @@ export class BookingService {
         'HALL',
         membershipNo,
         newTotal,
-        dbPaid,
+        newPaid, // Use intended total paid for voucher calculation
         newPaymentStatus,
         currTotal,
         oldActualCash,
@@ -3594,8 +3598,8 @@ export class BookingService {
         : Number(basePrice) * numberOfDays;
       let intendedPaid = 0;
 
-      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
-      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+      const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+      const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
       if (
         String(paymentStatus) === 'PAID' ||
@@ -4017,9 +4021,9 @@ export class BookingService {
           paidAmount !== undefined ? Number(paidAmount) : currPaid;
       }
 
-      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
       const isOnline =
-        paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
+        paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode).toUpperCase() === 'ONLINE';
 
       // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
       let bookingPaidAmount = intendedPaid;
@@ -4295,8 +4299,8 @@ export class BookingService {
       ? Number(totalPrice)
       : Number(basePrice) * slotsCount;
 
-    const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
-    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
     let intendedPaid = 0;
     let amountToBalance = 0;
@@ -4660,8 +4664,8 @@ export class BookingService {
     // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
     // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
     let dbPaid = newPaid;
-    const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
-    const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode).toUpperCase() === 'ONLINE';
 
     if (isKuickpay && newPaid > currPaid) {
       dbPaid = currPaid;
@@ -4904,8 +4908,8 @@ export class BookingService {
       let intendedPaid = 0;
       let amountToBalance = 0;
       const isToBill = paymentStatus === 'TO_BILL';
-      const isKuickpay = (paymentMode as any) === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
-      const isOnline = (paymentMode as any) === (PaymentMode as any).ONLINE || String(paymentMode) === 'ONLINE';
+      const isKuickpay = (paymentMode as any) === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+      const isOnline = (paymentMode as any) === (PaymentMode as any).ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
       if (paymentStatus === 'PAID') {
         intendedPaid = total;
@@ -5161,10 +5165,10 @@ export class BookingService {
 
     const isKuickpay =
       paymentMode === ((PaymentMode as any).KUICKPAY as unknown) ||
-      String(paymentMode) === 'KUICKPAY';
+      String(paymentMode).toUpperCase() === 'KUICKPAY';
     const isOnline =
       paymentMode === (PaymentMode.ONLINE as unknown) ||
-      String(paymentMode) === 'ONLINE';
+      String(paymentMode).toUpperCase() === 'ONLINE';
 
     // NEW LOGIC: Only stagnate db ledger (paidAmount) if the increase is KUICKPAY or ONLINE
     let dbPaid = newPaid;
@@ -5966,8 +5970,8 @@ export class BookingService {
     const paid = intendedPaid;
     const owed = total - paid;
 
-    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY');
-    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || String(paymentMode) === 'ONLINE');
+    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY');
+    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || String(paymentMode).toUpperCase() === 'ONLINE');
 
     const isHalfPaid =
       String(paymentStatus) === 'HALF_PAID' ||
@@ -6043,9 +6047,9 @@ export class BookingService {
           amount: intendedPaid,
           payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
           voucher_type: voucherType as VoucherType,
-          status: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY') ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
+          status: (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY') ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
           issued_by: createdBy || 'admin',
-          paid_at: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY')
+          paid_at: (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY')
             ? null
             : (payload.paid_at ? new Date(payload.paid_at) : new Date()),
           transaction_id: payload.transaction_id || null,
@@ -6232,8 +6236,8 @@ export class BookingService {
     const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID' || newPaymentStatus === (PaymentStatus.HALF_PAID as unknown);
     const newOwed = newTotal - newPaid;
 
-    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
-    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
     // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
     let dbPaid = newPaid;
@@ -6269,7 +6273,7 @@ export class BookingService {
           booking_id: booking.id,
           membership_no: `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`,
           amount: paidDiff,
-          payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
+          payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
           voucher_type: voucherType as VoucherType,
           status: isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
           issued_by: updatedBy || 'admin',
