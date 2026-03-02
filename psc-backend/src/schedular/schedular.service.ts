@@ -320,21 +320,77 @@ export class SchedularService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async checkVoucherExpiry() {
+    this.logger.log(`Checking for expired online vouchers...`);
     const now = new Date();
 
-    const result = await this.prismaService.paymentVoucher.updateMany({
+    const expiredVouchers = await this.prismaService.paymentVoucher.findMany({
       where: {
         status: 'PENDING',
         payment_mode: 'ONLINE',
         expiresAt: { lt: now },
       },
-      data: {
-        status: 'CANCELLED',
-      },
     });
 
-    if (result.count > 0) {
-      this.logger.log(`Cancelled ${result.count} expired online vouchers.`);
+    if (expiredVouchers.length === 0) return;
+
+    for (const voucher of expiredVouchers) {
+      try {
+        await this.prismaService.$transaction(async (tx) => {
+          // 1. Update Voucher Status to EXPIRED
+          await tx.paymentVoucher.update({
+            where: { id: voucher.id },
+            data: {
+              status: 'EXPIRED' as any,
+              remarks: `${voucher.remarks || ''} | Voucher expired due to payment timeout.`.trim(),
+            },
+          });
+
+          // 2. Identify and Cancel the Booking
+          const cancellationData = {
+            isCancelled: true,
+            remarks: `Booking cancelled due to payment voucher (#${voucher.consumer_number}) expiration.`,
+          };
+
+          if (voucher.booking_type === 'ROOM') {
+            await tx.roomBooking.update({
+              where: { id: voucher.booking_id },
+              data: cancellationData,
+            });
+            // Also free up rooms
+            const bookingRooms = await tx.roomOnBooking.findMany({
+              where: { bookingId: voucher.booking_id },
+            });
+            await tx.room.updateMany({
+              where: { id: { in: bookingRooms.map((rb) => rb.roomId) } },
+              data: { isBooked: false },
+            });
+          } else if (voucher.booking_type === 'HALL') {
+            await tx.hallBooking.update({
+              where: { id: voucher.booking_id },
+              data: cancellationData,
+            });
+          } else if (voucher.booking_type === 'LAWN') {
+            await tx.lawnBooking.update({
+              where: { id: voucher.booking_id },
+              data: cancellationData,
+            });
+          } else if (voucher.booking_type === 'PHOTOSHOOT') {
+            await tx.photoshootBooking.update({
+              where: { id: voucher.booking_id },
+              data: cancellationData,
+            });
+          }
+        });
+
+        this.logger.log(
+          `Voucher #${voucher.consumer_number} expired and associated ${voucher.booking_type} booking #${voucher.booking_id} cancelled.`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Error processing expiration for voucher #${voucher.consumer_number}:`,
+          error,
+        );
+      }
     }
   }
 }

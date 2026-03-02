@@ -5,6 +5,7 @@ import RulesTab from "@/components/content/RulesTab"
 import AnnouncementsTab from "@/components/content/AnnouncementsTab"
 import AboutUsTab from "@/components/content/AboutUsTab"
 import PromotionalAdsTab from "@/components/content/PromotionalAdsTab"
+import ContactUsTab from "@/components/content/ContactUsTab"
 
 export default function Content() {
   return (
@@ -15,12 +16,13 @@ export default function Content() {
       </div>
 
       <Tabs defaultValue="events" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 ">
+        <TabsList className="grid w-full grid-cols-5 ">
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
           {/* <TabsTrigger value="announcements">Announcements</TabsTrigger> */}
           <TabsTrigger value="about">About Us</TabsTrigger>
           <TabsTrigger value="ads">Ads</TabsTrigger>
+          <TabsTrigger value="contact">Contact Us</TabsTrigger>
         </TabsList>
 
         <div className="mt-6">
@@ -38,6 +40,9 @@ export default function Content() {
           </TabsContent>
           <TabsContent value="ads">
             <PromotionalAdsTab />
+          </TabsContent>
+          <TabsContent value="contact">
+            <ContactUsTab />
           </TabsContent>
         </div>
       </Tabs>

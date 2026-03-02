@@ -8,7 +8,7 @@ export class ContentService {
   constructor(
     private prisma: PrismaService,
     private cloudinary: CloudinaryService,
-  ) {}
+  ) { }
 
   // --- Events ---
   async createEvent(
@@ -76,7 +76,7 @@ export class ContentService {
             ? JSON.parse(data.images)
             : data.images;
         if (Array.isArray(parsed)) imageUrls = parsed;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (files && files.length > 0) {
@@ -318,5 +318,43 @@ export class ContentService {
 
   async deleteAd(id: number) {
     return this.prisma.promotionalAd.delete({ where: { id } });
+  }
+
+  // --- Contact Us ---
+  async getContactUs() {
+    return this.prisma.contactUs.findMany({
+      orderBy: { category: 'asc' },
+    });
+  }
+
+  async upsertContactUs(data: any, auditorName: string) {
+    const { id, category, phoneNumbers, time, email } = data;
+    if (id) {
+      return this.prisma.contactUs.update({
+        where: { id: Number(id) },
+        data: {
+          category,
+          phoneNumbers: phoneNumbers || [],
+          time,
+          email,
+          updatedBy: auditorName,
+        },
+      });
+    }
+
+    return this.prisma.contactUs.create({
+      data: {
+        category,
+        phoneNumbers: phoneNumbers || [],
+        time,
+        email,
+        createdBy: auditorName,
+        updatedBy: auditorName,
+      },
+    });
+  }
+
+  async deleteContactUs(id: number) {
+    return this.prisma.contactUs.delete({ where: { id } });
   }
 }

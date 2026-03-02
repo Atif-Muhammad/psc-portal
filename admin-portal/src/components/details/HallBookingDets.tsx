@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { HallBooking } from "@/types/hall-booking.type";
 import { Voucher } from "@/types/room-booking.type";
+import { formatDateTimeForDisplay } from "@/utils/pakDate";
 
 interface HallBookingDetailsCardProps {
   booking: HallBooking;
@@ -223,13 +224,7 @@ export function HallBookingDetailsCard({
               Hall Booking #{booking.id} - {booking.hall?.name || booking.hallName}
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Created {new Date(booking.createdAt).toLocaleString("en-PK", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              Created {formatDateTimeForDisplay(booking.createdAt)}
             </p>
           </div>
           <div className="flex flex-col gap-2 items-end">
@@ -409,7 +404,7 @@ export function HallBookingDetailsCard({
                         <div>
                           <Label>Created At</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.createdAt ? new Date(booking.createdAt).toLocaleString("en-PK") : "N/A"}
+                            {formatDateTimeForDisplay(booking.createdAt)}
                           </div>
                         </div>
                         <div>
@@ -419,7 +414,7 @@ export function HallBookingDetailsCard({
                         <div>
                           <Label>Last Updated</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.updatedAt ? new Date(booking.updatedAt).toLocaleString("en-PK") : "N/A"}
+                            {formatDateTimeForDisplay(booking.updatedAt)}
                           </div>
                         </div>
                       </div>
@@ -509,11 +504,11 @@ export function HallBookingDetailsCard({
                         </div>
                         <div className="grid grid-cols-1 gap-1 text-[10px] text-muted-foreground">
                           <div className="flex justify-between">
-                            <span>Issued At: {new Date(voucher.issued_at).toLocaleDateString()}</span>
+                            <span>Issued At: {formatDateTimeForDisplay(voucher.issued_at)}</span>
                             <span>By: {voucher.issued_by}</span>
                           </div>
                           {voucher.paid_at && (
-                            <div>Paid At: {new Date(voucher.paid_at).toLocaleDateString()}</div>
+                            <div>Paid At: {formatDateTimeForDisplay(voucher.paid_at)}</div>
                           )}
                         </div>
                       </div>
@@ -567,7 +562,7 @@ export function HallBookingDetailsCard({
                           <div>
                             <Label>Requested At</Label>
                             <Value className="text-xs">
-                              {new Date(request.createdAt).toLocaleString("en-PK")}
+                              {formatDateTimeForDisplay(request.createdAt)}
                             </Value>
                           </div>
                         </div>

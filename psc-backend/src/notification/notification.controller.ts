@@ -101,11 +101,13 @@ export class NotificationController {
     }
   }
 
+  @UseGuards(JwtAccGuard)
   @Get('notifications')
   async getNotifications() {
     return this.notificationService.getNotifications();
   }
 
+  @UseGuards(JwtAccGuard)
   @Patch('update-seen')
   async updateSeen(@Body('notiID', ParseIntPipe) notiID: number) {
     return this.notificationService.updateSeen(notiID);

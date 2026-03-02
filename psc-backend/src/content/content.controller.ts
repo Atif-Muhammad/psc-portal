@@ -20,7 +20,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('content')
 export class ContentController {
-  constructor(private readonly contentService: ContentService) {}
+  constructor(private readonly contentService: ContentService) { }
 
   // --- Events ---
   @UseGuards(JwtAccGuard)
@@ -195,5 +195,25 @@ export class ContentController {
   @Delete('ads/:id')
   deleteAd(@Param('id') id: string) {
     return this.contentService.deleteAd(+id);
+  }
+
+  // --- Contact Us ---
+  @UseGuards(JwtAccGuard)
+  @Get('contact-us')
+  getContactUs() {
+    return this.contentService.getContactUs();
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Post('contact-us')
+  upsertContactUs(@Body() data: any, @Req() req: any) {
+    const adminName = req.user?.name || 'system';
+    return this.contentService.upsertContactUs(data, adminName);
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Delete('contact-us/:id')
+  deleteContactUs(@Param('id') id: string) {
+    return this.contentService.deleteContactUs(+id);
   }
 }

@@ -195,6 +195,11 @@ export class NotificationService {
 
   async getNotifications() {
     return await this.prisma.notification.findMany({
+      where: {
+        NOT: {
+          createdBy: 'system',
+        }
+      },
       include: {
         _count: {
           select: { deliveries: true },

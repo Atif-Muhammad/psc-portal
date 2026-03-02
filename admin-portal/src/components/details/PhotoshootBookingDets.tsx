@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { PhotoshootBooking } from "@/pages/PhotoshootBookings";
 import { Voucher } from "@/types/room-booking.type";
+import { formatDateTimeForDisplay, formatTimeForDisplay } from "@/utils/pakDate";
 
 interface PhotoshootOutOfOrderPeriod {
   id: number;
@@ -246,13 +247,7 @@ export function PhotoshootBookingDetailsCard({
               Photoshoot Booking #{booking.id} - {booking.photoshoot?.description}
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Created {booking.createdAt ? new Date(booking.createdAt).toLocaleString("en-PK", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }) : "N/A"}
+              Created {booking.createdAt ? formatDateTimeForDisplay(booking.createdAt) : "N/A"}
             </p>
           </div>
           <div className="flex flex-col gap-2 items-end">
@@ -456,7 +451,7 @@ export function PhotoshootBookingDetailsCard({
                         <div>
                           <Label>Created At</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.createdAt ? new Date(booking.createdAt).toLocaleString("en-PK") : "N/A"}
+                            {booking.createdAt ? formatDateTimeForDisplay(booking.createdAt) : "N/A"}
                           </div>
                         </div>
                         <div>
@@ -466,7 +461,7 @@ export function PhotoshootBookingDetailsCard({
                         <div>
                           <Label>Last Updated At</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.updatedAt ? new Date(booking.updatedAt).toLocaleString("en-PK") : "N/A"}
+                            {booking.updatedAt ? formatDateTimeForDisplay(booking.updatedAt) : "N/A"}
                           </div>
                         </div>
                       </div>
@@ -575,7 +570,7 @@ export function PhotoshootBookingDetailsCard({
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-xs mt-2">
                       <div><Label>Requested By</Label><Value>{request.requestedBy || "Unknown"}</Value></div>
-                      <div><Label>Requested At</Label><Value>{new Date(request.createdAt).toLocaleString("en-PK")}</Value></div>
+                      <div><Label>Requested At</Label><Value>{formatDateTimeForDisplay(request.createdAt)}</Value></div>
                       <div className="col-span-2">
                         <Label>Reason</Label>
                         <div className="p-2 bg-white border rounded mt-1">{request.reason || "No reason provided"}</div>

@@ -926,8 +926,8 @@ export class BookingService {
     // Calculate booking amounts for the database
     // For TO_BILL: paidAmount = total, pendingAmount = 0 (shows as 'paid')
     // For others: use actual cash amounts
-    const bookingPaidAmount = isToBillStatus ? newTotal : dbPaid;
-    const bookingPendingAmount = isToBillStatus ? 0 : newOwed;
+    let bookingPaidAmount = isToBillStatus ? newTotal : dbPaid;
+    let bookingPendingAmount = isToBillStatus ? 0 : newOwed;
 
     // Handle Vouchers and get Refund Amount
     const refundAmount = await this.handleVoucherUpdateUnified(
@@ -960,6 +960,11 @@ export class BookingService {
       bank_name,
     );
 
+    // ── ADJUST PAID/PENDING FOR REFUND ────────────────────────
+    if (refundAmount > 0 && !isToBillStatus) {
+      bookingPaidAmount = Math.max(0, bookingPaidAmount - refundAmount);
+      bookingPendingAmount = Math.max(0, newTotal - bookingPaidAmount);
+    }
     // Calculate diffs for ledger update. 
     // If we reversed TO_BILL, currPaid for the final update is now effectively oldActualCash
     const referencePaid = isMovingFromToBill ? oldActualCash : currPaid;
@@ -1638,7 +1643,9 @@ export class BookingService {
       await appendUpdateRemark(refundText);
     }
 
+    // ── HANDLE ADVANCE INCREASE: Only create if admin opted in ───
     if (
+      details.generateAdvanceVoucher &&
       newTotal > oldTotal &&
       (newStatus === 'ADVANCE_PAYMENT' || oldStatus === 'ADVANCE_PAYMENT')
     ) {
@@ -1713,6 +1720,7 @@ export class BookingService {
       // If user paid more advance than now required, generate refund voucher
       if (totalAdvancePaid > newRequiredAdvance) {
         const advanceRefundAmount = totalAdvancePaid - newRequiredAdvance;
+        refundAmount += advanceRefundAmount;
         const refundVno = generateNumericVoucherNo();
         const refundText = `Advance overpayment refund: Paid ${totalAdvancePaid} but only ${newRequiredAdvance} required (total decreased from ${oldTotal} to ${newTotal})`;
 

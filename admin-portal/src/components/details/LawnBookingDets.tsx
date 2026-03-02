@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { LawnBooking } from "@/pages/LawnBookings";
 import { Voucher } from "@/types/room-booking.type";
+import { formatDateTimeForDisplay } from "@/utils/pakDate";
 
 interface LawnBookingDetailsCardProps {
   booking: LawnBooking;
@@ -227,13 +228,7 @@ export function LawnBookingDetailsCard({
               Lawn Booking #{booking.id} - {booking.lawn?.description}
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Created {booking.createdAt ? new Date(booking.createdAt).toLocaleString("en-PK", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }) : "N/A"}
+              Created {booking.createdAt ? formatDateTimeForDisplay(booking.createdAt) : "N/A"}
             </p>
           </div>
           <div className="flex flex-col gap-2 items-end">
@@ -419,7 +414,7 @@ export function LawnBookingDetailsCard({
                         <div>
                           <Label>Created At</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.createdAt ? new Date(booking.createdAt).toLocaleString("en-PK") : "N/A"}
+                            {booking.createdAt ? formatDateTimeForDisplay(booking.createdAt) : "N/A"}
                           </div>
                         </div>
                         <div>
@@ -429,7 +424,7 @@ export function LawnBookingDetailsCard({
                         <div>
                           <Label>Last Updated</Label>
                           <div className="text-xs text-gray-600">
-                            {booking.updatedAt ? new Date(booking.updatedAt).toLocaleString("en-PK") : "N/A"}
+                            {booking.updatedAt ? formatDateTimeForDisplay(booking.updatedAt) : "N/A"}
                           </div>
                         </div>
                       </div>
@@ -548,7 +543,7 @@ export function LawnBookingDetailsCard({
                               <span>By: {voucher.issued_by}</span>
                             </div>
                             {voucher.paid_at && (
-                              <div className="text-green-600 font-medium">Paid At: {new Date(voucher.paid_at).toLocaleString()}</div>
+                              <div className="text-green-600 font-medium">Paid At: {formatDateTimeForDisplay(voucher.paid_at)}</div>
                             )}
                           </div>
                         </div>
@@ -603,7 +598,7 @@ export function LawnBookingDetailsCard({
                           <div>
                             <Label>Requested At</Label>
                             <Value className="text-xs">
-                              {new Date(request.createdAt).toLocaleString("en-PK")}
+                              {formatDateTimeForDisplay(request.createdAt)}
                             </Value>
                           </div>
                         </div>

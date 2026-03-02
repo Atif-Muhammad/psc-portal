@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { exportVoucherPDF } from "@/lib/pdfExport";
 import { getAccountMembers, getMemberVouchers, getMemberBookings } from "../../config/apis";
 import { DetailedCardSkeleton } from "@/components/Skeletons";
+import { formatDateForDisplay, formatDateTimeForDisplay } from "@/utils/pakDate";
 
 
 export default function Accounts() {
@@ -115,7 +116,7 @@ export default function Accounts() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    return formatDateForDisplay(dateString);
   };
 
   if (loading) {
@@ -284,7 +285,7 @@ export default function Accounts() {
                       memberVouchers.map((voucher) => (
                         <TableRow key={voucher.id}>
                           <TableCell className="font-medium">{voucher.id}</TableCell>
-                          <TableCell>{formatDate(voucher.issued_at || voucher.created_at)}</TableCell>
+                          <TableCell>{formatDateTimeForDisplay(voucher.issued_at || voucher.created_at)}</TableCell>
                           <TableCell>{voucher.voucher_type || voucher.booking_type}</TableCell>
                           <TableCell>PKR {voucher.amount?.toLocaleString() || 0}</TableCell>
                           <TableCell>{getStatusBadge(voucher.status)}</TableCell>

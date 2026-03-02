@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Send, Search, Bell, Megaphone, History } from "lucide-react";
+import { Plus, Send, Search, Bell, Megaphone, History, Eye } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,39 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { getMembers, authAdmin, sendNotification, getNotifications } from "../../config/apis";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Quill editor configuration (Matching AboutUsTab/Contents)
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+    [{ 'align': [] }],
+    ['link', 'image'],
+    [{ 'color': [] }, { 'background': [] }],
+    ['clean']
+  ],
+};
+
+const quillFormats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike', 'blockquote',
+  'list', 'bullet', 'indent', 'align',
+  'link', 'image', 'color', 'background'
+];
+
+// Custom CSS to fix editor height consistently
+const editorStyles = `
+  .rich-text-editor .ql-container {
+    min-height: 200px;
+    font-size: 16px;
+  }
+  .rich-text-editor .ql-editor {
+    min-height: 200px;
+  }
+`;
 
 
 export default function Notifications() {
@@ -28,6 +61,8 @@ export default function Notifications() {
   const [sendToAll, setSendToAll] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState("notifications");
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewingNotification, setViewingNotification] = useState<any>(null);
 
   const { toast } = useToast();
 
@@ -137,6 +172,7 @@ export default function Notifications() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <style>{editorStyles}</style>
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Bell className="h-8 w-8 text-primary" />
@@ -187,12 +223,17 @@ export default function Notifications() {
 
                   <div>
                     <Label>Description</Label>
-                    <Textarea
-                      value={messageContent}
-                      onChange={(e) => setMessageContent(e.target.value)}
-                      placeholder="Enter your message here..."
-                      className="mt-2 min-h-[120px]"
-                    />
+                    <div className="mt-2 rich-text-editor">
+                      <ReactQuill
+                        theme="snow"
+                        value={messageContent}
+                        onChange={setMessageContent}
+                        modules={quillModules}
+                        formats={quillFormats}
+                        placeholder="Enter your message here..."
+                        className="mb-2"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-4">
@@ -307,6 +348,7 @@ export default function Notifications() {
                       <TableHead>Recipients</TableHead>
                       <TableHead>Sent By</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -318,8 +360,14 @@ export default function Notifications() {
                             {notification.createdAt ? format(new Date(notification.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}
                           </TableCell>
                           <TableCell className="font-semibold">{notification.title}</TableCell>
-                          <TableCell className="max-w-md truncate" title={notification.description}>
-                            {notification.description}
+                          <TableCell className="max-w-md">
+                            <div className="ql-snow">
+                              <div
+                                className="line-clamp-2 text-sm ql-editor !p-0"
+                                dangerouslySetInnerHTML={{ __html: notification.description || "" }}
+                                title={notification.description?.replace(/<[^>]*>?/gm, '')}
+                              />
+                            </div>
                           </TableCell>
                           <TableCell>{notification._count?.deliveries || 0} members</TableCell>
                           <TableCell className="text-sm font-medium">{notification.createdBy || "System"}</TableCell>
@@ -327,6 +375,18 @@ export default function Notifications() {
                             <Badge className={notification.delivered ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}>
                               {notification.delivered ? "SENT" : "PENDING"}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setViewingNotification(notification);
+                                setIsViewOpen(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -364,12 +424,17 @@ export default function Notifications() {
                 </div>
                 <div className="space-y-2">
                   <Label>Message content</Label>
-                  <Textarea
-                    value={messageContent}
-                    onChange={(e) => setMessageContent(e.target.value)}
-                    placeholder="Enter the message to broadcast to all active members..."
-                    className="min-h-[150px]"
-                  />
+                  <div className="mt-1 rich-text-editor">
+                    <ReactQuill
+                      theme="snow"
+                      value={messageContent}
+                      onChange={setMessageContent}
+                      modules={quillModules}
+                      formats={quillFormats}
+                      placeholder="Enter the message to broadcast to all active members..."
+                      className="mb-2"
+                    />
+                  </div>
                 </div>
                 <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-blue-700 font-medium text-sm">
@@ -414,6 +479,7 @@ export default function Notifications() {
                         <TableHead>Message</TableHead>
                         <TableHead>Sent By</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -425,14 +491,32 @@ export default function Notifications() {
                               {notification.createdAt ? format(new Date(notification.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}
                             </TableCell>
                             <TableCell className="font-semibold text-sm">{notification.title}</TableCell>
-                            <TableCell className="max-w-xs truncate text-xs" title={notification.description}>
-                              {notification.description}
+                            <TableCell className="max-w-xs">
+                              <div className="ql-snow">
+                                <div
+                                  className="line-clamp-2 text-xs ql-editor !p-0"
+                                  dangerouslySetInnerHTML={{ __html: notification.description || "" }}
+                                  title={notification.description?.replace(/<[^>]*>?/gm, '')}
+                                />
+                              </div>
                             </TableCell>
                             <TableCell className="text-xs font-medium">{notification.createdBy || "System"}</TableCell>
                             <TableCell>
                               <Badge className={notification.delivered ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}>
                                 {notification.delivered ? "SENT" : "PENDING"}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setViewingNotification(notification);
+                                  setIsViewOpen(true);
+                                }}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -451,6 +535,42 @@ export default function Notifications() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* View Notification Dialog */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Notification Details</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-4">
+            <div className="flex justify-between items-start border-b pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{viewingNotification?.title}</h3>
+                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                  <span>{viewingNotification?.createdAt ? format(new Date(viewingNotification.createdAt), "dd MMM yyyy, hh:mm a") : ""}</span>
+                  <span>•</span>
+                  <span>Sent by: {viewingNotification?.createdBy || "System"}</span>
+                </div>
+              </div>
+              <Badge className={viewingNotification?.delivered ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}>
+                {viewingNotification?.delivered ? "SENT" : "PENDING"}
+              </Badge>
+            </div>
+
+            <div className="prose prose-sm dark:prose-invert max-w-none py-2">
+              <div className="ql-snow">
+                <div
+                  className="notification-content-preview ql-editor !p-0"
+                  dangerouslySetInnerHTML={{ __html: viewingNotification?.description || "" }}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="p-4 border-t">
+            <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Receipt, XCircle, Loader2, NotepadText, CheckCircle } from "lucide-react";
 import { Booking } from "@/types/room-booking.type";
+import { formatDateTimeForDisplay } from "@/utils/pakDate";
 
 interface BookingsTableProps {
   bookings: Booking[];
@@ -87,10 +88,10 @@ export const BookingsTable = React.memo(({
                   )}
                 </TableCell>
                 <TableCell>
-                  {new Date(booking.checkIn).toLocaleDateString()}
+                  {formatDateTimeForDisplay(booking.checkIn)}
                 </TableCell>
                 <TableCell>
-                  {new Date(booking.checkOut).toLocaleDateString()}
+                  {formatDateTimeForDisplay(booking.checkOut)}
                 </TableCell>
                 <TableCell>
                   PKR {booking.totalPrice?.toLocaleString()}

@@ -982,6 +982,8 @@ export default function RoomBookings() {
       bank_name: editForm.bank_name,
       transaction_id: editForm.transaction_id,
       paid_at: editForm.paid_at,
+      generateAdvanceVoucher: editForm.generateAdvanceVoucher || false,
+      advanceVoucherAmount: editForm.advanceVoucherAmount || 0,
     };
 
     updateMutation.mutate(payload);

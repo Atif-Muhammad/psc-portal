@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Receipt, Download } from "lucide-react";
 import { Voucher, Booking } from "@/types/room-booking.type";
 import { exportVoucherPDF } from "@/lib/pdfExport";
+import { formatDateTimeForDisplay } from "@/utils/pakDate";
 
 interface VouchersDialogProps {
   viewVouchers: any;
@@ -82,11 +83,11 @@ export const VouchersDialog = React.memo(({
                       <div className="text-sm font-mono text-muted-foreground">
                         Consumer Number: {voucher.consumer_number}
                       </div>
-                      {voucher.voucher_no && (
+                      {/* {voucher.voucher_no && (
                         <div className="text-xs font-mono text-muted-foreground">
                           Voucher No: {voucher.voucher_no}
                         </div>
-                      )}
+                      )} */}
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
                       <div className="flex items-center gap-2">
@@ -131,16 +132,14 @@ export const VouchersDialog = React.memo(({
                     <div>
                       <div className="font-medium">Issued At</div>
                       <div className="text-xs">
-                        {new Date(voucher.issued_at).toLocaleDateString()} {" "}
-                        {new Date(voucher.issued_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatDateTimeForDisplay(voucher.issued_at)}
                       </div>
                     </div>
                     {voucher.paid_at && voucher.payment_mode !== "ONLINE" && voucher.payment_mode !== "KUICKPAY" && (
                       <div>
                         <div className="font-medium">Paid At</div>
                         <div className="text-xs">
-                          {new Date(voucher.paid_at).toLocaleDateString()} {" "}
-                          {new Date(voucher.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatDateTimeForDisplay(voucher.paid_at)}
                         </div>
                       </div>
                     )}
@@ -182,8 +181,7 @@ export const VouchersDialog = React.memo(({
                           <div className="col-span-2 flex justify-between border-b border-blue-100 pb-1">
                             <span className="text-blue-700 font-medium">Paid Date:</span>
                             <span>
-                              {new Date(voucher.paid_at).toLocaleDateString()} {" "}
-                              {new Date(voucher.paid_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatDateTimeForDisplay(voucher.paid_at)}
                             </span>
                           </div>
                         )}

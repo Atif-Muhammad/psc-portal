@@ -30,15 +30,44 @@ export const getPakistanDateString = (date: Date): string => {
   return pktDate.toISOString().split('T')[0];
 };
 
-
-
 // Helper function to format dates for display in Pakistan time
 export const formatDateForDisplay = (dateString: string) => {
+  if (!dateString) return "N/A";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "N/A";
   return date.toLocaleDateString('en-PK', {
     timeZone: 'Asia/Karachi',
     year: 'numeric',
     month: 'short',
     day: 'numeric'
+  });
+};
+
+// Helper function to format time for display (12-hour clock)
+export const formatTimeForDisplay = (dateString: string) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "N/A";
+  return date.toLocaleTimeString('en-PK', {
+    timeZone: 'Asia/Karachi',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
+// Helper function to format date and time for display (12-hour clock)
+export const formatDateTimeForDisplay = (dateString: string) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "N/A";
+  return date.toLocaleString('en-PK', {
+    timeZone: 'Asia/Karachi',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
   });
 };

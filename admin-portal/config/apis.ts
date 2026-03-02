@@ -1966,6 +1966,28 @@ export const deleteAd = async (id: any): Promise<any> => {
   } catch (error: any) { throw { message: error.response?.data?.message || "Error deleting ad", status: error.response?.status || 500 }; }
 };
 
+// Contact Us
+export const getContactUs = async (): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/content/contact-us`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) { throw { message: error.response?.data?.message || "Error fetching contact info", status: error.response?.status || 500 }; }
+};
+
+export const upsertContactUs = async (data: any): Promise<any> => {
+  try {
+    const response = await axios.post(`${base_url}/content/contact-us`, data, { withCredentials: true });
+    return response.data;
+  } catch (error: any) { throw { message: error.response?.data?.message || "Error saving contact info", status: error.response?.status || 500 }; }
+};
+
+export const deleteContactUs = async (id: any): Promise<any> => {
+  try {
+    const response = await axios.delete(`${base_url}/content/contact-us/${id}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) { throw { message: error.response?.data?.message || "Error deleting contact info", status: error.response?.status || 500 }; }
+};
+
 /////////////////////////////////////////////////
 
 
