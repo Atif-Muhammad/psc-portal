@@ -425,8 +425,8 @@ export class BookingService {
     const total = Number(totalPrice);
     let intendedPaid = 0;
 
-    const isKuickpay = paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode) === 'KUICKPAY';
-    const isOnline = paymentMode === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
     if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
       intendedPaid = total;
@@ -865,8 +865,8 @@ export class BookingService {
       newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
     }
 
-    const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode) === 'KUICKPAY';
-    const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode) === 'ONLINE';
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
     // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
     // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
@@ -1416,7 +1416,6 @@ export class BookingService {
     // Track if we created a voucher during this execution to prevent duplicates
     let voucherCreatedForPaymentIncrease = false;
     let voucherAmountCreated = 0;
-    let voucherCreatedIsOnline = false;
 
     const roomCount = bookingType === 'ROOM' ? details.roomCount || 0 : 1;
     const oldRequiredAdvance = this.calculateAdvanceAmount(roomCount, oldTotal);
@@ -1577,12 +1576,8 @@ export class BookingService {
       const isToBillStatus =
         newStatus === (PaymentStatus.TO_BILL as unknown) ||
         newStatus === 'TO_BILL';
-      const isKuickpay =
-        paymentMode === ((PaymentMode as any).KUICKPAY as unknown) ||
-        String(paymentMode) === 'KUICKPAY';
-      const isOnline =
-        paymentMode === (PaymentMode.ONLINE as unknown) ||
-        String(paymentMode) === 'ONLINE';
+      const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
+      const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
       if (isAdvanceStatus || isKuickpay || isOnline) {
         vType = (isKuickpay || isOnline) ? VoucherType.FULL_PAYMENT : VoucherType.ADVANCE_PAYMENT;
@@ -1615,7 +1610,6 @@ export class BookingService {
       // Mark that we created a voucher and track the amount and type
       voucherCreatedForPaymentIncrease = true;
       voucherAmountCreated = paidDiff;
-      voucherCreatedIsOnline = isKuickpay;
 
       await appendUpdateRemark(updateText);
     }
@@ -6238,8 +6232,8 @@ export class BookingService {
     const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID' || newPaymentStatus === (PaymentStatus.HALF_PAID as unknown);
     const newOwed = newTotal - newPaid;
 
-    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY');
-    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || paymentMode === 'ONLINE');
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode) === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode) === 'ONLINE';
 
     // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
     let dbPaid = newPaid;
@@ -6255,7 +6249,7 @@ export class BookingService {
     const paidDiff = newPaid - currPaid;
     if (paidDiff > 0) {
       let voucherType: VoucherType;
-      if (String(newPaymentStatus) === 'PAID') {
+      if (isKuickpay || isOnline || String(newPaymentStatus) === 'PAID') {
         voucherType = VoucherType.FULL_PAYMENT;
       } else if (
         String(newPaymentStatus) === 'ADVANCE_PAYMENT' ||
@@ -6271,21 +6265,22 @@ export class BookingService {
         data: {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
-          booking_type: 'ROOM',
+          booking_type: BookingType.ROOM,
           booking_id: booking.id,
           membership_no: `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`,
           amount: paidDiff,
           payment_mode: (paymentMode as PaymentMode) || PaymentMode.CASH,
           voucher_type: voucherType as VoucherType,
-          status: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY') ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
+          status: isKuickpay ? VoucherStatus.PENDING : VoucherStatus.CONFIRMED,
           issued_by: updatedBy || 'admin',
-          paid_at: (paymentMode === (PaymentMode as any).KUICKPAY || paymentMode === 'KUICKPAY')
+          paid_at: isKuickpay
             ? null
             : (updateData.paid_at ? new Date(updateData.paid_at) : new Date()),
           transaction_id: updateData.transaction_id || null,
           bank_name: updateData.bank_name || bank_name || null,
           card_number: card_number,
           check_number: check_number,
+          expiresAt: isKuickpay ? new Date(Date.now() + 60 * 60 * 1000) : null,
           remarks: `AFFILIATED BOOKING UPDATE${isHalfPaid ? ' PARTIAL' : ''} - Rooms: ${roomNumbers} | ${formatPakistanDate(newCheckIn)} → ${formatPakistanDate(newCheckOut)} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}${isKuickpay ? ' | KUICKPAY' : ''}${isOnline ? ' | ONLINE' : ''}`,
         } as any,
       });
