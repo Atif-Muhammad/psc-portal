@@ -117,8 +117,7 @@ export class BookingService {
       },
       orderBy: {
         issued_at: 'desc'
-      },
-      take: 3,
+      }
     });
 
     const enhancedVouchers = await Promise.all(vouchers.map(async (voucher) => {
