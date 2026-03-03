@@ -3,17 +3,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Receipt, XCircle, Loader2, NotepadText, CheckCircle } from "lucide-react";
+import { Edit, Receipt, XCircle, Loader2, NotepadText, CheckCircle, Lock } from "lucide-react";
 import { Booking } from "@/types/room-booking.type";
 import { formatDateTimeForDisplay } from "@/utils/pakDate";
 
 interface BookingsTableProps {
   bookings: Booking[];
   isLoading: boolean;
-  onEdit: (booking: Booking) => void;
+  onEdit?: (booking: Booking) => void;
   onDetail: (booking: Booking) => void;
   onViewVouchers: (booking: Booking) => void;
   onCancel?: (booking: Booking) => void;
+  onClose?: (booking: Booking) => void;
   getPaymentBadge: (status: string) => React.ReactNode;
   onApprove?: (booking: Booking) => void;
   onReject?: (booking: Booking) => void;
@@ -27,6 +28,7 @@ export const BookingsTable = React.memo(({
   onDetail,
   onViewVouchers,
   onCancel,
+  onClose,
   getPaymentBadge,
   onApprove,
   onReject,
@@ -107,14 +109,16 @@ export const BookingsTable = React.memo(({
                       title="Booking Details">
                       <NotepadText />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(booking)}
-                      title="Edit Booking"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    {onEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit(booking)}
+                        title="Edit Booking"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -132,6 +136,17 @@ export const BookingsTable = React.memo(({
                         title="Cancel Booking"
                       >
                         <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onClose && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-amber-600"
+                        onClick={() => onClose(booking)}
+                        title="Close Booking"
+                      >
+                        <Lock className="h-4 w-4" />
                       </Button>
                     )}
                     {onApprove && (

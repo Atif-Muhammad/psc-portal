@@ -114,6 +114,7 @@ export interface Booking {
   remarks?: string;
   affiliatedClubId?: number;
   affiliatedMembershipNo?: string;
+  isClosed?: boolean;
 }
 
 export interface BookingForm {

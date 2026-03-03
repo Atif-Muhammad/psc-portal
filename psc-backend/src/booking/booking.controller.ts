@@ -199,6 +199,49 @@ export class BookingController {
       return this.bookingService.gCancellationRequestsLawn(page, limit);
   }
 
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @Get('get/bookings/closed')
+  async getClosedBookings(
+    @Query('bookingsFor') bookingFor: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    if (bookingFor === 'rooms')
+      return this.bookingService.gClosedBookingsRoom(page, limit);
+  }
+
+  @UseGuards(JwtAccGuard, RolesGuard)
+  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @Post('close/booking')
+  async closeBooking(
+    @Query('bookingFor') bookingFor: string,
+    @Query('bookID') bookID: string,
+    @Body() body: {
+      refund?: boolean;
+      paymentMode?: string;
+      transaction_id?: string;
+      bank_name?: string;
+      check_number?: string;
+      paid_at?: string;
+    },
+    @Req() req: any,
+  ) {
+    const adminName = req.user?.name || 'system';
+    const refundPayload = body.refund ? {
+      paymentMode: body.paymentMode || 'CASH',
+      transaction_id: body.transaction_id,
+      bank_name: body.bank_name,
+      check_number: body.check_number,
+      paid_at: body.paid_at,
+    } : undefined;
+
+    if (bookingFor === 'rooms')
+      return this.bookingService.closeBookingRoom(Number(bookID), refundPayload, adminName);
+    if (bookingFor === 'room_aff')
+      return this.bookingService.closeBookingRoomAff(Number(bookID), refundPayload, adminName);
+  }
+
   // @UseGuards(JwtAccGuard)
   @Post('cancelReqBooking')
   async cancelReqBooking(

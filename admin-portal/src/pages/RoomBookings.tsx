@@ -24,6 +24,8 @@ import {
   getRoomDateStatuses,
   getCancelledBookings,
   getCancellationRequests,
+  getClosedBookings,
+  closeBooking,
 } from "../../config/apis";
 import { Plus, Loader2, X } from "lucide-react";
 import {
@@ -56,6 +58,7 @@ import { BookingsTable } from "@/components/BookingsTable";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
+import { CloseBookingDialog } from "@/components/CloseBookingDialog";
 import { BookingFormComponent } from "@/components/BookingForm";
 
 // Import types and utilities
@@ -88,6 +91,7 @@ export default function RoomBookings() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [closeBookingTarget, setCloseBookingTarget] = useState<Booking | null>(null);
   const [viewVouchers, setViewVouchers] = useState<Booking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [activeTab, setActiveTab] = useState("active");
@@ -207,17 +211,37 @@ export default function RoomBookings() {
     enabled: activeTab === "requests",
   });
 
+  const {
+    data: closedData,
+    fetchNextPage: fetchNextClosed,
+    hasNextPage: hasNextClosed,
+    isFetchingNextPage: isFetchingNextClosed,
+    isLoading: isLoadingClosed,
+  } = useInfiniteQuery({
+    queryKey: ["bookings", "rooms", "closed"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getClosedBookings({ bookingsFor: "rooms", pageParam });
+      return res as Booking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "closed",
+  });
+
   const bookings = useMemo(() => {
     if (activeTab === "active") return data?.pages.flat() || [];
     if (activeTab === "cancelled") return cancelledData?.pages.flat() || [];
     if (activeTab === "requests") return requestData?.pages.flat() || [];
+    if (activeTab === "closed") return closedData?.pages.flat() || [];
     return [];
-  }, [data, cancelledData, requestData, activeTab]);
+  }, [data, cancelledData, requestData, closedData, activeTab]);
 
-  const isLoading = isLoadingBookings || isLoadingCancelled || isLoadingRequests;
-  const isFetchingNext = isFetchingNextPage || isFetchingNextCancelled || isFetchingNextRequests;
-  const hasNext = hasNextPage || hasNextCancelled || hasNextRequests;
-  const fetchNext = activeTab === "active" ? fetchNextPage : activeTab === "cancelled" ? fetchNextCancelled : fetchNextRequests;
+  const isLoading = isLoadingBookings || isLoadingCancelled || isLoadingRequests || isLoadingClosed;
+  const isFetchingNext = isFetchingNextPage || isFetchingNextCancelled || isFetchingNextRequests || isFetchingNextClosed;
+  const hasNext = activeTab === "active" ? hasNextPage : activeTab === "cancelled" ? hasNextCancelled : activeTab === "requests" ? hasNextRequests : hasNextClosed;
+  const fetchNext = activeTab === "active" ? fetchNextPage : activeTab === "cancelled" ? fetchNextCancelled : activeTab === "requests" ? fetchNextRequests : fetchNextClosed;
 
   const observer = useRef<IntersectionObserver>();
   const lastElementRef = useCallback(
@@ -692,9 +716,10 @@ export default function RoomBookings() {
         if (
           ["roomTypeId", "pricingType", "checkIn", "checkOut", "heads", "totalPrice"].includes(field)
         ) {
-          const oldTotal = prev.totalPrice || 0;
-          const oldPaid = prev.paidAmount || 0;
-          const oldPaymentStatus = prev.paymentStatus;
+          const oldTotal = isEdit ? (editBooking?.totalPrice || 0) : (prev.totalPrice || 0);
+          const oldPaid = isEdit ? (editBooking?.paidAmount || 0) : (prev.paidAmount || 0);
+          const oldPending = isEdit ? (editBooking?.pendingAmount || 0) : (prev.pendingAmount || 0);
+          const oldPaymentStatus = isEdit ? (editBooking?.paymentStatus || "UNPAID") : prev.paymentStatus;
 
           const newPrice = calculateTotal(
             field === "roomTypeId" ? value : newForm.roomTypeId,
@@ -709,29 +734,53 @@ export default function RoomBookings() {
 
           // AUTO-ADJUST PAYMENT STATUS WHEN DATES OR PRICING CHANGE IN EDIT MODE
           if (isEdit) {
-            if (newPrice > oldPaid && oldPaymentStatus === "PAID") {
-              // Price Increased and was Fully Paid -> Downgrade to HALF_PAID
-              newForm.paymentStatus = "HALF_PAID";
-              newForm.paidAmount = oldPaid; // Preserve existing paid amount
-              newForm.pendingAmount = newPrice - oldPaid;
-            } else if (newPrice < oldPaid) {
-              // Price decreased below what was paid -> Mark as PAID
-              newForm.paymentStatus = "PAID";
-              newForm.paidAmount = newPrice;
-              newForm.pendingAmount = 0;
-            } else if (newPrice > oldTotal && (oldPaymentStatus === "HALF_PAID" || oldPaymentStatus === "UNPAID" || oldPaymentStatus === "ADVANCE_PAYMENT")) {
-              // Price Increased -> Preserve existing paid amount
+            if (newPrice > oldTotal) {
+              // PRICE INCREASE
+              if (oldPaymentStatus === "PAID") {
+                // Was Fully Paid -> Downgrade to HALF_PAID since more is now owed
+                newForm.paymentStatus = "HALF_PAID";
+              }
+              // Preserve existing paid amount, recalculate pending
               newForm.paidAmount = oldPaid;
               newForm.pendingAmount = newPrice - oldPaid;
+            } else if (newPrice < oldTotal) {
+              // PRICE DECREASE (Settlement Case Logic)
+              const diff = oldTotal - newPrice;
+              let effectiveDiff = diff;
+              let adjustedPending = oldPending;
+
+              // Step 0: Absorb any prior negative pending
+              if (oldPending < 0) {
+                effectiveDiff = diff + oldPending;
+                adjustedPending = 0;
+              }
+
+              if (effectiveDiff <= 0) {
+                // Decrease fully absorbed by prior negative pending
+                newForm.paymentStatus = "PAID";
+                newForm.paidAmount = oldPaid;
+                newForm.pendingAmount = newPrice - oldPaid;
+              } else if (effectiveDiff === adjustedPending) {
+                // Case A: Exactly covers pending
+                newForm.paymentStatus = (newPrice - oldPaid) <= 0 ? "PAID" : "HALF_PAID";
+                newForm.paidAmount = oldPaid;
+                newForm.pendingAmount = newPrice - oldPaid;
+              } else if (effectiveDiff < adjustedPending) {
+                // Case B: Partially covers pending
+                newForm.paymentStatus = (newPrice - oldPaid) <= 0 ? "PAID" : "HALF_PAID";
+                newForm.paidAmount = oldPaid;
+                newForm.pendingAmount = newPrice - oldPaid;
+              } else {
+                // Case C: Exceeds pending -> now club owes member
+                newForm.paymentStatus = "PAID";
+                newForm.paidAmount = oldPaid; // Keep actual cash received
+                newForm.pendingAmount = newPrice - oldPaid; // negative = club owes member
+              }
             } else {
-              // Standard accounting update
-              const accounting = calculateAccountingValues(
-                newForm.paymentStatus,
-                newPrice,
-                oldPaid
-              );
-              newForm.paidAmount = accounting.paid;
-              newForm.pendingAmount = accounting.pendingAmount;
+              // Total Price stayed exactly the same (rare if fields changed)
+              newForm.paidAmount = oldPaid;
+              newForm.pendingAmount = newPrice - oldPaid;
+              newForm.paymentStatus = oldPaymentStatus;
             }
           } else {
             // Creation mode - use standard accounting
@@ -809,16 +858,56 @@ export default function RoomBookings() {
       let newStatus = prev.paymentStatus;
 
       if (isEdit) {
-        if (newTotal > prev.paidAmount && prev.paymentStatus === 'PAID') {
-          // Auto downgrade
-          newStatus = 'HALF_PAID';
-          newPaid = prev.paidAmount; // Keep old paid
-          newPending = newTotal - prev.paidAmount;
+        const originalTotal = editBooking?.totalPrice || 0;
+        const originalPaid = editBooking?.paidAmount || 0;
+        const originalPending = editBooking?.pendingAmount || 0;
+        const originalStatus = editBooking?.paymentStatus || "UNPAID";
+
+        if (newTotal > originalTotal) {
+          // PRICE INCREASE
+          if (originalStatus === "PAID") {
+            newStatus = "HALF_PAID";
+          }
+          newPaid = originalPaid;
+          newPending = newTotal - originalPaid;
+        } else if (newTotal < originalTotal) {
+          // PRICE DECREASE (Settlement Case Logic)
+          const diff = originalTotal - newTotal;
+          let effectiveDiff = diff;
+          let adjustedPending = originalPending;
+
+          // Step 0: Absorb any prior negative pending
+          if (originalPending < 0) {
+            effectiveDiff = diff + originalPending;
+            adjustedPending = 0;
+          }
+
+          if (effectiveDiff <= 0) {
+            // Decrease fully absorbed by prior negative pending
+            newStatus = "PAID";
+            newPaid = originalPaid;
+            newPending = newTotal - originalPaid;
+          } else if (effectiveDiff === adjustedPending) {
+            // Case A: Exactly covers pending
+            newStatus = (newTotal - originalPaid) <= 0 ? "PAID" : "HALF_PAID";
+            newPaid = originalPaid;
+            newPending = newTotal - originalPaid;
+          } else if (effectiveDiff < adjustedPending) {
+            // Case B: Partially covers pending
+            newStatus = (newTotal - originalPaid) <= 0 ? "PAID" : "HALF_PAID";
+            newPaid = originalPaid;
+            newPending = newTotal - originalPaid;
+          } else {
+            // Case C: Exceeds pending -> club owes member
+            newStatus = "PAID";
+            newPaid = originalPaid; // Keep actual cash received
+            newPending = newTotal - originalPaid; // negative = club owes member
+          }
         } else {
-          // Standard manual or price-change logic for edit
-          const accounting = calculateAccountingValues(newStatus, newTotal, prev.paidAmount);
-          newPaid = accounting.paid;
-          newPending = accounting.pendingAmount;
+          // Total Price stayed same (e.g. swapped rooms of same type)
+          newPaid = originalPaid;
+          newPending = newTotal - originalPaid;
+          newStatus = originalStatus;
         }
       } else {
         // Create Mode - Use standard accounting
@@ -1131,10 +1220,11 @@ export default function RoomBookings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-4 mb-4">
           <TabsTrigger value="active">Active Bookings</TabsTrigger>
           <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
           <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
+          <TabsTrigger value="closed">Closed Bookings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="m-0">
@@ -1148,6 +1238,7 @@ export default function RoomBookings() {
             }}
             onViewVouchers={handleViewVouchers}
             onCancel={setCancelBooking}
+            onClose={setCloseBookingTarget}
             getPaymentBadge={getPaymentBadge}
           />
         </TabsContent>
@@ -1180,6 +1271,19 @@ export default function RoomBookings() {
             onApprove={handleApproveReq}
             onReject={handleRejectReq}
             onViewReason={handleViewReason}
+          />
+        </TabsContent>
+
+        <TabsContent value="closed" className="m-0">
+          <BookingsTable
+            bookings={filteredBookings}
+            isLoading={isLoading}
+            onDetail={(booking: Booking) => {
+              setOpenDetails(true);
+              setDetailBooking(booking);
+            }}
+            onViewVouchers={handleViewVouchers}
+            getPaymentBadge={getPaymentBadge}
           />
         </TabsContent>
       </Tabs>
@@ -1227,6 +1331,21 @@ export default function RoomBookings() {
         onClose={() => setCancelBooking(null)}
         onConfirm={handleDelete}
         isDeleting={deleteMutation.isPending}
+      />
+
+      <CloseBookingDialog
+        booking={closeBookingTarget}
+        onClose={() => setCloseBookingTarget(null)}
+        onConfirm={(bookingId, refundPayload) => {
+          closeBooking("rooms", bookingId, refundPayload).then(() => {
+            toast({ title: "Booking closed successfully" });
+            setCloseBookingTarget(null);
+            queryClient.invalidateQueries({ queryKey: ["bookings", "rooms"] });
+          }).catch((err: any) => {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+          });
+        }}
+        isClosing={false}
       />
 
       <Dialog

@@ -322,12 +322,13 @@ export class AffiliationService {
 
   // -------------------- AFFILIATED CLUB ROOM BOOKINGS --------------------
 
-  async getAffiliatedRoomBookings(page = 1, limit = 10, clubId?: number, status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS') {
+  async getAffiliatedRoomBookings(page = 1, limit = 10, clubId?: number, status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS' | 'CLOSED') {
     const where: any = {};
     if (clubId) where.affiliatedClubId = clubId;
 
     if (status === 'ACTIVE') {
       where.isCancelled = false;
+      where.isClosed = false;
       where.cancellationRequests = {
         none: { status: 'PENDING' },
       };
@@ -339,6 +340,9 @@ export class AffiliationService {
       where.cancellationRequests = {
         some: { status: 'PENDING' },
       };
+    } else if (status === 'CLOSED') {
+      where.isClosed = true;
+      where.isCancelled = false;
     }
 
     const [total, data] = await Promise.all([

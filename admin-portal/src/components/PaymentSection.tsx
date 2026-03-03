@@ -26,10 +26,10 @@ export const PaymentSection = React.memo(({
   const calculateRealTimeAccounting = () => {
     const total = form.totalPrice || 0;
     const paid = form.paidAmount || 0;
-    let pending = total - paid;
-
-    // Ensure pending amount is never negative
-    if (pending < 0) pending = 0;
+    // Use form.pendingAmount if it's negative (club owes member), otherwise calculate
+    let pending = form.pendingAmount !== undefined && form.pendingAmount < 0
+      ? form.pendingAmount
+      : total - paid;
 
     return {
       total,
@@ -174,7 +174,7 @@ export const PaymentSection = React.memo(({
             }}
           />
           <div className="text-xs text-muted-foreground mt-1">
-            {accounting.pending > 0 ? 'Amount remaining' : 'Fully paid'}
+            {accounting.pending > 0 ? 'Amount remaining' : accounting.pending < 0 ? 'Club owes member' : 'Fully paid'}
           </div>
         </div>
       </div>

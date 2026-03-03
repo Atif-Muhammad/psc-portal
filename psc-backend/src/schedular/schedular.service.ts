@@ -326,7 +326,7 @@ export class SchedularService {
     const expiredVouchers = await this.prismaService.paymentVoucher.findMany({
       where: {
         status: 'PENDING',
-        payment_mode: 'ONLINE',
+        payment_mode: 'KUICKPAY',
         expiresAt: { lt: now },
       },
     });

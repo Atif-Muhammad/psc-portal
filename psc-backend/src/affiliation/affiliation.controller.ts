@@ -138,7 +138,7 @@ export class AffiliationController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('clubId') clubId?: string,
-    @Query('status') status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS',
+    @Query('status') status?: 'ACTIVE' | 'CANCELLED' | 'REQUESTS' | 'CLOSED',
   ) {
     return await this.affiliationService.getAffiliatedRoomBookings(
       page ? Number(page) : 1,

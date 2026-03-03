@@ -39,6 +39,7 @@ import {
   cancelReqBooking,
   updateCancellationReq,
   getVouchers,
+  closeBooking,
 } from "../../config/apis";
 import type { AffiliatedClub, CreateAffiliatedClubDto, UpdateAffiliatedClubDto, AffiliatedClubRequest } from "@/types/affiliated-club.type";
 import { useToast } from "@/hooks/use-toast";
@@ -47,6 +48,7 @@ import { BookingsTable } from "@/components/BookingsTable";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
+import { CloseBookingDialog } from "@/components/CloseBookingDialog";
 import { BookingFormComponent } from "@/components/BookingForm";
 // Import types and utilities
 import {
@@ -88,6 +90,7 @@ export default function AffiliatedClubs() {
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [viewVouchers, setViewVouchers] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [closeBookingTarget, setCloseBookingTarget] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
   const [bookingPage, setBookingPage] = useState(1);
   const [bookingTab, setBookingTab] = useState("ACTIVE");
@@ -743,10 +746,11 @@ export default function AffiliatedClubs() {
           </div>
 
           <Tabs value={bookingTab} onValueChange={(val) => { setBookingTab(val); setBookingPage(1); }}>
-            <TabsList className="w-full sm:w-auto grid grid-cols-3">
+            <TabsList className="w-full sm:w-auto grid grid-cols-4">
               <TabsTrigger value="ACTIVE">Active</TabsTrigger>
               <TabsTrigger value="REQUESTS">Requested</TabsTrigger>
               <TabsTrigger value="CANCELLED">Cancelled</TabsTrigger>
+              <TabsTrigger value="CLOSED">Closed</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -784,8 +788,9 @@ export default function AffiliatedClubs() {
                 bookings={affiliatedBookings?.data || []}
                 isLoading={isLoadingBookings}
                 onDetail={(booking) => setDetailBooking(booking)}
-                onEdit={(booking) => handleEditBooking(booking)}
-                onCancel={(booking) => setCancelBooking(booking)}
+                onEdit={bookingTab !== "CLOSED" ? (booking) => handleEditBooking(booking) : undefined}
+                onCancel={bookingTab !== "CLOSED" ? (booking) => setCancelBooking(booking) : undefined}
+                onClose={bookingTab === "ACTIVE" ? (booking) => setCloseBookingTarget(booking) : undefined}
                 onViewVouchers={(booking) => setViewVouchers(booking)}
                 getPaymentBadge={getPaymentBadge}
               />
@@ -1133,6 +1138,21 @@ export default function AffiliatedClubs() {
           if (cancelBooking) cancelBookingMutation.mutate({ bookID: String(cancelBooking.id), reason });
         }}
         isDeleting={cancelBookingMutation.isPending}
+      />
+
+      <CloseBookingDialog
+        booking={closeBookingTarget}
+        onClose={() => setCloseBookingTarget(null)}
+        onConfirm={(bookingId, refundPayload) => {
+          closeBooking("room_aff", bookingId, refundPayload).then(() => {
+            toast({ title: "Booking closed successfully" });
+            setCloseBookingTarget(null);
+            queryClient.invalidateQueries({ queryKey: ["affiliatedBookings"] });
+          }).catch((err: any) => {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+          });
+        }}
+        isClosing={false}
       />
     </div >
   );

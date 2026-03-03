@@ -424,6 +424,60 @@ export const getCancellationRequests = async ({
   }
 };
 
+export const getClosedBookings = async ({
+  bookingsFor,
+  pageParam = 1,
+}: {
+  bookingsFor: string;
+  pageParam?: number;
+}): Promise<any> => {
+  try {
+    const response = await axios.get(
+      `${base_url}/booking/get/bookings/closed?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const closeBooking = async (
+  bookingFor: string,
+  bookID: any,
+  refundPayload?: {
+    refund: boolean;
+    paymentMode?: string;
+    transaction_id?: string;
+    bank_name?: string;
+    check_number?: string;
+    paid_at?: string;
+  }
+): Promise<any> => {
+  try {
+    const response = await axios.post(
+      `${base_url}/booking/close/booking?bookingFor=${bookingFor}&bookID=${bookID}`,
+      refundPayload || {},
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
 // vouchers
 export const getVouchers = async (
   bookingType: string,
