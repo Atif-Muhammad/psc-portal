@@ -106,7 +106,7 @@ export class BookingService {
     const vouchers = await this.prismaService.paymentVoucher.findMany({
       where: {
         membership_no,
-        payment_mode: PaymentMode.ONLINE,
+        payment_mode: PaymentMode.KUICKPAY,
         status: 'PENDING',
         issued_at: {
           gte: new Date(Date.now() - 60 * 60 * 1000)
