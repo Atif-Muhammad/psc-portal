@@ -186,22 +186,24 @@ export class PaymentService {
       : null;
 
     let booking: any = null;
-    if (voucher.booking_type === 'ROOM') {
-      booking = await this.prismaService.roomBooking.findUnique({
-        where: { id: voucher.booking_id },
-      });
-    } else if (voucher.booking_type === 'HALL') {
-      booking = await this.prismaService.hallBooking.findUnique({
-        where: { id: voucher.booking_id },
-      });
-    } else if (voucher.booking_type === 'LAWN') {
-      booking = await this.prismaService.lawnBooking.findUnique({
-        where: { id: voucher.booking_id },
-      });
-    } else if (voucher.booking_type === 'PHOTOSHOOT') {
-      booking = await this.prismaService.photoshootBooking.findUnique({
-        where: { id: voucher.booking_id },
-      });
+    if (voucher.booking_id) {
+      if (voucher.booking_type === 'ROOM') {
+        booking = await this.prismaService.roomBooking.findUnique({
+          where: { id: voucher.booking_id || undefined },
+        });
+      } else if (voucher.booking_type === 'HALL') {
+        booking = await this.prismaService.hallBooking.findUnique({
+          where: { id: voucher.booking_id || undefined },
+        });
+      } else if (voucher.booking_type === 'LAWN') {
+        booking = await this.prismaService.lawnBooking.findUnique({
+          where: { id: voucher.booking_id || undefined },
+        });
+      } else if (voucher.booking_type === 'PHOTOSHOOT') {
+        booking = await this.prismaService.photoshootBooking.findUnique({
+          where: { id: voucher.booking_id || undefined },
+        });
+      }
     }
 
     const now = new Date();
@@ -364,107 +366,109 @@ export class PaymentService {
       const bType = voucher.booking_type;
       const bId = voucher.booking_id;
 
-      const updateCommonBooking = async (prismaTx: any, booking: any, bTypeLabel: string) => {
-        const voucherAmount = Number(voucher.amount);
-        const currentPaid = Number(booking.paidAmount);
-        const total = Number(booking.totalPrice);
-        const newPaid = currentPaid + voucherAmount;
+      if (bType && bId) {
+
+        const updateCommonBooking = async (prismaTx: any, booking: any, bTypeLabel: string) => {
+          const voucherAmount = Number(voucher.amount);
+          const currentPaid = Number(booking.paidAmount);
+          const total = Number(booking.totalPrice);
+          const newPaid = currentPaid + voucherAmount;
 
 
-        let newStatus = booking.paymentStatus;
-        if (newPaid >= total) {
-          newStatus = PaymentStatus.PAID;
-        } else if (voucher.voucher_type === VoucherType.ADVANCE_PAYMENT) {
-          newStatus = PaymentStatus.ADVANCE_PAYMENT;
-        } else if (voucher.voucher_type === VoucherType.HALF_PAYMENT) {
-          newStatus = PaymentStatus.HALF_PAID;
-        }
+          let newStatus = booking.paymentStatus;
+          if (newPaid >= total) {
+            newStatus = PaymentStatus.PAID;
+          } else if (voucher.voucher_type === VoucherType.ADVANCE_PAYMENT) {
+            newStatus = PaymentStatus.ADVANCE_PAYMENT;
+          } else if (voucher.voucher_type === VoucherType.HALF_PAYMENT) {
+            newStatus = PaymentStatus.HALF_PAID;
+          }
 
-        const newPending = Math.max(0, total - newPaid);
+          const newPending = Math.max(0, total - newPaid);
 
-        const updateData: any = {
-          paymentStatus: newStatus,
-          paidAmount: newPaid,
-          pendingAmount: newPending,
-          isConfirmed: true,
+          const updateData: any = {
+            paymentStatus: newStatus,
+            paidAmount: newPaid,
+            pendingAmount: newPending,
+            isConfirmed: true,
+          };
+
+
+
+          let updatedBooking: any;
+          if (bTypeLabel === 'ROOM') {
+            updatedBooking = await prismaTx.roomBooking.update({
+              where: { id: bId || undefined },
+              data: updateData,
+              include: { rooms: true },
+            });
+            const roomIds = updatedBooking.rooms.map((r: any) => r.roomId);
+            await prismaTx.roomHoldings.deleteMany({
+              where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
+            });
+          } else if (bTypeLabel === 'HALL') {
+            updatedBooking = await prismaTx.hallBooking.update({
+              where: { id: bId || undefined },
+              data: updateData,
+            });
+            await prismaTx.hallHoldings.deleteMany({
+              where: { hallId: updatedBooking.hallId, holdBy: voucher.membership_no },
+            });
+          } else if (bTypeLabel === 'LAWN') {
+            updatedBooking = await prismaTx.lawnBooking.update({
+              where: { id: bId || undefined },
+              data: updateData,
+            });
+            await prismaTx.lawnHoldings.deleteMany({
+              where: { lawnId: updatedBooking.lawnId, holdBy: voucher.membership_no },
+            });
+          } else if (bTypeLabel === 'PHOTOSHOOT') {
+            updatedBooking = await prismaTx.photoshootBooking.update({
+              where: { id: bId || undefined },
+              data: updateData,
+            });
+          }
         };
 
+        if (bType === 'ROOM') {
+          const booking = await prisma.roomBooking.findUnique({
+            where: { id: bId || undefined },
+          });
+          if (booking) await updateCommonBooking(prisma, booking, 'ROOM');
+        } else if (bType === 'HALL') {
+          const booking = await prisma.hallBooking.findUnique({
+            where: { id: bId || undefined },
+          });
+          if (booking) await updateCommonBooking(prisma, booking, 'HALL');
+        } else if (bType === 'LAWN') {
+          const booking = await prisma.lawnBooking.findUnique({
+            where: { id: bId || undefined },
+          });
+          if (booking) await updateCommonBooking(prisma, booking, 'LAWN');
+        } else if (bType === 'PHOTOSHOOT') {
+          const booking = await prisma.photoshootBooking.findUnique({
+            where: { id: bId || undefined },
+          });
+          if (booking) await updateCommonBooking(prisma, booking, 'PHOTOSHOOT');
+        }
 
 
-        let updatedBooking: any;
-        if (bTypeLabel === 'ROOM') {
-          updatedBooking = await prismaTx.roomBooking.update({
-            where: { id: bId },
-            data: updateData,
-            include: { rooms: true },
-          });
-          const roomIds = updatedBooking.rooms.map((r: any) => r.roomId);
-          await prismaTx.roomHoldings.deleteMany({
-            where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
-          });
-        } else if (bTypeLabel === 'HALL') {
-          updatedBooking = await prismaTx.hallBooking.update({
-            where: { id: bId },
-            data: updateData,
-          });
-          await prismaTx.hallHoldings.deleteMany({
-            where: { hallId: updatedBooking.hallId, holdBy: voucher.membership_no },
-          });
-        } else if (bTypeLabel === 'LAWN') {
-          updatedBooking = await prismaTx.lawnBooking.update({
-            where: { id: bId },
-            data: updateData,
-          });
-          await prismaTx.lawnHoldings.deleteMany({
-            where: { lawnId: updatedBooking.lawnId, holdBy: voucher.membership_no },
-          });
-        } else if (bTypeLabel === 'PHOTOSHOOT') {
-          updatedBooking = await prismaTx.photoshootBooking.update({
-            where: { id: bId },
-            data: updateData,
+        // put check here for member or an affiliated club?
+
+        // Update Member Ledger if member exists
+        if (member) {
+          const paidAmount = Number(voucher.amount);
+          await prisma.member.update({
+            where: { Membership_No: voucher.membership_no },
+            data: {
+              bookingAmountPaid: { increment: Math.round(paidAmount) },
+              bookingAmountDue: { decrement: Math.round(paidAmount) },
+              bookingBalance: { increment: Math.round(paidAmount) },
+              lastBookingDate: getPakistanDate(),
+            },
           });
         }
-      };
-
-      if (bType === 'ROOM') {
-        const booking = await prisma.roomBooking.findUnique({
-          where: { id: bId },
-        });
-        if (booking) await updateCommonBooking(prisma, booking, 'ROOM');
-      } else if (bType === 'HALL') {
-        const booking = await prisma.hallBooking.findUnique({
-          where: { id: bId },
-        });
-        if (booking) await updateCommonBooking(prisma, booking, 'HALL');
-      } else if (bType === 'LAWN') {
-        const booking = await prisma.lawnBooking.findUnique({
-          where: { id: bId },
-        });
-        if (booking) await updateCommonBooking(prisma, booking, 'LAWN');
-      } else if (bType === 'PHOTOSHOOT') {
-        const booking = await prisma.photoshootBooking.findUnique({
-          where: { id: bId },
-        });
-        if (booking) await updateCommonBooking(prisma, booking, 'PHOTOSHOOT');
       }
-
-
-      // put check here for member or an affiliated club?
-
-      // Update Member Ledger if member exists
-      if (member) {
-        const paidAmount = Number(voucher.amount);
-        await prisma.member.update({
-          where: { Membership_No: voucher.membership_no },
-          data: {
-            bookingAmountPaid: { increment: Math.round(paidAmount) },
-            bookingAmountDue: { decrement: Math.round(paidAmount) },
-            bookingBalance: { increment: Math.round(paidAmount) },
-            lastBookingDate: getPakistanDate(),
-          },
-        });
-      }
-
 
 
       // Trigger asynchronous notifications after transaction success
@@ -669,8 +673,8 @@ export class PaymentService {
 
   private async createVoucher(data: {
     consumer_number: string;
-    booking_type: BookingType;
-    booking_id: number;
+    booking_type?: BookingType;
+    booking_id?: number;
     membership_no: string;
     amount: number;
     payment_mode: PaymentMode;
@@ -751,7 +755,7 @@ export class PaymentService {
     if (unpaidVouchers.length > 0) {
       // Fetch room bookings for these vouchers to identify their room types
       const bookingsWithRooms = await this.prismaService.roomBooking.findMany({
-        where: { id: { in: unpaidVouchers.map((v) => v.booking_id) }, isCancelled: false },
+        where: { id: { in: unpaidVouchers.map((v) => v.booking_id).filter((id): id is number => id !== null) }, isCancelled: false },
         select: {
           rooms: {
             select: {
@@ -1757,8 +1761,6 @@ export class PaymentService {
     const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
       consumer_number: generateConsumerNumber(Number(vno)),
-      booking_type: BookingType.ROOM, // placeholder — Balance vouchers skip booking updates
-      booking_id: 0,
       membership_no: String(bookingData.membership_no),
       amount: amountToPay,
       payment_mode: PaymentMode.KUICKPAY,
@@ -1812,6 +1814,8 @@ export class PaymentService {
 
     for (const voucher of expiredVouchers) {
       await this.prismaService.$transaction(async (prisma) => {
+        if (!voucher.booking_id) return;
+
         // 1. Delete associated booking if it's not confirmed
         if (voucher.booking_type === 'ROOM') {
           await prisma.roomBooking.deleteMany({
@@ -1855,23 +1859,23 @@ export class PaymentService {
       let bookingDates: Date[] = [];
       let venueName = 'Unknown Venue';
 
-      if (voucher.booking_type === BookingType.HALL) {
+      if (voucher.booking_type === BookingType.HALL && voucher.booking_id) {
         const booking = await this.prismaService.hallBooking.findUnique({
           where: { id: voucher.booking_id },
           include: { hall: true },
         });
         if (booking) {
           bookingDates = this.getDatesFromBooking(booking);
-          venueName = booking.hall?.name || 'Hall';
+          venueName = (booking as any).hall?.name || 'Hall';
         }
-      } else if (voucher.booking_type === BookingType.LAWN) {
+      } else if (voucher.booking_type === BookingType.LAWN && voucher.booking_id) {
         const booking = await this.prismaService.lawnBooking.findUnique({
           where: { id: voucher.booking_id },
           include: { lawn: true },
         });
         if (booking) {
           bookingDates = this.getDatesFromBooking(booking);
-          venueName = booking.lawn?.description || 'Lawn';
+          venueName = (booking as any).lawn?.description || 'Lawn';
         }
       }
       this.validateDateOverlaps(requestedDates, bookingDates, venueName, true);

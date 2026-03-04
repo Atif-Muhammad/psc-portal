@@ -305,8 +305,8 @@ model PaymentVoucher {
   consumer_number String @unique
   voucher_no      String? @unique
 
-  booking_type BookingType
-  booking_id   Int
+  booking_type BookingType?
+  booking_id   Int?
 
   membership_no String
   // member        Member @relation(fields: [membership_no], references: [Membership_No], onDelete: Cascade)

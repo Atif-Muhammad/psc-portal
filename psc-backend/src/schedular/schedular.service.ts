@@ -346,39 +346,41 @@ export class SchedularService {
           });
 
           // 2. Identify and Cancel the Booking
-          const cancellationData = {
-            isCancelled: true,
-            remarks: `Booking cancelled due to payment voucher (#${voucher.consumer_number}) expiration.`,
-          };
+          if (voucher.booking_id) {
+            const cancellationData = {
+              isCancelled: true,
+              remarks: `Booking cancelled due to payment voucher (#${voucher.consumer_number}) expiration.`,
+            };
 
-          if (voucher.booking_type === 'ROOM') {
-            await tx.roomBooking.update({
-              where: { id: voucher.booking_id },
-              data: cancellationData,
-            });
-            // Also free up rooms
-            const bookingRooms = await tx.roomOnBooking.findMany({
-              where: { bookingId: voucher.booking_id },
-            });
-            await tx.room.updateMany({
-              where: { id: { in: bookingRooms.map((rb) => rb.roomId) } },
-              data: { isBooked: false },
-            });
-          } else if (voucher.booking_type === 'HALL') {
-            await tx.hallBooking.update({
-              where: { id: voucher.booking_id },
-              data: cancellationData,
-            });
-          } else if (voucher.booking_type === 'LAWN') {
-            await tx.lawnBooking.update({
-              where: { id: voucher.booking_id },
-              data: cancellationData,
-            });
-          } else if (voucher.booking_type === 'PHOTOSHOOT') {
-            await tx.photoshootBooking.update({
-              where: { id: voucher.booking_id },
-              data: cancellationData,
-            });
+            if (voucher.booking_type === 'ROOM') {
+              await tx.roomBooking.update({
+                where: { id: voucher.booking_id },
+                data: cancellationData,
+              });
+              // Also free up rooms
+              const bookingRooms = await tx.roomOnBooking.findMany({
+                where: { bookingId: voucher.booking_id },
+              });
+              await tx.room.updateMany({
+                where: { id: { in: bookingRooms.map((rb) => rb.roomId) } },
+                data: { isBooked: false },
+              });
+            } else if (voucher.booking_type === 'HALL') {
+              await tx.hallBooking.update({
+                where: { id: voucher.booking_id },
+                data: cancellationData,
+              });
+            } else if (voucher.booking_type === 'LAWN') {
+              await tx.lawnBooking.update({
+                where: { id: voucher.booking_id },
+                data: cancellationData,
+              });
+            } else if (voucher.booking_type === 'PHOTOSHOOT') {
+              await tx.photoshootBooking.update({
+                where: { id: voucher.booking_id },
+                data: cancellationData,
+              });
+            }
           }
         });
 

@@ -136,9 +136,9 @@ export class BookingService {
         })
         : null;
 
-      if (voucher.booking_type === 'ROOM') {
-        const booking = await this.prismaService.roomBooking.findUnique({
-          where: { id: voucher.booking_id },
+      if (voucher.booking_type === 'ROOM' && voucher.booking_id) {
+        const booking: any = await this.prismaService.roomBooking.findUnique({
+          where: { id: voucher.booking_id || undefined },
           include: {
             rooms: {
               include: {
@@ -5852,9 +5852,9 @@ export class BookingService {
       });
 
       // 2. Mark Booking as Cancelled and associated Holdings
-      if (booking_type === 'ROOM') {
-        const booking = await prisma.roomBooking.findUnique({
-          where: { id: booking_id },
+      if (booking_type === 'ROOM' && booking_id) {
+        const booking: any = await prisma.roomBooking.findUnique({
+          where: { id: booking_id || undefined },
           include: { rooms: true },
         });
         if (booking) {
@@ -5870,13 +5870,13 @@ export class BookingService {
           });
           // Mark booking as cancelled
           await prisma.roomBooking.update({
-            where: { id: booking_id },
+            where: { id: booking_id || undefined },
             data: { isCancelled: true, remarks: "Cancelled by Member on Payment Screen" },
           });
         }
-      } else if (booking_type === 'HALL') {
+      } else if (booking_type === 'HALL' && booking_id) {
         const booking = await prisma.hallBooking.findUnique({
-          where: { id: booking_id },
+          where: { id: booking_id || undefined },
         });
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
@@ -5888,13 +5888,13 @@ export class BookingService {
             where: { hallId: booking.hallId, holdBy: membership_no },
           });
           await prisma.hallBooking.update({
-            where: { id: booking_id },
+            where: { id: booking_id || undefined },
             data: { isCancelled: true, remarks: "Cancelled by Member on Payment Screen" },
           });
         }
-      } else if (booking_type === 'LAWN') {
+      } else if (booking_type === 'LAWN' && booking_id) {
         const booking = await prisma.lawnBooking.findUnique({
-          where: { id: booking_id },
+          where: { id: booking_id || undefined },
         });
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
@@ -5906,13 +5906,13 @@ export class BookingService {
             where: { lawnId: booking.lawnId, holdBy: membership_no },
           });
           await prisma.lawnBooking.update({
-            where: { id: booking_id },
+            where: { id: booking_id || undefined },
             data: { isCancelled: true },
           });
         }
-      } else if (booking_type === 'PHOTOSHOOT') {
+      } else if (booking_type === 'PHOTOSHOOT' && booking_id) {
         const booking = await prisma.photoshootBooking.findUnique({
-          where: { id: booking_id },
+          where: { id: booking_id || undefined },
         });
         if (booking) {
           if (booking.paymentStatus !== 'UNPAID') {
@@ -5921,7 +5921,7 @@ export class BookingService {
             );
           }
           await prisma.photoshootBooking.update({
-            where: { id: booking_id },
+            where: { id: booking_id || undefined },
             data: { isCancelled: true },
           });
         }
