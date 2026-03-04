@@ -91,6 +91,13 @@ export class MemberController {
     });
   }
 
+
+  @Get('get/member')
+  @UseGuards(JwtAccGuard)
+  async getMember(@Req() req: {user: {id: string}}) {
+    return await this.member.getMember(req.user?.id);
+  }
+
   @UseGuards(JwtAccGuard)
   @Get('notifications')
   async getNotifications(@Req() req: { user: { id: string } }) {

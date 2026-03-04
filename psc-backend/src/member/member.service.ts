@@ -207,6 +207,18 @@ export class MemberService {
     };
   }
 
+  async getMember(memberID: string) {
+    return await this.prismaService.member.findUnique({
+      where: { Membership_No: memberID },
+      select: {
+        Status: true,
+        Actual_Status: true,
+        Balance: true,
+        totalBookings: true
+      }
+    });
+  }
+
   async searchMembers(searchFor: string) {
     // Trim and avoid empty or too short searches
     const query = searchFor.trim();

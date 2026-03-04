@@ -88,6 +88,22 @@ export class PaymentController {
     });
   }
 
+  // generate invoice balance
+
+  @UseGuards(JwtAccGuard)
+  @Post('generate/invoice/balance')
+  async generateInvoiceBalance(
+    @Body() bookingData: any,
+    @Req() req: { user: { id: string } },
+  ) {
+    // Prefer membership number coming from the frontend payload; fall back to JWT user id
+    const membership_no = bookingData.membership_no ?? req.user?.id;
+    return await this.payment.genInvoiceBalance({
+      ...bookingData,
+      membership_no,
+    });
+  }
+
   ///////////////////////////////////////////////////////////////////////////////
 
   @Get('member/vouchers')

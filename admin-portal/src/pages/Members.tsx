@@ -26,6 +26,7 @@ import {
   Ban,
   Edit,
   Trash2,
+  Eye,
 } from "lucide-react";
 import {
   Dialog,
@@ -70,6 +71,7 @@ export default function Members() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editMember, setEditMember] = useState<any>(null);
   const [deleteMemberDialog, setDeleteMemberDialog] = useState<any>(null);
+  const [viewMember, setViewMember] = useState<any>(null);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [memberType, setMemberType] = useState<"CIVILIAN" | "ARMED_FORCES">("CIVILIAN");
 
@@ -98,6 +100,7 @@ export default function Members() {
     });
 
   const members = data?.pages.flatMap((p) => p.data) ?? [];
+  console.log(members)
 
   // ─── Mutations ───────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -609,6 +612,152 @@ export default function Members() {
         </DialogContent>
       </Dialog >
 
+      {/* View Member Detail Dialog */}
+      <Dialog open={!!viewMember} onOpenChange={() => setViewMember(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <UserCheck className="h-6 w-6 text-primary" />
+              Member Details: {viewMember?.Name}
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewMember && (
+            <div className="space-y-6 py-4">
+              {/* Basic Info Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Membership Number</Label>
+                  <p className="font-semibold text-lg">{viewMember.Membership_No}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Member Type</Label>
+                  <p className="font-medium text-lg capitalize">{viewMember.memberType?.replace("_", " ") || "CIVILIAN"}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Contact Number</Label>
+                  <p className="font-medium text-lg">{viewMember.Contact_No || "N/A"}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Email Address</Label>
+                  <p className="font-medium">{viewMember.Email || "N/A"}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Actual Status</Label>
+                  <div>{getStatusBadge(viewMember.Actual_Status)}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">System Status</Label>
+                  <div>{getDerivedStatusBadge(viewMember.Status)}</div>
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <span className="p-1 px-2 bg-primary/10 rounded text-primary text-sm font-bold">Financial</span>
+                  Financial Summary
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Current Balance</Label>
+                    <p className="text-xl font-bold text-primary">PKR {Number(viewMember.Balance).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Debit (DR) Amount</Label>
+                    <p className="text-lg font-semibold">PKR {Number(viewMember.drAmount).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Credit (CR) Amount</Label>
+                    <p className="text-lg font-semibold">PKR {Number(viewMember.crAmount).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Booking Balance</Label>
+                    <p className="text-lg font-semibold">PKR {Number(viewMember.bookingBalance).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Amount Paid</Label>
+                    <p className="text-lg font-semibold text-green-600">PKR {Number(viewMember.bookingAmountPaid).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Amount Due</Label>
+                    <p className="text-lg font-semibold text-red-600">PKR {Number(viewMember.bookingAmountDue).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Activity & Tokens</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <Label>Total Bookings</Label>
+                      <span className="font-bold">{viewMember.totalBookings || 0}</span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <Label>Last Booking Date</Label>
+                      <span className="text-sm font-medium">
+                        {viewMember.lastBookingDate ? new Date(viewMember.lastBookingDate).toLocaleDateString("en-PK") : "Never"}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>FCM Token</Label>
+                      <p className="text-[10px] break-all text-muted-foreground bg-muted p-2 rounded">
+                        {viewMember.FCMToken || "No token available"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Security & Notes</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b pb-2">
+                      <Label>OTP</Label>
+                      <span className="font-mono bg-yellow-100 px-2 rounded">{viewMember.otp || "N/A"}</span>
+                    </div>
+                    <div className="flex justify-between border-b pb-2">
+                      <Label>OTP Expiry</Label>
+                      <span className="text-sm">{viewMember.otpExpiry ? new Date(viewMember.otpExpiry).toLocaleString() : "N/A"}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Other Details</Label>
+                      <p className="text-sm p-3 bg-muted/50 rounded-md italic">
+                        {viewMember.Other_Details || "No additional details provided."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-muted/20 p-4 rounded-xl border border-dashed">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Audit Logs</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <Label className="text-[10px] uppercase text-muted-foreground">Created By</Label>
+                    <p className="font-semibold">{viewMember.createdBy || "System"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase text-muted-foreground">Created At</Label>
+                    <p>{viewMember.createdAt ? new Date(viewMember.createdAt).toLocaleString() : "N/A"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase text-muted-foreground">Updated By</Label>
+                    <p className="font-semibold">{viewMember.updatedBy || viewMember.createdBy || "System"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase text-muted-foreground">Updated At</Label>
+                    <p>{viewMember.updatedat ? new Date(viewMember.updatedat).toLocaleString() : "N/A"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setViewMember(null)}>Close Details</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Members Table */}
       < Card >
         <CardContent className="pt-6">
@@ -704,6 +853,14 @@ export default function Members() {
                           {member.lastBookingDate || "-"}
                         </TableCell>
                         <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setViewMember(member)}
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4 text-blue-600" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

@@ -353,6 +353,13 @@ export class PaymentService {
         },
       });
 
+      const response = {
+        response_Code: '00',
+        Identification_parameter: member?.Email || (voucher as any).consumer_number,
+        reserved: '',
+      };
+      if (voucher.remarks === "Balance") return response
+
       // Update Booking
       const bType = voucher.booking_type;
       const bId = voucher.booking_id;
@@ -458,11 +465,7 @@ export class PaymentService {
         });
       }
 
-      const response = {
-        response_Code: '00',
-        Identification_parameter: member?.Email || (voucher as any).consumer_number,
-        reserved: '',
-      };
+
 
       // Trigger asynchronous notifications after transaction success
       this.triggerNotifications(voucher, paymentData, member).catch((err) =>
@@ -1722,6 +1725,58 @@ export class PaymentService {
           name: member?.Name,
           email: member?.Email,
           contact: member?.Contact_No,
+        },
+        voucher: {
+          ...voucher,
+          consumer_number: voucher.consumer_number,
+        },
+      };
+    }
+    throw new HttpException('Failed to create voucher', 500);
+  }
+
+  async genInvoiceBalance(bookingData: {
+    balance: string,
+    amountToPay: string,
+    membership_no: string,
+  }) {
+    // Validate member exists and is active
+    const member = await this.prismaService.member.findFirst({
+      where: { Membership_No: bookingData.membership_no },
+    });
+    if (!member)
+      throw new NotFoundException('Member not found');
+    if (member.Status !== 'active')
+      throw new UnprocessableEntityException('Cannot generate voucher for inactive member');
+
+    const amountToPay = Number(bookingData.amountToPay);
+    if (!amountToPay || amountToPay <= 0)
+      throw new BadRequestException('Amount to pay must be greater than 0');
+
+    // Generate voucher
+    const vno = generateNumericVoucherNo();
+    const voucher = await this.createVoucher({
+      consumer_number: generateConsumerNumber(Number(vno)),
+      booking_type: BookingType.ROOM, // placeholder — Balance vouchers skip booking updates
+      booking_id: 0,
+      membership_no: String(bookingData.membership_no),
+      amount: amountToPay,
+      payment_mode: PaymentMode.KUICKPAY,
+      voucher_type: VoucherType.FULL_PAYMENT,
+      status: VoucherStatus.PENDING,
+      issued_by: 'system',
+      remarks: 'Balance',
+    });
+
+    if (voucher) {
+      return {
+        issue_date: voucher.issued_at,
+        due_date: voucher.expiresAt,
+        membership: {
+          no: member.Membership_No,
+          name: member.Name,
+          email: member.Email,
+          contact: member.Contact_No,
         },
         voucher: {
           ...voucher,
