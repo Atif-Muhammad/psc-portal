@@ -1,0 +1,380 @@
+put the following in @beautifulMention:
+introductory card:
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Introductory Letter</title>
+  <style>
+    body {
+      font-family: "Georgia", serif;
+      background: #f2f2f2;
+      margin: 0;
+      padding: 40px;
+    }
+
+    .letter-container {
+      background: #ffffff;
+      max-width: 800px;
+      margin: auto;
+      padding: 60px 50px;
+      text-align: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .logo {
+      width: 180px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-style: italic;
+      text-decoration: underline;
+      font-size: 22px;
+      margin-bottom: 30px;
+    }
+
+    .meta {
+      text-align: left;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    .meta strong {
+      font-weight: bold;
+    }
+
+    .content {
+      font-size: 20px;
+      line-height: 1.6;
+      margin: 30px 0;
+    }
+
+    .content strong {
+      font-weight: bold;
+    }
+
+    .footer {
+      margin-top: 40px;
+      font-size: 20px;
+    }
+
+    .signature {
+      margin-top: 30px;
+      font-weight: bold;
+      font-size: 22px;
+    }
+
+    .club-name {
+      font-size: 20px;
+      margin-top: 5px;
+    }
+
+    .phone {
+      margin-top: 5px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="letter-container">
+
+    <!-- Logo -->
+    <img src="https://res.cloudinary.com/dtqdpntlc/image/upload/v1772616023/logo_rghsf6.png" class="logo" alt="Club Logo" />
+
+    <h1>INTRODUCTORY LETTER</h1>
+
+    <div class="meta">
+      <div><strong>Serial No:</strong> {{serialNo}}</div>
+      <div><strong>Date:</strong> {{date}}</div>
+    </div>
+
+    <img src=""/>
+
+    <div class="content">
+      I have the honor to introduce 
+      <strong>Mr. {{name}}</strong> with family, 
+      Membership No. <strong>{{membershipNo}}</strong>, 
+      a bonafide Member of Peshawar Services Club, 
+      who will be visiting <strong>{{targetClub}}</strong> 
+      on <strong>{{visitDate}}</strong> 
+      <br /><br />
+      Thank you for your kind cooperation!
+    </div>
+
+    <div class="footer">
+      Best Regards,
+    </div>
+
+    <div class="signature">
+      Secretary
+    </div>
+
+    <div class="club-name">
+      Peshawar Services Club
+    </div>
+
+    <div class="phone">
+      091-9212753-5
+    </div>
+
+  </div>
+</body>
+</html>
+
+
+<!-- SUBJECT: Photoshoot Booking Confirmation – Peshawar Services Club (PSC) -->
+
+<table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+  <tr>
+    <td>
+      <p><strong>Dear {{memberName}},</strong></p>
+
+      <p>Assalam-o-Alaikum,</p>
+
+      <p>
+        We are pleased to confirm your Photoshoot booking at Peshawar Services Club (PSC), 
+        requested via the Mobile App on {{date}} at {{time}}, under Booking ID: {{bookingId}}.
+      </p>
+
+      <p>
+        We sincerely thank you for choosing PSC for your special moments. Our team is committed to providing you with a pleasant and well-organized experience.
+      </p>
+
+      <p>
+        To ensure smooth operations and compliance with Club regulations, we kindly request you to review and follow the Standard Operating Procedures (SOPs) and Instructions available in the Mobile App under the booking section.
+      </p>
+
+      <p><strong>Important Guidelines & Terms</strong></p>
+
+      <ul>
+        <li>Members are requested to arrive on time as per their confirmed booking schedule.</li>
+        <li>All photography activities must be conducted within the approved areas only.</li>
+        <li>Members and photographers are required to follow Club decorum and policies at all times.</li>
+        <li>Any damage to Club property during the photoshoot shall be the responsibility of the member.</li>
+        <li>PSC reserves the right to regulate or stop activities that violate Club rules.</li>
+        <li>No refund shall be admissible in case of cancellation, postponement, or non-utilization of the booking.</li>
+      </ul>
+
+      <p>
+        Kindly ensure that your registered contact and email details are up to date for future correspondence.
+      </p>
+
+      <p>
+        For any assistance or clarification, please feel free to contact the Booking Office during working hours or call at 03419777711
+      </p>
+
+      <p>
+        We look forward to serving you and hope your experience at PSC will be memorable.
+      </p>
+
+      <p>
+        Warm regards,<br><br>
+        Management<br>
+        Peshawar Services Club<br>
+        03419777711
+      </p>
+    </td>
+  </tr>
+</table>
+
+
+<!-- SUBJECT: Hall Booking Confirmation – Peshawar Services Club (PSC) -->
+
+<table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+<tr>
+<td>
+
+<p><strong>Dear {{memberName}},</strong></p>
+
+<p>Assalam-o-Alaikum,</p>
+
+<p>
+We are pleased to confirm your Hall/Event booking at Peshawar Services Club (PSC), requested via the Mobile App on {{date}} at {{time}}, under Booking ID: {{bookingId}}.
+</p>
+
+<p>
+We thank you for choosing PSC for your special occasion and assure you of our best services to make your event successful and memorable.
+</p>
+
+<p>
+To ensure smooth arrangements and compliance with Club policies, you are kindly requested to review the Standard Operating Procedures (SOPs) and Instructions, which are available in the Mobile App under your booking section.
+</p>
+
+<p><strong>Important Guidelines & Policies (Summary)</strong></p>
+
+<p><strong>1. Booking & Registration</strong></p>
+<ul>
+<li>All event bookings are processed through the Booking Officer/F&B Department.</li>
+<li>Event details, guest count, and contact information must be accurately registered in the system.</li>
+<li>A minimum advance payment of Rs. 50,000 is required, or full payment may be deposited at the time of booking.</li>
+<li>A confirmation receipt and SMS notification will be issued upon registration.</li>
+</ul>
+
+<p><strong>2. Menu & Venue Arrangements</strong></p>
+<ul>
+<li>Members may select from approved buffet and Hi-Tea menus.</li>
+<li>Any additional menu items are subject to management approval.</li>
+<li>Menu, stage setup, and décor arrangements must be finalized at least 20 days prior to the event.</li>
+<li>Seating plans and theme preferences must be communicated in advance.</li>
+</ul>
+
+<p><strong>3. Payment & Finalization</strong></p>
+<ul>
+<li>Full payment must be cleared before the event date.</li>
+<li>Additional guests beyond the approved count will be charged accordingly and must be settled on the same day.</li>
+<li>Any unresolved balance will be added to the member’s account.</li>
+</ul>
+
+<p><strong>4. Media, Security & Compliance</strong></p>
+<ul>
+<li>Media personnel and foreign guests are not permitted without prior approval.</li>
+<li>Outside food, décor, DJs, fireworks, and firing are strictly prohibited.</li>
+<li>All rates are inclusive of taxes and service charges.</li>
+<li>Membership number and CNIC copy of guests are mandatory at booking.</li>
+</ul>
+
+<p><strong>5. Event Timings</strong></p>
+<p>
+Lunch: 11:00 AM – 3:00 PM<br>
+Dinner: 7:00 PM – 11:00 PM<br>
+Exceeding allotted time will incur a penalty of Rs. 20,000 per hour.
+</p>
+
+<p><strong>6. Cancellation & Refund Policy</strong></p>
+<p>
+In case of cancellation due to valid reasons, a formal written request addressed to the Secretary is required. Refunds (subject to approval) will be processed as follows:
+</p>
+
+<ul>
+<li>20 days or more before event: 100% refund</li>
+<li>12–20 days before event: 50% refund</li>
+<li>5–12 days before event: 25% refund</li>
+<li>Less than 5 days before event: No refund</li>
+</ul>
+
+<p><strong>7. Accountability & Responsibility</strong></p>
+<ul>
+<li>Members are responsible for the conduct of their guests.</li>
+<li>Any damage, misconduct, or policy violation will be dealt with as per Club rules.</li>
+<li>Applicable charges may be imposed where necessary.</li>
+</ul>
+
+<p>
+For detailed procedures and instructions, please refer to the SOPs available in the Mobile App.
+</p>
+
+<p>
+We look forward to hosting your event and wish you a pleasant and memorable experience at PSC.
+</p>
+
+<p>
+Warm regards,<br><br>
+Management<br>
+Peshawar Services Club<br>
+03419777711
+</p>
+
+</td>
+</tr>
+</table>
+
+
+<!-- SUBJECT: Payment Confirmation Receipt – Monthly Bill (PSC Mobile App) -->
+
+<table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+<tr>
+<td>
+
+<p><strong>Dear {{memberName}},</strong></p>
+
+<p>Assalam-o-Alaikum,</p>
+
+<p>
+We are pleased to acknowledge the receipt of your monthly bill payment made through the PSC Mobile App via KuickPay.
+</p>
+
+<p><strong>Payment Details</strong></p>
+
+<ul>
+<li>Member Name: {{memberName}}</li>
+<li>Membership No.: {{membershipNumber}}</li>
+<li>Amount Paid: Rs. {{amount}}</li>
+<li>Payment Method: KuickPay (Mobile App)</li>
+<li>Transaction Date: {{date}}</li>
+<li>Transaction Reference No.: {{referenceNo}}</li>
+</ul>
+
+<p>
+This email serves as your official confirmation receipt for the above-mentioned transaction.
+</p>
+
+<p>
+We sincerely appreciate your timely payment and continued cooperation.
+</p>
+
+<p>
+In case of any discrepancy, clarification, or query regarding your billing or payment, please feel free to contact the Accounts Department during working hours at 0919212753-4
+</p>
+
+<p>
+Thank you for being a valued member of Peshawar Services Club.
+</p>
+
+<p>
+Warm regards,<br><br>
+Management<br>
+Peshawar Services Club<br>
+0919212753-4
+</p>
+
+</td>
+</tr>
+</table>
+
+
+
+
+<!-- SUBJECT: PIN CODE OF PSC MOBILE APP | {{membershipNumber}} -->
+
+<table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+<tr>
+<td>
+
+<p><strong>Dear Mr. {{memberName}}</strong></p>
+
+<p>
+We are pleased to inform you that a unique One-Time PIN has been generated for your login to the Peshawar Services Club Mobile App.
+</p>
+
+<p>
+<strong>Your Login PIN: {{pinCode}}</strong>
+</p>
+
+<p><strong>Please note the following important instructions:</strong></p>
+
+<ul>
+<li>This PIN is for one-time use only and is required to complete your login.</li>
+<li>The PIN is valid for one hour only. Once expired, you are requested to generate a new PIN via the mobile app.</li>
+<li>Do not share this PIN with anyone under any circumstances.</li>
+<li>For your security, please log out of the app before selling, changing, or handing over your mobile phone.</li>
+<li>PSC will not be responsible for any misuse of the app resulting from sharing your PIN or negligence.</li>
+<li>The PSC Mobile App includes features with financial implications. Any request, transaction, or activity made through your account will be considered your responsibility.</li>
+<li>If you did not request this PIN or notice any suspicious activity, please contact the PSC Main Office immediately.</li>
+</ul>
+
+<p>
+Thank you for your cooperation in helping us maintain the security of our digital services.
+</p>
+
+<p>
+Warm regards,<br><br>
+Management<br>
+Peshawar Services Club<br>
+091-9212753-4
+</p>
+
+</td>
+</tr>
+</table>

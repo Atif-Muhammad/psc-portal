@@ -6225,7 +6225,7 @@ export class BookingService {
         checkIn: checkInDate,
         checkOut: checkOutDate,
         totalPrice: total,
-        paymentStatus: paymentStatus as unknown as PaymentStatus,
+        paymentStatus: isKuickpay ? PaymentStatus.UNPAID : (paymentStatus as unknown as PaymentStatus),
         paymentMode: paymentMode || 'CASH',
         paidAmount: bookingPaidAmount,
         pendingAmount: bookingPendingAmount,
@@ -6251,17 +6251,19 @@ export class BookingService {
 
     // ── CREATE PAYMENT VOUCHER ───────────────────────────────
     if (intendedPaid > 0) {
-      let voucherType: VoucherType;
+      let voucherType: VoucherType = payload.voucher_type;
 
-      if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
-        voucherType = VoucherType.FULL_PAYMENT;
-      } else if (
-        String(paymentStatus) === 'ADVANCE_PAYMENT' ||
-        paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
-      ) {
-        voucherType = VoucherType.ADVANCE_PAYMENT;
-      } else {
-        voucherType = VoucherType.HALF_PAYMENT;
+      if (!voucherType) {
+        if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
+          voucherType = VoucherType.FULL_PAYMENT;
+        } else if (
+          String(paymentStatus) === 'ADVANCE_PAYMENT' ||
+          paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+        ) {
+          voucherType = VoucherType.ADVANCE_PAYMENT;
+        } else {
+          voucherType = VoucherType.HALF_PAYMENT;
+        }
       }
 
       const vno = generateNumericVoucherNo();
@@ -6447,8 +6449,14 @@ export class BookingService {
     const currPaid = Number(booking.paidAmount);
     const currStatus = booking.paymentStatus;
 
-    let newPaymentStatus: PaymentStatus =
-      (paymentStatus as unknown as PaymentStatus) || currStatus;
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
+
+    let newPaymentStatus: PaymentStatus = currStatus;
+    if (!isKuickpay || (paidAmount === undefined && totalPrice === undefined)) {
+      newPaymentStatus = (paymentStatus as unknown as PaymentStatus) || currStatus;
+    }
+
     const newTotal = totalPrice !== undefined ? Number(totalPrice) : currTotal;
 
     let newPaid = currPaid;
@@ -6464,9 +6472,6 @@ export class BookingService {
     const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID' || newPaymentStatus === (PaymentStatus.HALF_PAID as unknown);
     const newOwed = newTotal - newPaid;
 
-    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
-    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
-
     // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
     let dbPaid = newPaid;
     if (isKuickpay && newPaid > currPaid) {
@@ -6480,16 +6485,18 @@ export class BookingService {
     // Determine if a new payment amount was provided
     const paidDiff = newPaid - currPaid;
     if (paidDiff > 0) {
-      let voucherType: VoucherType;
-      if (isKuickpay || isOnline || String(newPaymentStatus) === 'PAID') {
-        voucherType = VoucherType.FULL_PAYMENT;
-      } else if (
-        String(newPaymentStatus) === 'ADVANCE_PAYMENT' ||
-        newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
-      ) {
-        voucherType = VoucherType.ADVANCE_PAYMENT;
-      } else {
-        voucherType = VoucherType.HALF_PAYMENT;
+      let voucherType: VoucherType = updateData.voucher_type;
+      if (!voucherType) {
+        if (isKuickpay || isOnline || String(newPaymentStatus) === 'PAID') {
+          voucherType = VoucherType.FULL_PAYMENT;
+        } else if (
+          String(newPaymentStatus) === 'ADVANCE_PAYMENT' ||
+          newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+        ) {
+          voucherType = VoucherType.ADVANCE_PAYMENT;
+        } else {
+          voucherType = VoucherType.HALF_PAYMENT;
+        }
       }
 
       const vno = generateNumericVoucherNo();

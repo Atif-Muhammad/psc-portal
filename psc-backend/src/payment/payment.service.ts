@@ -188,8 +188,10 @@ export class PaymentService {
     let booking: any = null;
     if (voucher.booking_id) {
       if (voucher.booking_type === 'ROOM') {
-        booking = await this.prismaService.roomBooking.findUnique({
-          where: { id: voucher.booking_id || undefined },
+        booking = isAffiliated ? await this.prismaService.affClubBooking.findUnique({
+          where: { id: voucher.booking_id! },
+        }) : await this.prismaService.roomBooking.findUnique({
+          where: { id: voucher.booking_id! },
         });
       } else if (voucher.booking_type === 'HALL') {
         booking = await this.prismaService.hallBooking.findUnique({
@@ -237,7 +239,6 @@ export class PaymentService {
       13,
       true,
     );
-
     const consumerName = isAffiliated
       ? booking?.guestName || 'N/A'
       : member?.Name || 'N/A';
@@ -368,6 +369,7 @@ export class PaymentService {
 
       if (bType && bId) {
 
+        const isAffiliated = voucher.membership_no?.startsWith('AFFILIATED');
         const updateCommonBooking = async (prismaTx: any, booking: any, bTypeLabel: string) => {
           const voucherAmount = Number(voucher.amount);
           const currentPaid = Number(booking.paidAmount);
@@ -397,15 +399,37 @@ export class PaymentService {
 
           let updatedBooking: any;
           if (bTypeLabel === 'ROOM') {
-            updatedBooking = await prismaTx.roomBooking.update({
+            updatedBooking = isAffiliated ? await prismaTx.affClubBooking.update({
+              where: { id: bId || undefined },
+              data: updateData,
+              include: { rooms: true },
+            }) : await prismaTx.roomBooking.update({
               where: { id: bId || undefined },
               data: updateData,
               include: { rooms: true },
             });
             const roomIds = updatedBooking.rooms.map((r: any) => r.roomId);
-            await prismaTx.roomHoldings.deleteMany({
-              where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
-            });
+            if (isAffiliated) {
+              await prismaTx.roomHoldings.deleteMany({
+                where: {
+                  roomId: { in: roomIds },
+                  OR: [
+                    {
+                      checkIn: { lt: updatedBooking.checkOut },
+                      checkOut: { gt: updatedBooking.checkIn },
+                    },
+                    {
+                      checkIn: null,
+                      holdExpiry: { gt: new Date() },
+                    }
+                  ]
+                },
+              });
+            } else {
+              await prismaTx.roomHoldings.deleteMany({
+                where: { roomId: { in: roomIds }, holdBy: voucher.membership_no },
+              });
+            }
           } else if (bTypeLabel === 'HALL') {
             updatedBooking = await prismaTx.hallBooking.update({
               where: { id: bId || undefined },
@@ -431,7 +455,9 @@ export class PaymentService {
         };
 
         if (bType === 'ROOM') {
-          const booking = await prisma.roomBooking.findUnique({
+          const booking = isAffiliated ? await prisma.affClubBooking.findUnique({
+            where: { id: bId || undefined },
+          }) : await prisma.roomBooking.findUnique({
             where: { id: bId || undefined },
           });
           if (booking) await updateCommonBooking(prisma, booking, 'ROOM');
