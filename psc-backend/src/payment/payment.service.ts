@@ -187,8 +187,8 @@ export class PaymentService {
 
     let booking: any = null;
     if (voucher.booking_id) {
-      if (voucher.booking_type === 'ROOM') {
-        booking = isAffiliated ? await this.prismaService.affClubBooking.findUnique({
+      if (voucher.booking_type === 'ROOM' || (voucher.booking_type as any) === 'AFF_ROOM') {
+        booking = (isAffiliated || (voucher.booking_type as any) === 'AFF_ROOM') ? await this.prismaService.affClubBooking.findUnique({
           where: { id: voucher.booking_id! },
         }) : await this.prismaService.roomBooking.findUnique({
           where: { id: voucher.booking_id! },
@@ -410,8 +410,8 @@ export class PaymentService {
 
 
           let updatedBooking: any;
-          if (bTypeLabel === 'ROOM') {
-            updatedBooking = isAffiliated ? await prismaTx.affClubBooking.update({
+          if (bTypeLabel === 'ROOM' || (voucher.booking_type as any) === 'AFF_ROOM') {
+            updatedBooking = (isAffiliated || (voucher.booking_type as any) === 'AFF_ROOM') ? await prismaTx.affClubBooking.update({
               where: { id: bId || undefined },
               data: updateData,
               include: { rooms: true },
@@ -466,8 +466,8 @@ export class PaymentService {
           }
         };
 
-        if (bType === 'ROOM') {
-          const booking = isAffiliated ? await prisma.affClubBooking.findUnique({
+        if ((bType as any) === 'ROOM' || (bType as any) === 'AFF_ROOM') {
+          const booking = (isAffiliated || (bType as any) === 'AFF_ROOM') ? await prisma.affClubBooking.findUnique({
             where: { id: bId || undefined },
           }) : await prisma.roomBooking.findUnique({
             where: { id: bId || undefined },
@@ -1790,7 +1790,7 @@ export class PaymentService {
     const amountToPay = Number(bookingData.amountToPay);
     if (!amountToPay || amountToPay <= 0)
       throw new BadRequestException('Amount to pay must be greater than 0');
-    if(amountToPay > Number(member.Balance))
+    if (amountToPay > Number(member.Balance))
       throw new BadRequestException('Amount to pay must be less than or equal to balance');
     // Generate voucher
     const vno = generateNumericVoucherNo();
@@ -1799,7 +1799,7 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: amountToPay,
       payment_mode: PaymentMode.KUICKPAY,
-      voucher_type: Number(member.Balance) === amountToPay ?  VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
+      voucher_type: Number(member.Balance) === amountToPay ? VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: 'Balance',

@@ -354,6 +354,7 @@ enum BookingType {
   HALL
   LAWN
   PHOTOSHOOT
+  AFF_ROOM
 }
 
 enum PaymentMode {

@@ -6271,7 +6271,7 @@ export class BookingService {
         data: {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
-          booking_type: 'ROOM',
+          booking_type: 'AFF_ROOM',
           booking_id: booking.id,
           membership_no: `AFFILIATED (${affiliatedMembershipNo})`,
           amount: intendedPaid,
@@ -6504,7 +6504,7 @@ export class BookingService {
         data: {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
-          booking_type: BookingType.ROOM,
+          booking_type: BookingType.AFF_ROOM,
           booking_id: booking.id,
           membership_no: `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`,
           amount: paidDiff,

@@ -148,7 +148,7 @@ export default function AffiliatedClubs() {
 
   const { data: bookingVouchers = [], isLoading: isLoadingVouchers } = useQuery<any[]>({
     queryKey: ["vouchers", viewVouchers?.id],
-    queryFn: () => (viewVouchers ? getVouchers("ROOM", viewVouchers.id) : []),
+    queryFn: () => (viewVouchers ? getVouchers("AFF_ROOM", viewVouchers.id) : []),
     enabled: !!viewVouchers,
   });
 
@@ -487,7 +487,7 @@ export default function AffiliatedClubs() {
   const DetailBookingView = ({ booking }: { booking: Booking }) => {
     const { data: detailVouchers = [], isLoading } = useQuery({
       queryKey: ['vouchers', 'ROOM', booking.id],
-      queryFn: () => getVouchers('ROOM', booking.id.toString()),
+      queryFn: () => getVouchers('AFF_ROOM', booking.id.toString()),
       enabled: !!booking.id,
     });
 
