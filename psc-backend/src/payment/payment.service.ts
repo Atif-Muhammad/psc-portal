@@ -1704,7 +1704,7 @@ export class PaymentService {
       booking_id: booking.id,
       membership_no: String(bookingData.membership_no),
       amount: totalPrice,
-      payment_mode: PaymentMode.ONLINE,
+      payment_mode: PaymentMode.KUICKPAY,
       voucher_type: VoucherType.FULL_PAYMENT,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
