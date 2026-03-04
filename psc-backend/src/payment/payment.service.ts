@@ -361,6 +361,18 @@ export class PaymentService {
         Identification_parameter: member?.Email || (voucher as any).consumer_number,
         reserved: '',
       };
+
+      // if balance? -> update member ledger
+      if (voucher.remarks === "Balance" && member) {
+        await prisma.member.update({
+          where: { Membership_No: member.Membership_No },
+          data: {
+            crAmount: { increment: Math.round(Number(voucher.amount)) },
+            Balance: { decrement: Math.round(Number(voucher.amount)) },
+            lastBookingDate: getPakistanDate(),
+          }
+        });
+      }
       if (voucher.remarks === "Balance") return response
 
       // Update Booking
@@ -477,9 +489,6 @@ export class PaymentService {
           });
           if (booking) await updateCommonBooking(prisma, booking, 'PHOTOSHOOT');
         }
-
-
-        // put check here for member or an affiliated club?
 
         // Update Member Ledger if member exists
         if (member) {
@@ -1766,7 +1775,6 @@ export class PaymentService {
   }
 
   async genInvoiceBalance(bookingData: {
-    balance: string,
     amountToPay: string,
     membership_no: string,
   }) {
@@ -1782,7 +1790,8 @@ export class PaymentService {
     const amountToPay = Number(bookingData.amountToPay);
     if (!amountToPay || amountToPay <= 0)
       throw new BadRequestException('Amount to pay must be greater than 0');
-
+    if(amountToPay > Number(member.Balance))
+      throw new BadRequestException('Amount to pay must be less than or equal to balance');
     // Generate voucher
     const vno = generateNumericVoucherNo();
     const voucher = await this.createVoucher({
@@ -1790,7 +1799,7 @@ export class PaymentService {
       membership_no: String(bookingData.membership_no),
       amount: amountToPay,
       payment_mode: PaymentMode.KUICKPAY,
-      voucher_type: VoucherType.FULL_PAYMENT,
+      voucher_type: Number(member.Balance) === amountToPay ?  VoucherType.FULL_PAYMENT : VoucherType.HALF_PAYMENT,
       status: VoucherStatus.PENDING,
       issued_by: 'system',
       remarks: 'Balance',

@@ -13,11 +13,13 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { Progress } from "@/components/ui/progress";
 import {
   Plus, Edit, Trash2, Eye, X, Calendar as CalendarIcon, TrendingUp, BarChart3,
-  BedDouble, Loader2,
+  BedDouble, Loader2, DollarSign, Wallet, CreditCard, Activity, ArrowUpRight,
+  TrendingDown, CheckCircle2, Clock, AlertCircle, Info
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -504,72 +506,252 @@ export default function AffiliatedClubs() {
       retry: 1,
     });
 
-    if (isLoading) return <div className="flex h-[400px] items-center justify-center"><p className="text-muted-foreground">Loading booking stats...</p></div>;
+    if (isLoading) return (
+      <div className="flex h-[400px] flex-col items-center justify-center gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary opacity-50" />
+        <p className="text-sm font-medium text-muted-foreground animate-pulse">Analyzing revenue data...</p>
+      </div>
+    );
+
+    const totals = bookingStats.reduce((acc: any, curr: any) => ({
+      revenue: acc.revenue + curr.totalRevenue,
+      paid: acc.paid + curr.totalPaid,
+      pending: acc.pending + curr.totalPending,
+      bookings: acc.bookings + curr.bookingCount,
+    }), { revenue: 0, paid: 0, pending: 0, bookings: 0 });
+
+    const SummaryCard = ({ title, value, icon: Icon, color, subValue }: any) => (
+      <Card className="overflow-hidden border-none shadow-sm relative group">
+        <div className={cn("absolute inset-0 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity", color)} />
+        <CardContent className="p-5">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{title}</p>
+              <h3 className="text-2xl font-bold tracking-tight">
+                {typeof value === 'number' && title.includes('Amount') || title.includes('Revenue')
+                  ? `Rs ${value.toLocaleString()}`
+                  : value}
+              </h3>
+              {subValue && <p className="text-[10px] text-muted-foreground font-medium">{subValue}</p>}
+            </div>
+            <div className={cn("p-2.5 rounded-xl transition-transform group-hover:scale-110 duration-300", color.replace('bg-', 'bg-').replace('opacity-', 'opacity-10'))}>
+              <Icon className={cn("h-5 w-5", color.replace('bg-', 'text-'))} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
 
     return (
-      <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <Card className="lg:col-span-2 shadow-sm border-none bg-primary/5">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              <h4 className="font-semibold">Revenue by Club</h4>
+      <div className="space-y-6 animate-in fade-in duration-700">
+        {/* Top Summary Row */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <SummaryCard
+            title="Total Revenue"
+            value={totals.revenue}
+            icon={DollarSign}
+            color="bg-blue-600 text-blue-600"
+            subValue="Expected total from all bookings"
+          />
+          <SummaryCard
+            title="Amount Realized"
+            value={totals.paid}
+            icon={CheckCircle2}
+            color="bg-emerald-600 text-emerald-600"
+            subValue={`${((totals.paid / (totals.revenue || 1)) * 100).toFixed(1)}% recovery rate`}
+          />
+          <SummaryCard
+            title="Outstanding"
+            value={totals.pending}
+            icon={Clock}
+            color="bg-orange-600 text-orange-600"
+            subValue="Payments still to be received"
+          />
+          <SummaryCard
+            title="Total Bookings"
+            value={totals.bookings}
+            icon={Activity}
+            color="bg-primary text-primary"
+            subValue={`Across ${bookingStats.length} active clubs`}
+          />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2 shadow-xl border-none bg-gradient-to-b from-card to-secondary/5 overflow-hidden">
+            <CardContent className="p-8">
+              <div className="flex items-center justify-between mb-8">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    <h4 className="text-lg font-bold">Revenue Performance</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Comparative revenue analysis across affiliated clubs</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary text-[10px] font-bold text-white">
+                    <TrendingUp className="h-3 w-3 text-emerald-500" />
+                    <span>{format(dateRange.from, 'MMM d')} - {format(dateRange.to, 'MMM d')}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-[380px] w-full mt-4">
+                {bookingStats.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-4 bg-secondary/10 rounded-2xl border border-dashed border-border/50">
+                    <BarChart3 className="h-12 w-12 opacity-10" />
+                    <div className="text-center">
+                      <p className="font-semibold">No performance data</p>
+                      <p className="text-xs opacity-60">Adjust the date filters to see results</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={bookingStats} margin={{ top: 20, right: 30, left: 10, bottom: 40 }}>
+                      <defs>
+                        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+                      <XAxis
+                        dataKey="clubName"
+                        axisLine={false}
+                        tickLine={false}
+                        angle={-30}
+                        textAnchor="end"
+                        interval={0}
+                        height={60}
+                        fontSize={11}
+                        fontWeight={500}
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        fontSize={11}
+                        fontWeight={500}
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        tickFormatter={(val) => `Rs ${val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val}`}
+                      />
+                      <Tooltip
+                        cursor={{ fill: 'hsl(var(--secondary) / 0.5)', radius: 8 }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-popover border border-border shadow-2xl rounded-xl p-4 min-w-[200px] backdrop-blur-md bg-opacity-95">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">{data.clubName}</p>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center bg-primary/5 p-2 rounded-lg">
+                                    <span className="text-[10px] font-medium">Total Price</span>
+                                    <span className="text-xs font-bold">Rs {data.totalRevenue.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center bg-emerald-500/5 p-2 rounded-lg">
+                                    <span className="text-[10px] font-medium text-emerald-600">Collected</span>
+                                    <span className="text-xs font-bold text-emerald-600">Rs {data.totalPaid.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center bg-orange-500/5 p-2 rounded-lg">
+                                    <span className="text-[10px] font-medium text-orange-600">Pending</span>
+                                    <span className="text-xs font-bold text-orange-600">Rs {data.totalPending.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="totalRevenue" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={32}>
+                        {bookingStats.map((_: any, index: number) => (
+                          <Cell key={`cell-${index}`} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4 h-[560px] flex flex-col">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                <BarChart3 className="h-4 w-4" />
+                <span>Club Insights</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] font-bold bg-secondary/50 border-border/50">
+                {bookingStats.length} Clubs
+              </Badge>
             </div>
-            <div className="h-[350px] w-full">
+
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
               {bookingStats.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center text-muted-foreground gap-2">
-                  <BarChart3 className="h-10 w-10 opacity-20" />
-                  <p>No booking data for this period</p>
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 text-center bg-secondary/5 rounded-3xl border border-dashed border-border">
+                  <Info className="h-8 w-8 mb-2 opacity-20" />
+                  <p className="text-xs">No clubs found for this category</p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={bookingStats} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
-                    <XAxis dataKey="clubName" axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} height={80} fontSize={12} />
-                    <YAxis axisLine={false} tickLine={false} fontSize={12} tickFormatter={(val) => `Rs ${val.toLocaleString()}`} />
-                    <Tooltip
-                      formatter={(val: number) => [`Rs ${val.toLocaleString()}`, "Revenue"]}
-                      contentStyle={{ backgroundColor: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                    />
-                    <Bar dataKey="totalRevenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} barSize={40}>
-                      {bookingStats.map((_: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - index * 0.1)})`} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                bookingStats.map((item: any) => {
+                  const payRate = (item.totalPaid / (item.totalRevenue || 1)) * 100;
+                  return (
+                    <Card key={item.clubName} className="group border-none shadow-sm hover:shadow-md transition-all duration-300 bg-card/40 backdrop-blur-sm overflow-hidden border-l-4 border-l-transparent hover:border-l-primary">
+                      <CardContent className="p-4">
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-0.5">
+                              <h5 className="text-xs font-black uppercase tracking-widest text-foreground group-hover:text-primary transition-colors">{item.clubName}</h5>
+                              <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                <Activity className="h-3 w-3" />
+                                {item.bookingCount} Room Bookings
+                              </p>
+                            </div>
+                            <div className={cn(
+                              "text-[10px] font-black px-2 py-1 rounded-md",
+                              payRate >= 100 ? "bg-emerald-500/10 text-emerald-600" :
+                                payRate > 50 ? "bg-orange-500/10 text-orange-600" : "bg-destructive/10 text-destructive"
+                            )}>
+                              {payRate.toFixed(0)}% PAID
+                            </div>
+                          </div>
 
-        <Card className="shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              <h4 className="font-semibold">Booking Breakdown</h4>
-            </div>
-            <div className="space-y-4">
-              {bookingStats.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No data available</p>
-              ) : (
-                bookingStats.map((item: any) => (
-                  <div key={item.clubName} className="p-4 rounded-lg bg-secondary/20 border border-border/50">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-sm font-semibold truncate max-w-[150px]">{item.clubName}</span>
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                        {item.bookingCount} Bookings
-                      </Badge>
-                    </div>
-                    <div className="text-2xl font-bold text-foreground">
-                      Rs {item.totalRevenue.toLocaleString()}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 font-medium">Total Revenue Generated</p>
-                  </div>
-                ))
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[10px] font-bold mb-1 px-0.5">
+                              <span className="text-muted-foreground">COLLECTION RATE</span>
+                              <span>Rs {item.totalPaid.toLocaleString()} / Rs {item.totalRevenue.toLocaleString()}</span>
+                            </div>
+                            <Progress value={payRate} className="h-1.5 bg-secondary" />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="bg-emerald-500/[0.03] border border-emerald-500/10 rounded-xl p-3 space-y-1">
+                              <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1.5 font-black">
+                                <CheckCircle2 className="h-3 w-3" /> Fully Paid
+                              </p>
+                              <p className="text-sm font-black text-emerald-700">{item.paidBookingsCount}</p>
+                            </div>
+                            <div className="bg-orange-500/[0.03] border border-orange-500/10 rounded-xl p-3 space-y-1">
+                              <p className="text-[9px] font-bold text-orange-600 uppercase tracking-wider flex items-center gap-1.5 font-black">
+                                <AlertCircle className="h-3 w-3" /> Pending
+                              </p>
+                              <p className="text-sm font-black text-orange-700">Rs {item.totalPending.toLocaleString()}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[9px] text-muted-foreground font-black pt-2 uppercase tracking-widest border-t border-border/30 px-1">
+                            <span className="flex items-center gap-1"><div className="h-1 w-1 rounded-full bg-slate-400" /> Unpaid: {item.unpaidBookingsCount}</span>
+                            <span className="flex items-center gap-1"><div className="h-1 w-1 rounded-full bg-slate-400" /> Half: {item.halfPaidBookingsCount}</span>
+                            <span className="flex items-center gap-1"><div className="h-1 w-1 rounded-full bg-slate-400" /> Adv: {item.advancePaidBookingsCount}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   };

@@ -292,33 +292,74 @@ export class AffiliationService {
       }
     }
 
-    const stats = await this.prismaService.affClubBooking.groupBy({
-      by: ['affiliatedClubId'],
+    const bookings = await this.prismaService.affClubBooking.findMany({
       where,
-      _count: {
-        id: true,
-      },
-      _sum: {
+      select: {
+        affiliatedClubId: true,
         totalPrice: true,
+        paidAmount: true,
+        pendingAmount: true,
+        paymentStatus: true,
       },
     });
 
     const clubs = await this.prismaService.affiliatedClub.findMany({
       where: {
-        id: { in: stats.map((s) => s.affiliatedClubId) },
+        id: { in: [...new Set(bookings.map((b) => b.affiliatedClubId))] },
       },
       select: { id: true, name: true },
     });
 
-    return stats
-      .map((stat) => ({
-        clubName:
-          clubs.find((c) => c.id === stat.affiliatedClubId)?.name || 'Unknown',
-        bookingCount: stat._count.id,
-        totalRevenue: Number(stat._sum.totalPrice) || 0,
-      }))
+    const statsMap = new Map<number, any>();
+
+    bookings.forEach((booking) => {
+      let clubStats = statsMap.get(booking.affiliatedClubId);
+      if (!clubStats) {
+        clubStats = {
+          clubName: clubs.find((c) => c.id === booking.affiliatedClubId)?.name || 'Unknown',
+          bookingCount: 0,
+          totalRevenue: 0,
+          totalPaid: 0,
+          totalPending: 0,
+          paidBookingsCount: 0,
+          paidAmountTotal: 0,
+          unpaidBookingsCount: 0,
+          unpaidAmountTotal: 0,
+          halfPaidBookingsCount: 0,
+          halfPaidAmountTotal: 0,
+          advancePaidBookingsCount: 0,
+          advancePaidAmountTotal: 0,
+        };
+        statsMap.set(booking.affiliatedClubId, clubStats);
+      }
+
+      clubStats.bookingCount++;
+      clubStats.totalRevenue += Number(booking.totalPrice) || 0;
+      clubStats.totalPaid += Number(booking.paidAmount) || 0;
+      clubStats.totalPending += Number(booking.pendingAmount) || 0;
+
+      const status = String(booking.paymentStatus);
+      const paid = Number(booking.paidAmount) || 0;
+
+      if (status === 'PAID') {
+        clubStats.paidBookingsCount++;
+        clubStats.paidAmountTotal += paid;
+      } else if (status === 'UNPAID') {
+        clubStats.unpaidBookingsCount++;
+        clubStats.unpaidAmountTotal += paid;
+      } else if (status === 'HALF_PAID') {
+        clubStats.halfPaidBookingsCount++;
+        clubStats.halfPaidAmountTotal += paid;
+      } else if (status === 'ADVANCE_PAYMENT') {
+        clubStats.advancePaidBookingsCount++;
+        clubStats.advancePaidAmountTotal += paid;
+      }
+    });
+
+    return Array.from(statsMap.values())
       .sort((a, b) => b.totalRevenue - a.totalRevenue);
   }
+
 
   // -------------------- AFFILIATED CLUB ROOM BOOKINGS --------------------
 
