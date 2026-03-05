@@ -1,7 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
-  previewFeatures = ["mapAllModelsToLowerCase"]
 }
 
 datasource db {
@@ -33,6 +32,8 @@ model Admin {
 
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+
+  @@map("admin")
 }
 
 enum MemberStatus {
@@ -96,6 +97,8 @@ model Member {
 
   createdAt DateTime  @default(now())
   updatedat DateTime  @updatedAt
+
+  @@map("member")
 }
 
 enum PaymentStatus {
@@ -153,6 +156,8 @@ model RoomBooking {
   updatedBy String? 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("roombooking")
 }
 
 enum BookingOpt {
@@ -202,6 +207,8 @@ model HallBooking {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("hallbooking")
 }
 
 model LawnBooking {
@@ -244,6 +251,8 @@ model LawnBooking {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("lawnbooking")
 }
 
 model PhotoshootBooking {
@@ -282,6 +291,8 @@ model PhotoshootBooking {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("photoshootbooking")
 }
 
 model SportSubscription {
@@ -299,6 +310,8 @@ model SportSubscription {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("sportsubscription")
 }
 
 model PaymentVoucher {
@@ -343,6 +356,8 @@ model PaymentVoucher {
   @@index([membership_no])
   @@index([consumer_number])
   @@index([voucher_no])
+
+  @@map("paymentvoucher")
 }
 
 enum Channel {
@@ -399,6 +414,8 @@ model RoomType {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("roomtype")
 }
 
 model RoomReservation {
@@ -415,6 +432,8 @@ model RoomReservation {
 
   @@index([roomId])
   @@index([reservedFrom, reservedTo])
+
+  @@map("roomreservation")
 }
 
 // rooms
@@ -438,6 +457,8 @@ model Room {
   updatedBy String @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("room")
 }
 
 model RoomOnBooking {
@@ -455,6 +476,8 @@ model RoomOnBooking {
 
   @@index([bookingId])
   @@index([roomId])
+
+  @@map("roomonbooking")
 }
 
 model roomHoldings {
@@ -469,6 +492,8 @@ model roomHoldings {
   room Room @relation(fields: [roomId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("roomholdings")
 }
 
 model RoomOutOfOrder {
@@ -489,6 +514,8 @@ model RoomOutOfOrder {
   @@index([roomId])
   @@index([startDate])
   @@index([endDate])
+
+  @@map("roomoutoforder")
 }
 
 // halls
@@ -522,6 +549,8 @@ model Hall {
   updatedBy String @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("hall")
 }
 
 model hallHoldings {
@@ -537,6 +566,8 @@ model hallHoldings {
   hall Hall @relation(fields: [hallId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("hallholdings")
 }
 
 model HallOutOfOrder {
@@ -557,6 +588,8 @@ model HallOutOfOrder {
   @@index([hallId])
   @@index([startDate])
   @@index([endDate])
+
+  @@map("halloutoforder")
 }
 
 model HallReservation {
@@ -577,6 +610,8 @@ model HallReservation {
 
   @@index([hallId])
   @@index([reservedFrom, reservedTo])
+
+  @@map("hallreservation")
 }
 
 model LawnOutOfOrder {
@@ -597,6 +632,8 @@ model LawnOutOfOrder {
   @@index([lawnId])
   @@index([startDate])
   @@index([endDate])
+
+  @@map("lawnoutoforder")
 }
 model Lawn {
   id             Int          @id @default(autoincrement())
@@ -625,6 +662,8 @@ model Lawn {
 
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+
+  @@map("lawn")
 }
 model lawnHoldings {
   id Int @id @unique @default(autoincrement())
@@ -639,6 +678,8 @@ model lawnHoldings {
   lawn Lawn @relation(fields: [lawnId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("lawnholdings")
 }
 
 model LawnCategory {
@@ -653,6 +694,8 @@ model LawnCategory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("lawncategory")
 }
 
 model LawnReservation {
@@ -673,6 +716,8 @@ model LawnReservation {
 
   @@index([lawnId])
   @@index([reservedFrom, reservedTo])
+
+  @@map("lawnreservation")
 }
 
 model PhotoshootReservation {
@@ -693,6 +738,8 @@ model PhotoshootReservation {
 
   @@index([photoshootId])
   @@index([reservedFrom, reservedTo])
+
+  @@map("photoshootreservation")
 }
 
 // photoshoot
@@ -716,6 +763,8 @@ model Photoshoot {
 
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
+
+  @@map("photoshoot")
 }
 
 model PhotoshootOutOfOrder {
@@ -736,6 +785,8 @@ model PhotoshootOutOfOrder {
   @@index([photoshootId])
   @@index([startDate])
   @@index([endDate])
+
+  @@map("photoshootoutoforder")
 }
 
 // sports
@@ -776,6 +827,8 @@ model Sport {
   updatedBy String @default("")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  @@map("sport")
 }
 
 model SportCharge {
@@ -795,6 +848,8 @@ model SportCharge {
 
   createdBy String @default("")
   updatedBy String @default("")
+
+  @@map("sportcharge")
 }
 
 // affiliated clubs
@@ -823,6 +878,8 @@ model AffiliatedClub {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("affiliatedclub")
 }
 
 model AffiliatedClubRequest {
@@ -842,6 +899,8 @@ model AffiliatedClubRequest {
 
   @@index([membershipNo])
   @@index([affiliatedClubId])
+
+  @@map("affiliatedclubrequest")
 }
 
 // Content Management
@@ -861,6 +920,8 @@ model Event {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("event")
 }
 
 model ClubRule {
@@ -875,6 +936,8 @@ model ClubRule {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("clubrule")
 }
 
 // MESSING MODULE
@@ -892,6 +955,8 @@ model MessingCategory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("messingcategory")
 }
 
 model MessingSubCategory {
@@ -911,6 +976,8 @@ model MessingSubCategory {
   updatedAt DateTime @updatedAt
 
   @@index([messingCategoryId])
+
+  @@map("messingsubcategory")
 }
 
 model MessingItem {
@@ -930,6 +997,8 @@ model MessingItem {
   updatedAt DateTime @updatedAt
 
   @@index([messingSubCategoryId])
+
+  @@map("messingitem")
 }
 
 model Announcement {
@@ -942,6 +1011,8 @@ model Announcement {
   updatedBy String @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("announcement")
 }
 
 model AboutUs {
@@ -951,6 +1022,8 @@ model AboutUs {
   updatedBy String @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("aboutus")
 }
 
 model ClubHistory {
@@ -961,6 +1034,8 @@ model ClubHistory {
   updatedBy String @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("clubhistory")
 }
 
 model PromotionalAd {
@@ -974,6 +1049,8 @@ model PromotionalAd {
   updatedBy String @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("promotionalad")
 }
 
 
@@ -986,6 +1063,8 @@ model deliveredNotis{
   deliveredTo Member @relation(fields: [member], references: [Membership_No])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("deliverednotis")
 }
 
 model RoomCancellationRequest {
@@ -1001,6 +1080,8 @@ model RoomCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+
+  @@map("roomcancellationrequest")
 }
 
 model HallCancellationRequest {
@@ -1016,6 +1097,8 @@ model HallCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+
+  @@map("hallcancellationrequest")
 }
 
 model LawnCancellationRequest {
@@ -1031,6 +1114,8 @@ model LawnCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+
+  @@map("lawncancellationrequest")
 }
 
 
@@ -1044,6 +1129,8 @@ model Notification {
   updatedBy String @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("notification")
 }
 
 
@@ -1073,6 +1160,8 @@ model Feedback {
   @@index([memberNo])
   @@index([categoryId])
   @@index([subCategoryId])
+
+  @@map("feedback")
 }
 
 model FeedbackCategory {
@@ -1082,6 +1171,8 @@ model FeedbackCategory {
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@map("feedbackcategory")
 }
 
 model FeedbackSubCategory {
@@ -1091,6 +1182,8 @@ model FeedbackSubCategory {
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@map("feedbacksubcategory")
 }
 
 model FeedbackRemark {
@@ -1103,6 +1196,8 @@ model FeedbackRemark {
   createdAt  DateTime @default(now())
 
   @@index([feedbackId])
+
+  @@map("feedbackremark")
 }
 
 model PhotoshootCancellationRequest {
@@ -1118,6 +1213,8 @@ model PhotoshootCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+
+  @@map("photoshootcancellationrequest")
 }
 
 // ==================== Affiliated Club Bookings ====================
@@ -1165,6 +1262,8 @@ model AffClubBooking {
   updatedAt DateTime @updatedAt
 
   @@index([affiliatedClubId])
+
+  @@map("affclubbooking")
 }
 
 model AffClubCancellationRequest {
@@ -1180,6 +1279,8 @@ model AffClubCancellationRequest {
 
   @@index([bookingId])
   @@index([status])
+
+  @@map("affclubcancellationrequest")
 }
 
 model AffClubBookingRoom {
@@ -1192,6 +1293,8 @@ model AffClubBookingRoom {
 
   @@index([bookingId])
   @@index([roomId])
+
+  @@map("affclubbookingroom")
 }
 
 model ContactUs {
@@ -1205,4 +1308,6 @@ model ContactUs {
   updatedBy String @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("contactus")
 }
