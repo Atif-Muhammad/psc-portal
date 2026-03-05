@@ -778,7 +778,7 @@ export class PaymentService {
       where: {
         membership_no: bookingData.membership_no,
         status: VoucherStatus.PENDING,
-        payment_mode: PaymentMode.ONLINE,
+        payment_mode: PaymentMode.KUICKPAY,
         booking_type: BookingType.ROOM,
         expiresAt: {
           gte: new Date(),
@@ -1884,7 +1884,7 @@ export class PaymentService {
       where: {
         membership_no: membershipNo,
         status: VoucherStatus.PENDING,
-        payment_mode: PaymentMode.ONLINE,
+        payment_mode: PaymentMode.KUICKPAY,
         expiresAt: { gt: new Date() },
         booking_type: { in: [BookingType.HALL, BookingType.LAWN] }
       },
