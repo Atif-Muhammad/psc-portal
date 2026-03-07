@@ -28,10 +28,14 @@ import {
 } from 'src/utils/time';
 import { generateNumericVoucherNo, generateConsumerNumber } from 'src/utils/id';
 import * as paymentPolicies from 'src/common/config/payment-policies.json';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class BookingService {
-  constructor(private prismaService: PrismaService) { }
+  constructor(
+    private prismaService: PrismaService,
+    private notificationService: NotificationService,
+  ) { }
 
   private formatHallBookingRemarks(
     hallName: string,
@@ -636,6 +640,12 @@ export class BookingService {
     await this.prismaService.roomHoldings.deleteMany({
       where: { roomId: { in: roomIdsToBook }, holdBy: membershipNo.toString() },
     });
+
+    this.notificationService.notifyBooking(
+      membershipNo,
+      'Room Booking Confirmation',
+      `New Room Booking: ${roomNumbers} from ${formatPakistanDate(checkInDate)} to ${formatPakistanDate(checkOutDate)}`
+    );
 
     return booking;
   }
@@ -2104,7 +2114,7 @@ export class BookingService {
       throw new BadRequestException('A cancellation request is already pending for this booking');
     }
 
-    return await this.prismaService.roomCancellationRequest.create({
+    const created = await this.prismaService.roomCancellationRequest.create({
       data: {
         bookingId: booking.id,
         reason: reason || 'Booking cancellation requested by admin',
@@ -2112,6 +2122,14 @@ export class BookingService {
         status: 'PENDING',
       },
     });
+
+    this.notificationService.notifyBooking(
+      booking.Membership_No,
+      'Room Booking Cancellation Request Received',
+      'We have received your request to cancel your room booking. Our team will review it and get back to you shortly.'
+    );
+
+    return created;
   }
 
   async updateCancellationReq(
@@ -2133,6 +2151,19 @@ export class BookingService {
         },
       });
 
+      const booking = await this.prismaService.roomBooking.findUnique({
+        where: { id: bookingId },
+        select: { Membership_No: true },
+      });
+
+      if (booking) {
+        this.notificationService.notifyBooking(
+          booking.Membership_No,
+          `Room Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
+          `Your request to cancel the room booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
+        );
+      }
+
       if (status === 'APPROVED' && pendingRequest) {
         return await this.cancelRoomBookingInternal(bookingId, pendingRequest.createdAt);
       }
@@ -2150,6 +2181,19 @@ export class BookingService {
           adminRemarks: remarks || 'Action taken by admin',
         },
       });
+
+      const booking = await this.prismaService.hallBooking.findUnique({
+        where: { id: bookingId },
+        include: { member: { select: { Membership_No: true } } },
+      });
+
+      if (booking?.member) {
+        this.notificationService.notifyBooking(
+          booking.member.Membership_No,
+          `Hall Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
+          `Your request to cancel the hall booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
+        );
+      }
 
       if (status === 'APPROVED' && pendingRequest) {
         return await this.cancelHallBookingInternal(bookingId, pendingRequest.createdAt);
@@ -2169,6 +2213,19 @@ export class BookingService {
         },
       });
 
+      const booking = await this.prismaService.lawnBooking.findUnique({
+        where: { id: bookingId },
+        include: { member: { select: { Membership_No: true } } },
+      });
+
+      if (booking?.member) {
+        this.notificationService.notifyBooking(
+          booking.member.Membership_No,
+          `Lawn Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
+          `Your request to cancel the lawn booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
+        );
+      }
+
       if (status === 'APPROVED' && pendingRequest) {
         return await this.cancelLawnBookingInternal(bookingId, pendingRequest.createdAt);
       }
@@ -2187,6 +2244,19 @@ export class BookingService {
         },
       });
 
+      const booking = await this.prismaService.photoshootBooking.findUnique({
+        where: { id: bookingId },
+        include: { member: { select: { Membership_No: true } } },
+      });
+
+      if (booking?.member) {
+        this.notificationService.notifyBooking(
+          booking.member.Membership_No,
+          `Photoshoot Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
+          `Your request to cancel the photoshoot booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
+        );
+      }
+
       if (status === 'APPROVED' && pendingRequest) {
         return await this.cancelPhotoshootBookingInternal(bookingId, pendingRequest.createdAt);
       }
@@ -2204,6 +2274,19 @@ export class BookingService {
           adminRemarks: remarks || 'Action taken by admin',
         },
       });
+
+      const booking = await this.prismaService.affClubBooking.findUnique({
+        where: { id: bookingId },
+        select: { affiliatedMembershipNo: true },
+      });
+
+      if (booking) {
+        this.notificationService.notifyBooking(
+          booking.affiliatedMembershipNo,
+          `Affiliated Club Room Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
+          `Your request to cancel the affiliated club room booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
+        );
+      }
 
       if (status === 'APPROVED' && pendingRequest) {
         return await this.cancelRoomAffBookingInternal(bookingId, pendingRequest.createdAt);
@@ -3130,6 +3213,12 @@ export class BookingService {
         where: { hallId: hall.id, holdBy: membershipNo.toString() },
       });
 
+      this.notificationService.notifyBooking(
+        membershipNo,
+        'Hall Booking Confirmation',
+        `New Hall Booking: ${hall.name} for ${formatPakistanDate(booking)} (${eventTime})`
+      );
+
       return booked;
     });
   }
@@ -3588,7 +3677,7 @@ export class BookingService {
       throw new BadRequestException('A cancellation request is already pending or approved for this booking');
     }
 
-    return await this.prismaService.hallCancellationRequest.create({
+    const created = await this.prismaService.hallCancellationRequest.create({
       data: {
         bookingId: booking.id,
         reason: reason || 'Booking cancellation requested by admin',
@@ -3596,6 +3685,20 @@ export class BookingService {
         status: 'PENDING',
       },
     });
+
+    const member = await this.prismaService.member.findUnique({
+      where: { Sno: booking.memberId },
+    });
+
+    if (member) {
+      this.notificationService.notifyBooking(
+        member.Membership_No,
+        'Hall Booking Cancellation Request Received',
+        'We have received your request to cancel your hall booking. Our team will review it and get back to you shortly.'
+      );
+    }
+
+    return created;
   }
 
   // lawn booking
@@ -4022,6 +4125,12 @@ export class BookingService {
         where: { lawnId: lawn.id, holdBy: membershipNo.toString() },
       });
 
+      this.notificationService.notifyBooking(
+        membershipNo,
+        'Lawn Booking Confirmation',
+        `New Lawn Booking: ${lawn.description} for ${formatPakistanDate(booking)} (${eventTime})`
+      );
+
       return { ...booked, lawnName: lawn.description };
     });
   }
@@ -4382,7 +4491,7 @@ export class BookingService {
       throw new BadRequestException('A cancellation request is already pending or approved for this booking');
     }
 
-    return await this.prismaService.lawnCancellationRequest.create({
+    const created = await this.prismaService.lawnCancellationRequest.create({
       data: {
         bookingId: booking.id,
         reason: reason || 'Booking cancellation requested by admin',
@@ -4390,6 +4499,20 @@ export class BookingService {
         status: 'PENDING',
       },
     });
+
+    const member = await this.prismaService.member.findUnique({
+      where: { Sno: booking.memberId },
+    });
+
+    if (member) {
+      this.notificationService.notifyBooking(
+        member.Membership_No,
+        'Lawn Booking Cancellation Request Received',
+        'We have received your request to cancel your lawn booking. Our team will review it and get back to you shortly.'
+      );
+    }
+
+    return created;
   }
 
 
@@ -4629,6 +4752,12 @@ export class BookingService {
         } as any,
       });
     }
+
+    this.notificationService.notifyBooking(
+      membershipNo,
+      'Photoshoot Booking Confirmation',
+      `New Photoshoot Booking for ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}`
+    );
 
     return booked;
   }

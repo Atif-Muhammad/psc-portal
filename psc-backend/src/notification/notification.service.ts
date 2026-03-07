@@ -6,12 +6,16 @@ import { QueueMessage, QueueMeta, QueueStatus } from './types';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MemberStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { MailerService } from 'src/mailer/mailer.service';
+import { v4 as uuidv4 } from 'uuid';
+import { generateNumericVoucherNo } from 'src/utils/id';
 
 @Injectable()
 export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject('FIREBASE_ADMIN') private readonly firebase: typeof admin,
+    private readonly mailerService: MailerService,
   ) { }
 
   private readonly DATA_DIR = path.join(process.cwd(), 'data', 'notification');
@@ -428,5 +432,49 @@ export class NotificationService {
         seen: true,
       },
     });
+  }
+
+  async notifyBooking(memberNo: string, title: string, description: string) {
+    try {
+      const member = await this.prisma.member.findUnique({
+        where: { Membership_No: memberNo },
+        select: { Email: true, Name: true },
+      });
+
+      if (!member || !member.Email) return;
+
+      // 1. Create Notification Record (Internal history)
+      const noti = await this.createNoti(
+        { title, description },
+        'system'
+      );
+
+      // 2. Enqueue for FCM (Handled by @Cron sendNoti)
+      this.enqueue({
+        id: uuidv4(),
+        recipient: member.Email,
+        status: 'PENDING',
+        noti_created: noti.id,
+      });
+
+      // 3. Send Email immediately
+      if (member.Email) {
+        // Basic template for booking ping
+        const html = `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #0056b3;">${title}</h2>
+            <p>Dear ${member.Name},</p>
+            <p>${description}</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #666;">
+              This is an automated notification from Peshawar Service Club. Please do not reply to this email.
+            </p>
+          </div>
+        `;
+        await this.mailerService.sendMail(member.Email, [], title, html);
+      }
+    } catch (error) {
+      console.error('Failed to notify booking:', error);
+    }
   }
 }
