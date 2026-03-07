@@ -112,6 +112,12 @@ export class PaymentController {
     return await this.payment.getMemberVouchers(membershipNo);
   }
 
+  @UseGuards(JwtAccGuard)
+  @Get('bill-payment-history/:membershipNo')
+  async getBillPaymentHistory(@Param('membershipNo') membershipNo: string) {
+    return this.payment.getBillPaymentHistory(membershipNo);
+  }
+
   @Get('voucher/booking')
   async getVouchersByBooking(
     @Query('bookingType') bookingType: string,

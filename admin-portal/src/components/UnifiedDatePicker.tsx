@@ -30,6 +30,7 @@ interface UnifiedDatePickerProps {
     // For Time Picker
     timeSlots?: string[];
     className?: string;
+    allowPastDates?: boolean;
 }
 
 const DEFAULT_TIME_SLOTS = [
@@ -54,6 +55,7 @@ export function UnifiedDatePicker({
     isCheckout = false,
     timeSlots = DEFAULT_TIME_SLOTS,
     className,
+    allowPastDates = false,
 }: UnifiedDatePickerProps) {
     const [open, setOpen] = useState(false);
 
@@ -191,7 +193,7 @@ export function UnifiedDatePicker({
             const today = new Date(minDate);
             today.setHours(0, 0, 0, 0);
             if (date < today) return true;
-        } else {
+        } else if (!allowPastDates) {
             // Default to today if no minDate provided (optional, but safe default for bookings)
             const today = new Date();
             today.setHours(0, 0, 0, 0);

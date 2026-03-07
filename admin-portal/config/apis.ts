@@ -2074,6 +2074,32 @@ export const getNotifications = async (): Promise<any> => {
   }
 };
 
+export const getMemberNotifications = async (membershipNo: string, from?: string, to?: string): Promise<any> => {
+  try {
+    const params = new URLSearchParams();
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+
+    const response = await axios.get(`${base_url}/notification/member-history/${membershipNo}?${params.toString()}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching member notifications", status: error.response?.status || 500 };
+  }
+};
+
+export const getBillPaymentHistory = async (membershipNo: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/payment/bill-payment-history/${membershipNo}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching bill payment history", status: error.response?.status || 500 };
+  }
+};
+
 // Accounts
 export const getAccountMembers = async (page = 1, limit = 20, search = ""): Promise<any> => {
   try {

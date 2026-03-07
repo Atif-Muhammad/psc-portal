@@ -362,15 +362,36 @@ export class NotificationService {
     this.updateStatus(noti.id, 'DONE');
   }
 
-  async getMemberNotifications(membershipNo: string) {
-    return await this.prisma.notification.findMany({
-      where: {
-        deliveries: {
-          some: {
-            member: membershipNo,
-          },
+  async getMemberNotifications(
+    membershipNo: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const where: any = {
+      deliveries: {
+        some: {
+          member: membershipNo,
         },
       },
+    };
+
+    if (startDate && endDate) {
+      where.createdAt = {
+        gte: startDate,
+        lte: endDate,
+      };
+    } else if (startDate) {
+      where.createdAt = {
+        gte: startDate,
+      };
+    } else if (endDate) {
+      where.createdAt = {
+        lte: endDate,
+      };
+    }
+
+    return await this.prisma.notification.findMany({
+      where,
       include: {
         deliveries: {
           where: {

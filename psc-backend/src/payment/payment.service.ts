@@ -372,6 +372,18 @@ export class PaymentService {
             lastBookingDate: getPakistanDate(),
           }
         });
+
+        // Record in BillPaymentHistory
+        await prisma.billPaymentHistory.create({
+          data: {
+            membershipNo: member.Membership_No,
+            amount: voucher.amount,
+            status: 'PAID',
+            remarks: voucher.remarks,
+            consumerNo: voucher.consumer_number,
+            paidAt: new Date(),
+          }
+        });
       }
       if (voucher.remarks === "Balance") return response
 
@@ -1983,4 +1995,11 @@ export class PaymentService {
 
   // check idempotency
   async checkIdempo(idempotencyKey: string) { }
+
+  async getBillPaymentHistory(membershipNo: string) {
+    return await this.prismaService.billPaymentHistory.findMany({
+      where: { membershipNo },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

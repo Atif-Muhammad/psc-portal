@@ -12,11 +12,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { getMembers, authAdmin, sendNotification, getNotifications } from "../../config/apis";
+import { getMembers, authAdmin, sendNotification, getNotifications, getMemberNotifications } from "../../config/apis";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 
 // Quill editor configuration (Matching AboutUsTab/Contents)
 const quillModules = {
@@ -63,6 +64,12 @@ export default function Notifications() {
   const [activeTab, setActiveTab] = useState("notifications");
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [viewingNotification, setViewingNotification] = useState<any>(null);
+
+  // States for Member History tab
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [selectedHistoryMember, setSelectedHistoryMember] = useState<any>(null);
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
   const { toast } = useToast();
 
@@ -183,9 +190,12 @@ export default function Notifications() {
       </div>
 
       <Tabs defaultValue="notifications" className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-1 max-w-[400px]">
+        <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" /> Notifications
+          </TabsTrigger>
+          <TabsTrigger value="member-history" className="gap-2">
+            <History className="h-4 w-4" /> Member History
           </TabsTrigger>
           {/* <TabsTrigger value="announcements" className="gap-2">
             <Megaphone className="h-4 w-4" /> Announcements
@@ -404,6 +414,135 @@ export default function Notifications() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="member-history" className="space-y-6 mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5 text-primary" />
+                  Search Member History
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or membership no..."
+                    value={historySearchTerm}
+                    onChange={(e) => setHistorySearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                <div className="border rounded-md max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableBody>
+                      {useQuery({
+                        queryKey: ["members-history-search", historySearchTerm],
+                        queryFn: () => getMembers({ search: historySearchTerm }),
+                        enabled: historySearchTerm.length > 2
+                      }).data?.data?.map((member: any) => (
+                        <TableRow
+                          key={member.Membership_No}
+                          className={`cursor-pointer transition-colors ${selectedHistoryMember?.Membership_No === member.Membership_No ? 'bg-primary/10' : 'hover:bg-muted'}`}
+                          onClick={() => setSelectedHistoryMember(member)}
+                        >
+                          <TableCell>
+                            <div className="font-medium text-sm">{member.Name}</div>
+                            <div className="text-xs text-muted-foreground">{member.Membership_No}</div>
+                          </TableCell>
+                        </TableRow>
+                      )) || (
+                          <TableRow>
+                            <TableCell className="text-center py-8 text-muted-foreground text-sm">
+                              {historySearchTerm.length > 2 ? "No members found" : "Type at least 3 characters to search"}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5 text-muted-foreground" />
+                    {selectedHistoryMember ? `History for ${selectedHistoryMember.Name}` : "Member History"}
+                  </CardTitle>
+                  {selectedHistoryMember && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Membership No: {selectedHistoryMember.Membership_No}
+                    </p>
+                  )}
+                </div>
+                {selectedHistoryMember && (
+                  <div className="flex items-center gap-4">
+                    <div className="w-64">
+                      <UnifiedDatePicker
+                        selectionMode="range"
+                        value={startDate}
+                        endDate={endDate}
+                        allowPastDates={true}
+                        onChange={(date, type) => {
+                          if (type === "start") setStartDate(date);
+                          else if (type === "end") setEndDate(date);
+                        }}
+                        placeholder="Filter by date range"
+                      />
+                    </div>
+                    {(startDate || endDate) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setStartDate(undefined);
+                          setEndDate(undefined);
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedHistoryMember ? (
+                        <MemberHistoryTable
+                          membershipNo={selectedHistoryMember.Membership_No}
+                          startDate={startDate}
+                          endDate={endDate}
+                          setViewOpen={setIsViewOpen}
+                          setViewingNoti={setViewingNotification}
+                        />
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                            Select a member to view their notification history
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         <TabsContent value="announcements" className="space-y-6 mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-1">
@@ -572,5 +711,81 @@ export default function Notifications() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function MemberHistoryTable({
+  membershipNo,
+  startDate,
+  endDate,
+  setViewOpen,
+  setViewingNoti
+}: {
+  membershipNo: string,
+  startDate?: Date,
+  endDate?: Date,
+  setViewOpen: any,
+  setViewingNoti: any
+}) {
+  const { data: history, isLoading } = useQuery({
+    queryKey: ["member-notifications", membershipNo, startDate, endDate],
+    queryFn: () => getMemberNotifications(
+      membershipNo,
+      startDate?.toISOString(),
+      endDate?.toISOString()
+    ),
+    enabled: !!membershipNo
+  });
+
+  if (isLoading) {
+    return (
+      <TableRow>
+        <TableCell colSpan={4} className="text-center py-8">Loading history...</TableCell>
+      </TableRow>
+    );
+  }
+
+  if (!history || history.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+          No notifications found for this member
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <>
+      {history.map((notification: any) => (
+        <TableRow key={notification.id}>
+          <TableCell className="whitespace-nowrap text-xs">
+            {notification.createdAt ? format(new Date(notification.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}
+          </TableCell>
+          <TableCell className="font-semibold text-sm">{notification.title}</TableCell>
+          <TableCell className="max-w-xs">
+            <div className="ql-snow">
+              <div
+                className="line-clamp-2 text-xs ql-editor !p-0"
+                dangerouslySetInnerHTML={{ __html: notification.description || "" }}
+                title={notification.description?.replace(/<[^>]*>?/gm, '')}
+              />
+            </div>
+          </TableCell>
+          <TableCell className="text-right">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setViewingNoti(notification);
+                setViewOpen(true);
+              }}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
   );
 }

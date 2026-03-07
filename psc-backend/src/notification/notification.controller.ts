@@ -6,6 +6,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Param,
   ParseIntPipe,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
@@ -111,5 +112,22 @@ export class NotificationController {
   @Patch('update-seen')
   async updateSeen(@Body('notiID', ParseIntPipe) notiID: number) {
     return this.notificationService.updateSeen(notiID);
+  }
+
+  @UseGuards(JwtAccGuard)
+  @Get('member-history/:membershipNo')
+  async getMemberNotifications(
+    @Param('membershipNo') membershipNo: string,
+    @Req() req: any,
+  ) {
+    const { from, to } = req.query;
+    const startDate = from ? new Date(from) : undefined;
+    const endDate = to ? new Date(to) : undefined;
+
+    return this.notificationService.getMemberNotifications(
+      membershipNo,
+      startDate,
+      endDate,
+    );
   }
 }

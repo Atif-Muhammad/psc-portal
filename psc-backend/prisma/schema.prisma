@@ -88,6 +88,7 @@ model Member {
 
   // vouchers PaymentVoucher[]
   feedbacks Feedback[]
+  billPayments BillPaymentHistory[]
 
   otp       Int? //temp otp
   otpExpiry DateTime? //otp expiry time
@@ -1310,4 +1311,19 @@ model ContactUs {
   updatedAt DateTime @updatedAt
 
   @@map("contactus")
+}
+
+model BillPaymentHistory {
+  id            Int      @id @default(autoincrement())
+  membershipNo  String
+  member        Member   @relation(fields: [membershipNo], references: [Membership_No])
+  amount        Decimal  @db.Decimal(20, 2)
+  status        String   @default("PENDING") // PENDING, PAID, CANCELLED
+  remarks       String?  @db.Text
+  consumerNo    String?  @unique
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("billpaymenthistory")
 }
