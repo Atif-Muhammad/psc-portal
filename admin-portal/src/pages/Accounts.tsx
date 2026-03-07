@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { exportVoucherPDF } from "@/lib/pdfExport";
-import { getAccountMembers, getMemberVouchers, getMemberBookings, getBillPaymentHistory } from "../../config/apis";
+import { getAccountMembers, getMemberVouchers, getMemberBookings, getBillPaymentHistory, cancelBalanceVoucher } from "../../config/apis";
 import { DetailedCardSkeleton } from "@/components/Skeletons";
 import { formatDateForDisplay, formatDateTimeForDisplay } from "@/utils/pakDate";
 
@@ -35,6 +35,7 @@ export default function Accounts() {
   const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [selectedBillPayment, setSelectedBillPayment] = useState<any>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -101,6 +102,23 @@ export default function Accounts() {
       const data = await getBillPaymentHistory(membershipNo);
       setBillPaymentHistory(data || []);
     } catch { setBillPaymentHistory([]); }
+  };
+
+  const handleCancelVoucher = async (voucherId: number) => {
+    try {
+      if (!window.confirm("Are you sure you want to cancel this balance voucher?")) return;
+      setIsCancelling(true);
+      await cancelBalanceVoucher(voucherId);
+      // Refresh vouchers
+      if (selectedMember) {
+        fetchMemberVouchers(selectedMember.Membership_No);
+      }
+      setSelectedVoucher(null);
+    } catch (error: any) {
+      alert(error.message || "Failed to cancel voucher");
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -509,6 +527,16 @@ export default function Accounts() {
             )}
 
             <div className="flex gap-2 pt-2">
+              {selectedVoucher?.remarks === 'Balance' && selectedVoucher?.status === 'PENDING' && (
+                <Button
+                  className="flex-1"
+                  variant="destructive"
+                  onClick={() => handleCancelVoucher(selectedVoucher.id)}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? "Cancelling..." : "Cancel Voucher"}
+                </Button>
+              )}
               <Button
                 className="flex-1"
                 variant="outline"

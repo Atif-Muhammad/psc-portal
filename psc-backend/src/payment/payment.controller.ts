@@ -118,6 +118,12 @@ export class PaymentController {
     return this.payment.getBillPaymentHistory(membershipNo);
   }
 
+  @UseGuards(JwtAccGuard)
+  @Post('balance/cancel/:id')
+  async cancelBalanceVoucher(@Param('id', ParseIntPipe) id: number) {
+    return await this.payment.cancelBalanceVoucher(id);
+  }
+
   @Get('voucher/booking')
   async getVouchersByBooking(
     @Query('bookingType') bookingType: string,

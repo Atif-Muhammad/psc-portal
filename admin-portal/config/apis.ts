@@ -2101,6 +2101,16 @@ export const getBillPaymentHistory = async (membershipNo: string): Promise<any> 
 };
 
 // Accounts
+
+export const cancelBalanceVoucher = async (id: number): Promise<any> => {
+  try {
+    const response = await axios.post(`${base_url}/payment/balance/cancel/${id}`, {}, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error cancelling voucher", status: error.response?.status || 500 };
+  }
+};
+
 export const getAccountMembers = async (page = 1, limit = 20, search = ""): Promise<any> => {
   try {
     const params = new URLSearchParams({

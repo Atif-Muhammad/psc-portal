@@ -2002,4 +2002,26 @@ export class PaymentService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async cancelBalanceVoucher(id: number) {
+    const voucher = await this.prismaService.paymentVoucher.findUnique({
+      where: { id },
+    });
+
+    if (!voucher) throw new NotFoundException('Voucher not found');
+    if (voucher.remarks !== 'Balance') {
+      throw new BadRequestException('Only balance vouchers can be cancelled via this API');
+    }
+    if (voucher.status !== VoucherStatus.PENDING) {
+      throw new BadRequestException('Only pending vouchers can be cancelled');
+    }
+
+    const now = new Date();
+    const newStatus = (voucher.expiresAt && voucher.expiresAt < now) ? VoucherStatus.EXPIRED : VoucherStatus.CANCELLED;
+
+    return await this.prismaService.paymentVoucher.update({
+      where: { id },
+      data: { status: newStatus },
+    });
+  }
 }
