@@ -447,6 +447,9 @@ export class BookingService {
       // For TO_BILL, we treat any amount provided as the billing amount, not cash.
       // So intendedPaid (cash) is 0, and the whole total becomes owed/billed.
       intendedPaid = 0;
+    } else if (isKuickpay && total > 0) {
+      // Fallback for Kuickpay: if no status set, assume full payment for voucher generation
+      intendedPaid = total;
     }
 
     // For KUICKPAY, initial paid amount is 0 as we want pending vouchers.
@@ -489,7 +492,7 @@ export class BookingService {
         checkIn: checkInDate,
         checkOut: checkOutDate,
         totalPrice: total,
-        paymentStatus: paymentStatus as unknown as PaymentStatus,
+        paymentStatus: isKuickpay ? PaymentStatus.UNPAID : (paymentStatus as unknown as PaymentStatus),
         pricingType,
         paidAmount: bookingPaidAmount,
         pendingAmount: bookingPendingAmount,
@@ -849,9 +852,16 @@ export class BookingService {
     const currPaid = Number(booking.paidAmount);
     const currStatus = booking.paymentStatus;
 
-    // Favor payload values, fall back to current values
-    let newPaymentStatus: PaymentStatus =
-      (paymentStatus as unknown as PaymentStatus) || currStatus;
+    let newPaymentStatus: PaymentStatus;
+    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
+
+    if (isKuickpay && paidAmount !== undefined) {
+      // For Kuickpay updates with new payment, preserve current status until confirmed
+      newPaymentStatus = currStatus;
+    } else {
+      newPaymentStatus = (paymentStatus as unknown as PaymentStatus) || currStatus;
+    }
     const newTotal = totalPrice !== undefined ? Number(totalPrice) : currTotal;
 
     // Check for price increase without explicit payment change
@@ -864,18 +874,24 @@ export class BookingService {
     // Respect manual status changes and amounts from UI
     if (String(newPaymentStatus) === 'PAID') {
       newPaid = isExplicitPaidAmount ? Number(paidAmount) : Math.max(newTotal, currPaid);
+    } else if (isKuickpay && isExplicitPaidAmount) {
+      // For Kuickpay, we must respect the new payment amount to trigger voucher generation
+      // even if the status is preserved as UNPAID or currStatus.
+      newPaid = Number(paidAmount);
     } else if (String(newPaymentStatus) === 'UNPAID') {
       newPaid = 0;
     } else if (String(newPaymentStatus) === 'TO_BILL' || newPaymentStatus === (PaymentStatus.TO_BILL as unknown)) {
       // For TO_BILL, we don't count the billing amount as new cash.
       // newPaid stays as whatever cash was previously paid.
       newPaid = currPaid;
-    } else {
-      newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
+    } else if (isExplicitPaidAmount) {
+      // For HALF_PAID, ADVANCE_PAYMENT, or any other status with explicit amount
+      newPaid = Number(paidAmount);
     }
 
-    const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
-    const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
+    // Moved up
+    // const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
+    // const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
     // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
     // Manual ONLINE payments are confirmed immediately, so dbPaid = newPaid.
@@ -938,6 +954,24 @@ export class BookingService {
     let bookingPaidAmount = isToBillStatus ? newTotal : dbPaid;
     let bookingPendingAmount = isToBillStatus ? 0 : newOwed;
 
+    // ── EXPIRE OLD KUICKPAY VOUCHERS ──────────────────────────
+    if (isKuickpay && newPaid > currPaid) {
+      await this.prismaService.paymentVoucher.updateMany({
+        where: {
+          booking_id: booking.id,
+          booking_type: 'ROOM',
+          payment_mode: PaymentMode.KUICKPAY,
+          status: VoucherStatus.PENDING,
+        },
+        data: {
+          status: VoucherStatus.EXPIRED,
+          remarks: {
+            set: 'Expired due to updated booking/new voucher generation'
+          }
+        } as any,
+      });
+    }
+
     // Handle Vouchers and get Refund Amount
     const refundAmount = await this.handleVoucherUpdateUnified(
       booking.id,
@@ -971,110 +1005,110 @@ export class BookingService {
 
     // ── PRICE DECREASE SETTLEMENT ────────────────────────────
     // When total decreases, treat the diff as a virtual payment instead of a refund.
-    if (newTotal < currTotal && !isToBillStatus) {
-      const diffAmount = currTotal - newTotal;
-      const currPending = Number(booking.pendingAmount) || 0;
+    // if (newTotal < currTotal && !isToBillStatus) {
+    //   const diffAmount = currTotal - newTotal;
+    //   const currPending = Number(booking.pendingAmount) || 0;
 
-      // Step 0: Absorb any prior negative pending (club owes member)
-      let effectiveDiff = diffAmount;
-      let adjustedPending = currPending;
+    //   // Step 0: Absorb any prior negative pending (club owes member)
+    //   let effectiveDiff = diffAmount;
+    //   let adjustedPending = currPending;
 
-      if (currPending < 0) {
-        // Prior owed amount absorbs part/all of the decrease
-        effectiveDiff = diffAmount + currPending; // currPending is negative, so subtracts
-        adjustedPending = 0;
-      }
+    //   if (currPending < 0) {
+    //     // Prior owed amount absorbs part/all of the decrease
+    //     effectiveDiff = diffAmount + currPending; // currPending is negative, so subtracts
+    //     adjustedPending = 0;
+    //   }
 
-      if (effectiveDiff <= 0) {
-        // Decrease fully absorbed by prior owed balance
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = 'PAID' as unknown as PaymentStatus;
-      } else if (effectiveDiff === adjustedPending) {
-        // Case A: decrease exactly covers pending → FULL_PAYMENT
-        const vno = generateNumericVoucherNo();
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            consumer_number: generateConsumerNumber(Number(vno)),
-            voucher_no: vno,
-            booking_type: 'ROOM',
-            booking_id: booking.id,
-            membership_no: membershipNo ?? booking.Membership_No,
-            amount: effectiveDiff,
-            payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-            voucher_type: VoucherType.FULL_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
-            issued_by: 'admin',
-            paid_at: new Date(),
-            remarks: `Price decrease settlement (FULL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers}`,
-          } as any,
-        });
-        await this.appendUpdateRemarkToHistoricalVouchers(
-          booking.id,
-          'ROOM',
-          `Settled by voucher ${vno}`,
-        );
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
-      } else if (effectiveDiff < adjustedPending) {
-        // Case B: decrease covers part of pending → HALF_PAYMENT
-        const vno = generateNumericVoucherNo();
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            consumer_number: generateConsumerNumber(Number(vno)),
-            voucher_no: vno,
-            booking_type: 'ROOM',
-            booking_id: booking.id,
-            membership_no: membershipNo ?? booking.Membership_No,
-            amount: effectiveDiff,
-            payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-            voucher_type: VoucherType.HALF_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
-            issued_by: 'admin',
-            paid_at: new Date(),
-            remarks: `Price decrease settlement (PARTIAL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers}`,
-          } as any,
-        });
-        await this.appendUpdateRemarkToHistoricalVouchers(
-          booking.id,
-          'ROOM',
-          `Adjusted by settlement voucher ${vno}`,
-        );
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
-      } else {
-        // Case C: decrease exceeds pending → FULL_PAYMENT for pending, negative pending for owed
-        if (adjustedPending > 0) {
-          const vno = generateNumericVoucherNo();
-          await this.prismaService.paymentVoucher.create({
-            data: {
-              consumer_number: generateConsumerNumber(Number(vno)),
-              voucher_no: vno,
-              booking_type: 'ROOM',
-              booking_id: booking.id,
-              membership_no: membershipNo ?? booking.Membership_No,
-              amount: adjustedPending,
-              payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-              voucher_type: VoucherType.FULL_PAYMENT,
-              status: VoucherStatus.CONFIRMED,
-              issued_by: 'admin',
-              paid_at: new Date(),
-              remarks: `Price decrease settlement (FULL+OWED) - Total reduced from ${currTotal} to ${newTotal} | Owed to member: ${effectiveDiff - adjustedPending} | Rooms: ${roomNumbers}`,
-            } as any,
-          });
-          await this.appendUpdateRemarkToHistoricalVouchers(
-            booking.id,
-            'ROOM',
-            `Settled by voucher ${vno}`,
-          );
-        }
-        bookingPaidAmount = dbPaid; // Keep actual cash received
-        bookingPendingAmount = newTotal - dbPaid; // negative = club owes member
-        newPaymentStatus = 'PAID' as unknown as PaymentStatus;
-      }
-    }
+    //   if (effectiveDiff <= 0) {
+    //     // Decrease fully absorbed by prior owed balance
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = 'PAID' as unknown as PaymentStatus;
+    //   } else if (effectiveDiff === adjustedPending) {
+    //     // Case A: decrease exactly covers pending → FULL_PAYMENT
+    //     const vno = generateNumericVoucherNo();
+    //     await this.prismaService.paymentVoucher.create({
+    //       data: {
+    //         consumer_number: generateConsumerNumber(Number(vno)),
+    //         voucher_no: vno,
+    //         booking_type: 'ROOM',
+    //         booking_id: booking.id,
+    //         membership_no: membershipNo ?? booking.Membership_No,
+    //         amount: effectiveDiff,
+    //         payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //         voucher_type: VoucherType.FULL_PAYMENT,
+    //         status: VoucherStatus.CONFIRMED,
+    //         issued_by: 'admin',
+    //         paid_at: new Date(),
+    //         remarks: `Price decrease settlement (FULL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers}`,
+    //       } as any,
+    //     });
+    //     await this.appendUpdateRemarkToHistoricalVouchers(
+    //       booking.id,
+    //       'ROOM',
+    //       `Settled by voucher ${vno}`,
+    //     );
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
+    //   } else if (effectiveDiff < adjustedPending) {
+    //     // Case B: decrease covers part of pending → HALF_PAYMENT
+    //     const vno = generateNumericVoucherNo();
+    //     await this.prismaService.paymentVoucher.create({
+    //       data: {
+    //         consumer_number: generateConsumerNumber(Number(vno)),
+    //         voucher_no: vno,
+    //         booking_type: 'ROOM',
+    //         booking_id: booking.id,
+    //         membership_no: membershipNo ?? booking.Membership_No,
+    //         amount: effectiveDiff,
+    //         payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //         voucher_type: VoucherType.HALF_PAYMENT,
+    //         status: VoucherStatus.CONFIRMED,
+    //         issued_by: 'admin',
+    //         paid_at: new Date(),
+    //         remarks: `Price decrease settlement (PARTIAL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers}`,
+    //       } as any,
+    //     });
+    //     await this.appendUpdateRemarkToHistoricalVouchers(
+    //       booking.id,
+    //       'ROOM',
+    //       `Adjusted by settlement voucher ${vno}`,
+    //     );
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
+    //   } else {
+    //     // Case C: decrease exceeds pending → FULL_PAYMENT for pending, negative pending for owed
+    //     if (adjustedPending > 0) {
+    //       const vno = generateNumericVoucherNo();
+    //       await this.prismaService.paymentVoucher.create({
+    //         data: {
+    //           consumer_number: generateConsumerNumber(Number(vno)),
+    //           voucher_no: vno,
+    //           booking_type: 'ROOM',
+    //           booking_id: booking.id,
+    //           membership_no: membershipNo ?? booking.Membership_No,
+    //           amount: adjustedPending,
+    //           payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //           voucher_type: VoucherType.FULL_PAYMENT,
+    //           status: VoucherStatus.CONFIRMED,
+    //           issued_by: 'admin',
+    //           paid_at: new Date(),
+    //           remarks: `Price decrease settlement (FULL+OWED) - Total reduced from ${currTotal} to ${newTotal} | Owed to member: ${effectiveDiff - adjustedPending} | Rooms: ${roomNumbers}`,
+    //         } as any,
+    //       });
+    //       await this.appendUpdateRemarkToHistoricalVouchers(
+    //         booking.id,
+    //         'ROOM',
+    //         `Settled by voucher ${vno}`,
+    //       );
+    //     }
+    //     bookingPaidAmount = dbPaid; // Keep actual cash received
+    //     bookingPendingAmount = newTotal - dbPaid; // negative = club owes member
+    //     newPaymentStatus = 'PAID' as unknown as PaymentStatus;
+    //   }
+    // }
 
     // Calculate diffs for ledger update. 
     // If we reversed TO_BILL, currPaid for the final update is now effectively oldActualCash
@@ -1488,7 +1522,7 @@ export class BookingService {
         data: {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
-          booking_type: 'ROOM',
+          booking_type: 'AFF_ROOM',
           booking_id: bookingId,
           membership_no: booking.affiliatedMembershipNo,
           amount: refundAmount,
@@ -2319,14 +2353,25 @@ export class BookingService {
       deductionAmount = result.deductionAmount;
     }
 
-    // Mark pending vouchers as cancelled
+    // Mark pending vouchers as cancelled/expired
     await this.prismaService.paymentVoucher.updateMany({
       where: {
         booking_id: bookingId,
         booking_type: BookingType.ROOM,
         status: VoucherStatus.PENDING,
+        NOT: { payment_mode: PaymentMode.KUICKPAY },
       },
       data: { status: VoucherStatus.CANCELLED },
+    });
+
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.ROOM,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.KUICKPAY,
+      },
+      data: { status: VoucherStatus.EXPIRED },
     });
 
     // Clear room holdings if any
@@ -2408,14 +2453,25 @@ export class BookingService {
       deductionAmount = result.deductionAmount;
     }
 
-    // Mark pending vouchers as cancelled
+    // Mark pending vouchers as cancelled/expired
     await this.prismaService.paymentVoucher.updateMany({
       where: {
         booking_id: bookingId,
         booking_type: BookingType.HALL,
         status: VoucherStatus.PENDING,
+        NOT: { payment_mode: PaymentMode.KUICKPAY },
       },
       data: { status: VoucherStatus.CANCELLED },
+    });
+
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.HALL,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.KUICKPAY,
+      },
+      data: { status: VoucherStatus.EXPIRED },
     });
 
     // Clear hall holdings if any
@@ -2477,14 +2533,25 @@ export class BookingService {
       where: { lawnId: booking.lawnId, holdBy: booking.memberId.toString() }, // holdBy is String, memberId is Int
     });
 
-    // Mark pending vouchers as cancelled
+    // Mark pending vouchers as cancelled/expired
     await this.prismaService.paymentVoucher.updateMany({
       where: {
         booking_id: bookingId,
         booking_type: BookingType.LAWN,
         status: VoucherStatus.PENDING,
+        NOT: { payment_mode: PaymentMode.KUICKPAY },
       },
       data: { status: VoucherStatus.CANCELLED },
+    });
+
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.LAWN,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.KUICKPAY,
+      },
+      data: { status: VoucherStatus.EXPIRED },
     });
 
     let refundAmount = 0;
@@ -2563,14 +2630,25 @@ export class BookingService {
       deductionAmount = result.deductionAmount;
     }
 
-    // Mark pending vouchers as cancelled
+    // Mark pending vouchers as cancelled/expired
     await this.prismaService.paymentVoucher.updateMany({
       where: {
         booking_id: bookingId,
         booking_type: BookingType.PHOTOSHOOT,
         status: VoucherStatus.PENDING,
+        NOT: { payment_mode: PaymentMode.KUICKPAY },
       },
       data: { status: VoucherStatus.CANCELLED },
+    });
+
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.PHOTOSHOOT,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.KUICKPAY,
+      },
+      data: { status: VoucherStatus.EXPIRED },
     });
 
     if (refundAmount > 0) {
@@ -2645,14 +2723,25 @@ export class BookingService {
     });
     if (!booking) throw new NotFoundException('Affiliated Booking not found');
 
-    // Mark pending vouchers as cancelled
+    // Mark pending vouchers as cancelled/expired
     await this.prismaService.paymentVoucher.updateMany({
       where: {
         booking_id: bookingId,
-        booking_type: BookingType.ROOM,
+        booking_type: BookingType.AFF_ROOM,
         status: VoucherStatus.PENDING,
+        NOT: { payment_mode: PaymentMode.KUICKPAY },
       },
       data: { status: VoucherStatus.CANCELLED },
+    });
+
+    await this.prismaService.paymentVoucher.updateMany({
+      where: {
+        booking_id: bookingId,
+        booking_type: BookingType.AFF_ROOM,
+        status: VoucherStatus.PENDING,
+        payment_mode: PaymentMode.KUICKPAY,
+      },
+      data: { status: VoucherStatus.EXPIRED },
     });
 
     // Clear room holdings if any
@@ -6314,26 +6403,28 @@ export class BookingService {
     }
 
     // ── PAYMENT CALCULATIONS ────────────────────────────────
-    const total = Number(totalPrice);
+    const total = Number(totalPrice) || 0;
     let intendedPaid = 0;
+    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY');
+    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || String(paymentMode).toUpperCase() === 'ONLINE');
 
-    if (String(paymentStatus) === 'PAID' || paymentStatus === (PaymentStatus.PAID as unknown)) {
+
+    if (String(paymentStatus) === 'PAID') {
       intendedPaid = total;
     } else if (
       String(paymentStatus) === 'HALF_PAID' ||
-      paymentStatus === (PaymentStatus.HALF_PAID as unknown) ||
-      String(paymentStatus) === 'ADVANCE_PAYMENT' ||
-      paymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown)
+      String(paymentStatus) === 'ADVANCE_PAYMENT'
     ) {
       intendedPaid = Number(paidAmount) || 0;
+    } else if (isKuickpay && total > 0) {
+      // Fallback for Kuickpay: if no status set, assume full payment for voucher generation
+      intendedPaid = total;
     }
 
     const paid = intendedPaid;
     const owed = total - paid;
 
-    const isKuickpay = (paymentMode === (PaymentMode as any).KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY');
-    const isOnline = (paymentMode === (PaymentMode as any).ONLINE || String(paymentMode).toUpperCase() === 'ONLINE');
-
+    
     const isHalfPaid =
       String(paymentStatus) === 'HALF_PAID' ||
       paymentStatus === (PaymentStatus.HALF_PAID as unknown);
@@ -6404,7 +6495,7 @@ export class BookingService {
         data: {
           consumer_number: generateConsumerNumber(Number(vno)),
           voucher_no: vno,
-          booking_type: 'AFF_ROOM',
+          booking_type: BookingType.AFF_ROOM,
           booking_id: booking.id,
           membership_no: `AFFILIATED (${affiliatedMembershipNo})`,
           amount: intendedPaid,
@@ -6585,8 +6676,11 @@ export class BookingService {
     const isKuickpay = (paymentMode as any) === PaymentMode.KUICKPAY || String(paymentMode).toUpperCase() === 'KUICKPAY';
     const isOnline = (paymentMode as any) === PaymentMode.ONLINE || String(paymentMode).toUpperCase() === 'ONLINE';
 
-    let newPaymentStatus: PaymentStatus = currStatus;
-    if (!isKuickpay || (paidAmount === undefined && totalPrice === undefined)) {
+    let newPaymentStatus: PaymentStatus;
+    if (isKuickpay && paidAmount !== undefined) {
+      // For Kuickpay updates with new payment, preserve current status until confirmed
+      newPaymentStatus = currStatus;
+    } else {
       newPaymentStatus = (paymentStatus as unknown as PaymentStatus) || currStatus;
     }
 
@@ -6596,13 +6690,18 @@ export class BookingService {
     const isExplicitPaidAmount = paidAmount !== undefined;
     if (String(newPaymentStatus) === 'PAID') {
       newPaid = isExplicitPaidAmount ? Number(paidAmount) : Math.max(newTotal, currPaid);
+    } else if (isKuickpay && isExplicitPaidAmount) {
+      // For Kuickpay, respect the explicit payment amount even if status is UNPAID or preserved
+      newPaid = Number(paidAmount);
     } else if (String(newPaymentStatus) === 'UNPAID') {
       newPaid = 0;
-    } else {
-      newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
+    } else if (String(newPaymentStatus) === 'TO_BILL' || newPaymentStatus === (PaymentStatus.TO_BILL as unknown)) {
+      newPaid = currPaid;
+    } else if (isExplicitPaidAmount) {
+      newPaid = Number(paidAmount);
     }
 
-    const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID' || newPaymentStatus === (PaymentStatus.HALF_PAID as unknown);
+    const isHalfPaid = String(newPaymentStatus) === 'HALF_PAID';
     const newOwed = newTotal - newPaid;
 
     // Only stagnate db ledger for KUICKPAY. Manual ONLINE payments update immediately.
@@ -6613,6 +6712,24 @@ export class BookingService {
 
     let bookingPaidAmount = dbPaid;
     let bookingPendingAmount = newTotal - dbPaid;
+
+    // ── EXPIRE OLD KUICKPAY VOUCHERS ──────────────────────────
+    if (isKuickpay && newPaid > currPaid) {
+      await this.prismaService.paymentVoucher.updateMany({
+        where: {
+          booking_id: booking.id,
+          booking_type: BookingType.AFF_ROOM,
+          payment_mode: PaymentMode.KUICKPAY,
+          status: VoucherStatus.PENDING,
+        },
+        data: {
+          status: VoucherStatus.EXPIRED,
+          remarks: {
+            set: 'Expired due to updated booking/new voucher generation'
+          }
+        } as any,
+      });
+    }
 
     // ── VOUCHER HANDLING ────────────────────────────────────
     // Determine if a new payment amount was provided
@@ -6660,111 +6777,111 @@ export class BookingService {
 
     // ── PRICE DECREASE SETTLEMENT ────────────────────────────
     // When total decreases, treat the diff as a virtual payment instead of a refund.
-    if (newTotal < currTotal) {
-      const diffAmount = currTotal - newTotal;
-      const currPendingVal = Number(booking.pendingAmount) || 0;
+    // if (newTotal < currTotal) {
+    //   const diffAmount = currTotal - newTotal;
+    //   const currPendingVal = Number(booking.pendingAmount) || 0;
 
-      // Step 0: Absorb any prior negative pending (club owes member)
-      let effectiveDiff = diffAmount;
-      let adjustedPending = currPendingVal;
+    //   // Step 0: Absorb any prior negative pending (club owes member)
+    //   let effectiveDiff = diffAmount;
+    //   let adjustedPending = currPendingVal;
 
-      if (currPendingVal < 0) {
-        effectiveDiff = diffAmount + currPendingVal; // currPendingVal is negative, so subtracts
-        adjustedPending = 0;
-      }
+    //   if (currPendingVal < 0) {
+    //     effectiveDiff = diffAmount + currPendingVal; // currPendingVal is negative, so subtracts
+    //     adjustedPending = 0;
+    //   }
 
-      const affMembershipLabel = `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`;
+    //   const affMembershipLabel = `AFFILIATED (${affiliatedMembershipNo ?? booking.affiliatedMembershipNo})`;
 
-      if (effectiveDiff <= 0) {
-        // Decrease fully absorbed by prior owed balance
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = 'PAID' as unknown as PaymentStatus;
-      } else if (effectiveDiff === adjustedPending) {
-        // Case A: decrease exactly covers pending → FULL_PAYMENT
-        const vno = generateNumericVoucherNo();
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            consumer_number: generateConsumerNumber(Number(vno)),
-            voucher_no: vno,
-            booking_type: BookingType.ROOM,
-            booking_id: booking.id,
-            membership_no: affMembershipLabel,
-            amount: effectiveDiff,
-            payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-            voucher_type: VoucherType.FULL_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
-            issued_by: updatedBy || 'admin',
-            paid_at: new Date(),
-            remarks: `AFFILIATED Price decrease settlement (FULL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
-          } as any,
-        });
-        await this.appendUpdateRemarkToHistoricalVouchers(
-          booking.id,
-          BookingType.ROOM,
-          `Settled by voucher ${vno}`,
-        );
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
-      } else if (effectiveDiff < adjustedPending) {
-        // Case B: decrease covers part of pending → HALF_PAYMENT
-        const vno = generateNumericVoucherNo();
-        await this.prismaService.paymentVoucher.create({
-          data: {
-            consumer_number: generateConsumerNumber(Number(vno)),
-            voucher_no: vno,
-            booking_type: BookingType.ROOM,
-            booking_id: booking.id,
-            membership_no: affMembershipLabel,
-            amount: effectiveDiff,
-            payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-            voucher_type: VoucherType.HALF_PAYMENT,
-            status: VoucherStatus.CONFIRMED,
-            issued_by: updatedBy || 'admin',
-            paid_at: new Date(),
-            remarks: `AFFILIATED Price decrease settlement (PARTIAL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
-          } as any,
-        });
-        await this.appendUpdateRemarkToHistoricalVouchers(
-          booking.id,
-          BookingType.ROOM,
-          `Adjusted by settlement voucher ${vno}`,
-        );
-        bookingPaidAmount = dbPaid;
-        bookingPendingAmount = newTotal - dbPaid;
-        newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
-      } else {
-        // Case C: decrease exceeds pending → FULL_PAYMENT for pending, negative pending for owed
-        if (adjustedPending > 0) {
-          const vno = generateNumericVoucherNo();
-          await this.prismaService.paymentVoucher.create({
-            data: {
-              consumer_number: generateConsumerNumber(Number(vno)),
-              voucher_no: vno,
-              booking_type: BookingType.ROOM,
-              booking_id: booking.id,
-              membership_no: affMembershipLabel,
-              amount: adjustedPending,
-              payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
-              voucher_type: VoucherType.FULL_PAYMENT,
-              status: VoucherStatus.CONFIRMED,
-              issued_by: updatedBy || 'admin',
-              paid_at: new Date(),
-              remarks: `AFFILIATED Price decrease settlement (FULL+OWED) - Total reduced from ${currTotal} to ${newTotal} | Owed to member: ${effectiveDiff - adjustedPending} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
-            } as any,
-          });
-          await this.appendUpdateRemarkToHistoricalVouchers(
-            booking.id,
-            BookingType.ROOM,
-            `Settled by voucher ${vno}`,
-          );
-        }
-        bookingPaidAmount = dbPaid; // Keep actual cash received
-        bookingPendingAmount = newTotal - dbPaid; // negative = club owes member
-        newPaymentStatus = 'PAID' as unknown as PaymentStatus;
-      }
-    }
+    //   if (effectiveDiff <= 0) {
+    //     // Decrease fully absorbed by prior owed balance
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = 'PAID' as unknown as PaymentStatus;
+    //   } else if (effectiveDiff === adjustedPending) {
+    //     // Case A: decrease exactly covers pending → FULL_PAYMENT
+    //     const vno = generateNumericVoucherNo();
+    //     await this.prismaService.paymentVoucher.create({
+    //       data: {
+    //         consumer_number: generateConsumerNumber(Number(vno)),
+    //         voucher_no: vno,
+    //         booking_type: BookingType.AFF_ROOM,
+    //         booking_id: booking.id,
+    //         membership_no: affMembershipLabel,
+    //         amount: effectiveDiff,
+    //         payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //         voucher_type: VoucherType.FULL_PAYMENT,
+    //         status: VoucherStatus.CONFIRMED,
+    //         issued_by: updatedBy || 'admin',
+    //         paid_at: new Date(),
+    //         remarks: `AFFILIATED Price decrease settlement (FULL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
+    //       } as any,
+    //     });
+    //     await this.appendUpdateRemarkToHistoricalVouchers(
+    //       booking.id,
+    //       BookingType.AFF_ROOM,
+    //       `Settled by voucher ${vno}`,
+    //     );
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
+    //   } else if (effectiveDiff < adjustedPending) {
+    //     // Case B: decrease covers part of pending → HALF_PAYMENT
+    //     const vno = generateNumericVoucherNo();
+    //     await this.prismaService.paymentVoucher.create({
+    //       data: {
+    //         consumer_number: generateConsumerNumber(Number(vno)),
+    //         voucher_no: vno,
+    //         booking_type: BookingType.AFF_ROOM,
+    //         booking_id: booking.id,
+    //         membership_no: affMembershipLabel,
+    //         amount: effectiveDiff,
+    //         payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //         voucher_type: VoucherType.HALF_PAYMENT,
+    //         status: VoucherStatus.CONFIRMED,
+    //         issued_by: updatedBy || 'admin',
+    //         paid_at: new Date(),
+    //         remarks: `AFFILIATED Price decrease settlement (PARTIAL) - Total reduced from ${currTotal} to ${newTotal} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
+    //       } as any,
+    //     });
+    //     await this.appendUpdateRemarkToHistoricalVouchers(
+    //       booking.id,
+    //       BookingType.AFF_ROOM,
+    //       `Adjusted by settlement voucher ${vno}`,
+    //     );
+    //     bookingPaidAmount = dbPaid;
+    //     bookingPendingAmount = newTotal - dbPaid;
+    //     newPaymentStatus = (newTotal - dbPaid) <= 0 ? 'PAID' as unknown as PaymentStatus : 'HALF_PAID' as unknown as PaymentStatus;
+    //   } else {
+    //     // Case C: decrease exceeds pending → FULL_PAYMENT for pending, negative pending for owed
+    //     if (adjustedPending > 0) {
+    //       const vno = generateNumericVoucherNo();
+    //       await this.prismaService.paymentVoucher.create({
+    //         data: {
+    //           consumer_number: generateConsumerNumber(Number(vno)),
+    //           voucher_no: vno,
+    //           booking_type: BookingType.AFF_ROOM,
+    //           booking_id: booking.id,
+    //           membership_no: affMembershipLabel,
+    //           amount: adjustedPending,
+    //           payment_mode: isKuickpay ? PaymentMode.KUICKPAY : (isOnline ? PaymentMode.ONLINE : (paymentMode as PaymentMode) || PaymentMode.CASH),
+    //           voucher_type: VoucherType.FULL_PAYMENT,
+    //           status: VoucherStatus.CONFIRMED,
+    //           issued_by: updatedBy || 'admin',
+    //           paid_at: new Date(),
+    //           remarks: `AFFILIATED Price decrease settlement (FULL+OWED) - Total reduced from ${currTotal} to ${newTotal} | Owed to member: ${effectiveDiff - adjustedPending} | Rooms: ${roomNumbers} | Club ID: ${affiliatedClubId ?? booking.affiliatedClubId}`,
+    //         } as any,
+    //       });
+    //       await this.appendUpdateRemarkToHistoricalVouchers(
+    //         booking.id,
+    //         BookingType.AFF_ROOM,
+    //         `Settled by voucher ${vno}`,
+    //       );
+    //     }
+    //     bookingPaidAmount = dbPaid; // Keep actual cash received
+    //     bookingPendingAmount = newTotal - dbPaid; // negative = club owes member
+    //     newPaymentStatus = 'PAID' as unknown as PaymentStatus;
+    //   }
+    // }
 
     // Removed TO_BILL voucher creation for update
 
@@ -6783,11 +6900,11 @@ export class BookingService {
         } : undefined,
         checkIn: newCheckIn,
         checkOut: newCheckOut,
-        totalPrice: newTotal,
+        totalPrice: Number(newTotal),
         paymentStatus: newPaymentStatus,
         paymentMode: paymentMode ?? booking.paymentMode,
-        paidAmount: bookingPaidAmount,
-        pendingAmount: bookingPendingAmount,
+        paidAmount: Number(bookingPaidAmount),
+        pendingAmount: Number(bookingPendingAmount),
         numberOfAdults: numberOfAdults ?? booking.numberOfAdults,
         numberOfChildren: numberOfChildren ?? booking.numberOfChildren,
         specialRequests: specialRequests ?? booking.specialRequests,

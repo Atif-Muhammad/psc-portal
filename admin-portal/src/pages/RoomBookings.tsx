@@ -577,10 +577,12 @@ export default function RoomBookings() {
         checkOut: editBooking.checkOut
           ? convertToDateTimeLocal(editBooking.checkOut)
           : "",
-        totalPrice: editBooking.totalPrice || 0,
-        paymentStatus: editBooking.paymentStatus || "UNPAID",
-        paidAmount: editBooking.paidAmount || 0,
-        pendingAmount: editBooking.pendingAmount || 0,
+        totalPrice: Number(editBooking.totalPrice) || 0,
+        paymentStatus: "", // Default to empty to avoid confusing the user
+        paidAmount: Number(editBooking.paidAmount) || 0,
+        existingPaidAmount: Number(editBooking.paidAmount) || 0,
+        newPaymentAmount: 0,
+        pendingAmount: Number(editBooking.pendingAmount) || 0,
         paymentMode: editBooking.paymentMode || "CASH",
         card_number: editBooking.card_number || "",
         check_number: editBooking.check_number || "",
@@ -737,11 +739,17 @@ export default function RoomBookings() {
             if (newPrice > oldTotal) {
               // PRICE INCREASE
               if (oldPaymentStatus === "PAID") {
-                // Was Fully Paid -> Downgrade to HALF_PAID since more is now owed
-                newForm.paymentStatus = "HALF_PAID";
+                // Was Fully Paid -> Downgrade to HALF_PAID ONLY IF more is now owed than already paid
+                if (newPrice > oldPaid) {
+                  newForm.paymentStatus = "HALF_PAID";
+                } else {
+                  newForm.paymentStatus = "PAID";
+                }
               }
               // Preserve existing paid amount, recalculate pending
               newForm.paidAmount = oldPaid;
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
               newForm.pendingAmount = newPrice - oldPaid;
             } else if (newPrice < oldTotal) {
               // PRICE DECREASE (Settlement Case Logic)
@@ -776,9 +784,13 @@ export default function RoomBookings() {
                 newForm.paidAmount = oldPaid; // Keep actual cash received
                 newForm.pendingAmount = newPrice - oldPaid; // negative = club owes member
               }
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
             } else {
               // Total Price stayed exactly the same (rare if fields changed)
               newForm.paidAmount = oldPaid;
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
               newForm.pendingAmount = newPrice - oldPaid;
               newForm.paymentStatus = oldPaymentStatus;
             }
@@ -797,21 +809,38 @@ export default function RoomBookings() {
         if (field === "paymentStatus") {
           // If manually changing status to PAID, auto-fill paidAmount
           if (value === "PAID") {
-            newForm.paidAmount = newForm.totalPrice;
+            const neededNewPayment = Math.max(0, Number(newForm.totalPrice) - (Number(newForm.existingPaidAmount) || 0));
+            newForm.newPaymentAmount = neededNewPayment;
+            newForm.paidAmount = Number(newForm.totalPrice);
             newForm.pendingAmount = 0;
           } else if (value === "UNPAID") {
-            newForm.paidAmount = 0;
-            newForm.pendingAmount = newForm.totalPrice;
+            newForm.newPaymentAmount = 0;
+            // Note: existingPaidAmount stays as is, because it's already in the system
+            newForm.paidAmount = Number(newForm.existingPaidAmount) || 0;
+            newForm.pendingAmount = Number(newForm.totalPrice) - newForm.paidAmount;
           } else if (value === "HALF_PAID") {
             // Keep existing paid amount if possible
-            newForm.pendingAmount = newForm.totalPrice - newForm.paidAmount;
+            newForm.pendingAmount = Number(newForm.totalPrice) - Number(newForm.paidAmount);
           } else if (value === "TO_BILL") {
             newForm.pendingAmount = 0; // In UI, TO_BILL clears pending as it goes to ledger
           }
         }
 
+        if (field === "newPaymentAmount") {
+          const newAmt = Number(value) || 0;
+          newForm.paidAmount = (Number(newForm.existingPaidAmount) || 0) + newAmt;
+          newForm.pendingAmount = Number(newForm.totalPrice) - newForm.paidAmount;
+
+          // Auto-adjust status if full amount reached
+          if (Number(newForm.paidAmount) >= Number(newForm.totalPrice) && newForm.paymentStatus !== "PAID") {
+            newForm.paymentStatus = "PAID";
+          } else if (!isEdit && Number(newForm.paidAmount) > 0 && Number(newForm.paidAmount) < Number(newForm.totalPrice) && newForm.paymentStatus !== "HALF_PAID") {
+            newForm.paymentStatus = "HALF_PAID";
+          }
+        }
+
         if (field === "paidAmount" && newForm.paymentStatus === "HALF_PAID") {
-          newForm.pendingAmount = newForm.totalPrice - value;
+          newForm.pendingAmount = Number(newForm.totalPrice) - Number(value);
         }
 
         return newForm;
@@ -866,7 +895,12 @@ export default function RoomBookings() {
         if (newTotal > originalTotal) {
           // PRICE INCREASE
           if (originalStatus === "PAID") {
-            newStatus = "HALF_PAID";
+            // Only downgrade if the new price actually exceeds what was already paid
+            if (newTotal > originalPaid) {
+              newStatus = "HALF_PAID";
+            } else {
+              newStatus = "PAID";
+            }
           }
           newPaid = originalPaid;
           newPending = newTotal - originalPaid;
@@ -921,6 +955,8 @@ export default function RoomBookings() {
         totalPrice: newTotal,
         paymentStatus: newStatus,
         paidAmount: newPaid,
+        existingPaidAmount: isEdit ? (Number(editBooking?.paidAmount) || 0) : 0,
+        newPaymentAmount: isEdit ? (newPaid - (Number(editBooking?.paidAmount) || 0)) : newPaid,
         pendingAmount: newPending,
         advanceVoucherAmount: calculateAdvance(newIds.length, newTotal, newPaid)
       }
@@ -1052,7 +1088,7 @@ export default function RoomBookings() {
       checkIn: editForm.checkIn.split("T")[0],
       checkOut: editForm.checkOut.split("T")[0],
       totalPrice: editForm.totalPrice.toString(),
-      paymentStatus: editForm.paymentStatus,
+      paymentStatus: editForm.paymentStatus || editBooking?.paymentStatus || "UNPAID",
       paidAmount: editForm.paidAmount,
       pendingAmount: editForm.pendingAmount,
       paymentMode: editForm.paymentMode,

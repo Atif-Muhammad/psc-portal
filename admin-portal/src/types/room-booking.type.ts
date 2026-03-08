@@ -133,8 +133,10 @@ export interface BookingForm {
   checkIn: string;
   checkOut: string;
   totalPrice: number;
-  paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL" | "ADVANCE_PAYMENT";
+  paymentStatus: "UNPAID" | "HALF_PAID" | "PAID" | "TO_BILL" | "ADVANCE_PAYMENT" | "";
   paidAmount: number;
+  existingPaidAmount?: number;
+  newPaymentAmount?: number;
   pendingAmount: number;
   paymentMode: "CASH" | "CARD" | "CHECK" | "ONLINE" | "KUICKPAY";
   card_number?: string;

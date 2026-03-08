@@ -167,6 +167,7 @@ export class PaymentService {
       !voucher ||
       voucher.voucher_type === VoucherType.REFUND ||
       voucher.status === VoucherStatus.CANCELLED ||
+      voucher.status === VoucherStatus.EXPIRED ||
       voucher.voucher_type === VoucherType.TO_BILL ||
       voucher.voucher_type === VoucherType.ADJUSTMENT
     ) {
@@ -231,7 +232,7 @@ export class PaymentService {
 
     let billStatus: 'U' | 'P' | 'B' | 'T' = 'U';
     if (voucher.status === VoucherStatus.CONFIRMED) billStatus = 'P';
-    else if (voucher.status === VoucherStatus.CANCELLED as string)
+    else if (voucher.status === VoucherStatus.CANCELLED as string || voucher.status === VoucherStatus.EXPIRED as string)
       billStatus = 'B';
 
     const amountStr = this.formatAmountForKuickpay(
@@ -315,7 +316,7 @@ export class PaymentService {
         };
       }
       // Check if voucher is a REFUND voucher - should not be payable
-      if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED) {
+      if (voucher.voucher_type === VoucherType.REFUND || voucher.status === VoucherStatus.CANCELLED || voucher.status === VoucherStatus.EXPIRED) {
         // if (voucher.voucher_type === VoucherType.REFUND) {
         return {
           response_Code: '01',

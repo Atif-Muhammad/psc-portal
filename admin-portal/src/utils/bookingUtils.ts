@@ -280,6 +280,8 @@ export const initialFormState: BookingForm = {
   totalPrice: 0,
   paymentStatus: "UNPAID",
   paidAmount: 0,
+  existingPaidAmount: 0,
+  newPaymentAmount: 0,
   pendingAmount: 0,
   paymentMode: "CASH",
   card_number: "",

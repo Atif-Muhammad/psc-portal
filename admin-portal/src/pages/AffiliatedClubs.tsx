@@ -264,9 +264,11 @@ export default function AffiliatedClubs() {
       numberOfAdults: booking.numberOfAdults || 1,
       numberOfChildren: booking.numberOfChildren || 0,
       specialRequests: booking.specialRequests || "",
-      paymentStatus: booking.paymentStatus as Booking["paymentStatus"],
+      paymentStatus: "", // Default to empty to avoid confusing the user
       paymentMode: (booking.paymentMode as Booking["paymentMode"]) || "CASH",
       paidAmount: Number(booking.paidAmount),
+      existingPaidAmount: Number(booking.paidAmount),
+      newPaymentAmount: 0,
       totalPrice: Number(booking.totalPrice),
       card_number: booking.card_number || "",
       check_number: booking.check_number || "",
@@ -275,6 +277,7 @@ export default function AffiliatedClubs() {
       paid_at: booking.paid_at ? format(new Date(booking.paid_at), "yyyy-MM-dd'T'HH:mm") : "",
       pricingType: "guest",
       paidBy: "GUEST",
+      heads: (booking as any).extraCharges || [],
     });
     setAffClubId(booking.affiliatedClubId?.toString() || "");
     setAffMembershipNo(booking.affiliatedMembershipNo || "");
@@ -383,6 +386,7 @@ export default function AffiliatedClubs() {
       id: editBooking.id,
       data: {
         ...sanitizeAffPayload(editForm),
+        paymentStatus: editForm.paymentStatus || editBooking.paymentStatus || "UNPAID",
         id: editBooking.id, // Update DTO requires id in body
       },
     });
@@ -403,27 +407,78 @@ export default function AffiliatedClubs() {
             newForm.checkOut,
             roomTypes
           );
-          const totalPrice = basePrice * selectedRoomIds.length;
+          const headsTotal = newForm.heads.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0);
+          const totalPrice = (basePrice * selectedRoomIds.length) + headsTotal;
+          const oldTotal = Number(prev.totalPrice) || 0;
+          const oldPaid = Number(prev.paidAmount) || 0;
+          const oldPending = Number(prev.pendingAmount) || 0;
+          const oldPaymentStatus = prev.paymentStatus;
+
           newForm.totalPrice = totalPrice;
-          const { pendingAmount } = calculateAccountingValues(newForm.paymentStatus, totalPrice, newForm.paidAmount);
-          newForm.pendingAmount = pendingAmount;
+
+          // Maintain the same price increase/decrease logic as RoomBookings.tsx
+          if (isEdit) {
+            if (totalPrice > oldTotal) {
+              if (oldPaymentStatus === "PAID") {
+                // Only downgrade if the new price actually exceeds what was already paid
+                if (totalPrice > oldPaid) {
+                  newForm.paymentStatus = "HALF_PAID";
+                } else {
+                  newForm.paymentStatus = "PAID";
+                }
+              }
+              newForm.paidAmount = oldPaid;
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
+              newForm.pendingAmount = totalPrice - oldPaid;
+            } else if (totalPrice < oldTotal) {
+              newForm.paidAmount = oldPaid;
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
+              newForm.pendingAmount = totalPrice - oldPaid;
+              if (newForm.pendingAmount <= 0) newForm.paymentStatus = "PAID";
+            } else {
+              newForm.paidAmount = oldPaid;
+              newForm.existingPaidAmount = oldPaid;
+              newForm.newPaymentAmount = 0;
+              newForm.pendingAmount = totalPrice - oldPaid;
+            }
+          } else {
+            const { pendingAmount } = calculateAccountingValues(newForm.paymentStatus, totalPrice, newForm.paidAmount);
+            newForm.pendingAmount = pendingAmount;
+          }
+        }
+      }
+
+      if (field === "newPaymentAmount") {
+        const newAmt = Number(value) || 0;
+        newForm.paidAmount = (Number(newForm.existingPaidAmount) || 0) + newAmt;
+        newForm.pendingAmount = Number(newForm.totalPrice) - newForm.paidAmount;
+
+        if (newForm.paidAmount >= Number(newForm.totalPrice) && newForm.paymentStatus !== "PAID") {
+          newForm.paymentStatus = "PAID";
+        } else if (!editBooking && newForm.paidAmount > 0 && newForm.paidAmount < Number(newForm.totalPrice) && newForm.paymentStatus !== "HALF_PAID") {
+          newForm.paymentStatus = "HALF_PAID";
         }
       }
 
       if (field === "paidAmount") {
-        const { pendingAmount } = calculateAccountingValues(newForm.paymentStatus, newForm.totalPrice, Number(value));
+        const { pendingAmount } = calculateAccountingValues(newForm.paymentStatus, Number(newForm.totalPrice), Number(value));
         newForm.pendingAmount = pendingAmount;
       }
 
       if (field === "paymentStatus") {
         if (value === "PAID") {
-          newForm.paidAmount = newForm.totalPrice;
+          const neededNewPayment = Math.max(0, Number(newForm.totalPrice) - (Number(newForm.existingPaidAmount) || 0));
+          newForm.newPaymentAmount = neededNewPayment;
+          newForm.paidAmount = Number(newForm.totalPrice);
           newForm.pendingAmount = 0;
         } else if (value === "UNPAID") {
-          newForm.paidAmount = 0;
-          newForm.pendingAmount = newForm.totalPrice;
+          newForm.newPaymentAmount = 0;
+          newForm.paidAmount = Number(newForm.existingPaidAmount) || 0;
+          newForm.pendingAmount = Number(newForm.totalPrice) - newForm.paidAmount;
         } else if (value === "HALF_PAID" || value === "ADVANCE_PAYMENT") {
-          newForm.pendingAmount = newForm.totalPrice - newForm.paidAmount;
+          newForm.pendingAmount = Number(newForm.totalPrice) - Number(newForm.paidAmount);
         }
       }
 
@@ -437,9 +492,18 @@ export default function AffiliatedClubs() {
 
       const updateForm = (f: BookingForm) => {
         const basePrice = calculatePrice(f.roomTypeId, "guest", f.checkIn, f.checkOut, roomTypes);
-        const newTotal = basePrice * newIds.length;
+        const headsTotal = f.heads.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0);
+        const newTotal = (basePrice * newIds.length) + headsTotal;
+        const isEdit = !!editBooking;
         const { paid, pendingAmount } = calculateAccountingValues(f.paymentStatus, newTotal, f.paidAmount);
-        return { ...f, totalPrice: newTotal, paidAmount: paid, pendingAmount };
+        return {
+          ...f,
+          totalPrice: newTotal,
+          paidAmount: paid,
+          existingPaidAmount: isEdit ? (Number(editBooking?.paidAmount) || 0) : 0,
+          newPaymentAmount: isEdit ? (paid - (Number(editBooking?.paidAmount) || 0)) : paid,
+          pendingAmount
+        };
       };
 
       if (editBooking) setEditForm(prevF => updateForm(prevF));

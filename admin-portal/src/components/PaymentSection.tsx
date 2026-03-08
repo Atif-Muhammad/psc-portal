@@ -24,34 +24,41 @@ export const PaymentSection = React.memo(({
 }: PaymentSectionProps) => {
   // Calculate accounting values in real-time
   const calculateRealTimeAccounting = () => {
-    const total = form.totalPrice || 0;
-    const paid = form.paidAmount || 0;
+    const total = Number(form.totalPrice) || 0;
+    const existingPaid = Number(form.existingPaidAmount) || 0;
+    const newPaid = Number(form.newPaymentAmount) || 0;
+    const totalPaid = existingPaid + newPaid;
+
     // Use form.pendingAmount if it's negative (club owes member), otherwise calculate
     let pending = form.pendingAmount !== undefined && form.pendingAmount < 0
       ? form.pendingAmount
-      : total - paid;
+      : total - totalPaid;
 
     return {
       total,
-      paid,
+      existingPaid,
+      newPaid,
+      totalPaid,
       pending
     };
   };
 
   const accounting = calculateRealTimeAccounting();
 
-  const handlePaidAmountChange = (value: number) => {
-    console.log('Real-time paid amount change:', value);
+  const handleNewPaymentChange = (value: number) => {
+    // Update new payment amount immediately
+    onChange("newPaymentAmount", value);
 
-    // Update paid amount immediately
-    onChange("paidAmount", value);
+    // Update consolidated paid amount (existing + new)
+    const updatedTotalPaid = (Number(form.existingPaidAmount) || 0) + Number(value);
+    onChange("paidAmount", updatedTotalPaid);
 
-    // Auto-update payment status based on amount
-    if (value === accounting.total && form.paymentStatus !== "PAID") {
+    // Auto-update payment status based on total paid vs total price
+    if (updatedTotalPaid === accounting.total && form.paymentStatus !== "PAID") {
       onChange("paymentStatus", "PAID");
-    } else if (value > 0 && value < accounting.total && form.paymentStatus !== "HALF_PAID") {
+    } else if (updatedTotalPaid > 0 && updatedTotalPaid < accounting.total && form.paymentStatus !== "HALF_PAID") {
       onChange("paymentStatus", "HALF_PAID");
-    } else if (value === 0 && form.paymentStatus !== "UNPAID") {
+    } else if (updatedTotalPaid === 0 && form.paymentStatus !== "UNPAID") {
       onChange("paymentStatus", "UNPAID");
     }
   };
@@ -72,7 +79,7 @@ export const PaymentSection = React.memo(({
           const roomRentOnly = Math.max(0, accounting.total - headsTotal);
 
           const adv = calculateAdvanceDetails(roomCount, roomRentOnly);
-          const remainingAdv = adv.requiredAmount - accounting.paid;
+          const remainingAdv = adv.requiredAmount - accounting.totalPaid;
 
           return (
             <div className="space-y-2">
@@ -92,9 +99,9 @@ export const PaymentSection = React.memo(({
                 <div className="flex items-center gap-1">
                   <span className="text-purple-700">Paid:</span>
                   <span
-                    className={`font-bold ${accounting.paid >= adv.requiredAmount ? "text-green-700" : "text-purple-700"}`}
+                    className={`font-bold ${accounting.totalPaid >= adv.requiredAmount ? "text-green-700" : "text-purple-700"}`}
                   >
-                    PKR {accounting.paid.toLocaleString()}
+                    PKR {accounting.totalPaid.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -132,7 +139,7 @@ export const PaymentSection = React.memo(({
           onValueChange={(val) => onChange("paymentStatus", val)}
         >
           <SelectTrigger className="mt-2">
-            <SelectValue />
+            <SelectValue placeholder="Select Status..." />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="UNPAID">Unpaid</SelectItem>
@@ -145,18 +152,28 @@ export const PaymentSection = React.memo(({
       </div>
 
       {/* Show paid amount input for all statuses */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
         <div>
-          <Label>Paid Amount (PKR) *</Label>
+          <Label>Existing Paid Amount (PKR)</Label>
+          <Input
+            type="text"
+            className="mt-2 font-semibold bg-gray-100"
+            value={(form.existingPaidAmount || 0).toLocaleString()}
+            disabled
+            readOnly
+          />
+        </div>
+        <div>
+          <Label>New Payment Amount (PKR)</Label>
           <PaidAmountInput
-            value={form.paidAmount || 0}
-            onChange={handlePaidAmountChange}
-            max={accounting.total}
-            disabled={form.paymentStatus === "PAID"}
+            value={form.newPaymentAmount || 0}
+            onChange={handleNewPaymentChange}
+            max={accounting.total - (form.existingPaidAmount || 0)}
+            disabled={form.paymentStatus === "PAID" && (form.existingPaidAmount || 0) >= accounting.total}
           />
           {form.paymentStatus === "HALF_PAID" && (
             <div className="text-xs text-muted-foreground mt-1">
-              Enter amount between 1 and {accounting.total - 1}
+              Enter amount between 1 and {accounting.total - (form.existingPaidAmount || 0) - 1}
             </div>
           )}
         </div>
@@ -284,22 +301,38 @@ export const PaymentSection = React.memo(({
         </Label>
         <div className="flex flex-wrap gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-blue-700">Total:</span>
+            <span className="text-blue-700">Total Price:</span>
             <span className="font-semibold text-blue-700">
               PKR {accounting.total.toLocaleString()}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-green-700">Paid (DR):</span>
-            <span className="font-semibold text-green-700">
-              PKR {accounting.paid.toLocaleString()}
+            <span className="text-slate-600">Existing Paid:</span>
+            <span className="font-semibold text-slate-700">
+              PKR {accounting.existingPaid.toLocaleString()}
+            </span>
+          </div>
+
+          {accounting.newPaid > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-orange-600">New Payment:</span>
+              <span className="font-semibold text-orange-700">
+                + PKR {accounting.newPaid.toLocaleString()}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 border-l pl-4 border-blue-200">
+            <span className="text-green-700">Total Paid (DR):</span>
+            <span className="font-bold text-green-700">
+              PKR {accounting.totalPaid.toLocaleString()}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-red-700">Pending (CR):</span>
-            <span className="font-semibold text-red-700">
+            <span className="font-bold text-red-700">
               PKR {accounting.pending.toLocaleString()}
             </span>
           </div>
