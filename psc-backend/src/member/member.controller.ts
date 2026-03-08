@@ -44,8 +44,7 @@ export class MemberController {
     return this.member.createBulk(payload, adminName);
   }
 
-  @UseGuards(JwtAccGuard, RolesGuard)
-  @Roles(RolesEnum.SUPER_ADMIN, RolesEnum.ADMIN)
+  @UseGuards(JwtAccGuard)
   @Patch('update/member')
   async updateMember(
     @Query('memberID') memberID: string,
