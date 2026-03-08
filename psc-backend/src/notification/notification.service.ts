@@ -434,7 +434,7 @@ export class NotificationService {
     });
   }
 
-  async notifyBooking(memberNo: string, title: string, description: string) {
+  async notifyMember(memberNo: string, title: string, description: string) {
     try {
       const member = await this.prisma.member.findUnique({
         where: { Membership_No: memberNo },
@@ -459,7 +459,7 @@ export class NotificationService {
 
       // 3. Send Email immediately
       if (member.Email) {
-        // Basic template for booking ping
+        // Basic template
         const html = `
           <div style="font-family: sans-serif; padding: 20px; color: #333;">
             <h2 style="color: #0056b3;">${title}</h2>
@@ -474,7 +474,7 @@ export class NotificationService {
         await this.mailerService.sendMail(member.Email, [], title, html);
       }
     } catch (error) {
-      console.error('Failed to notify booking:', error);
+      console.error('Failed to notify member:', error);
     }
   }
 }

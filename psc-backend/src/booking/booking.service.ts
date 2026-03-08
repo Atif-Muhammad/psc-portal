@@ -641,7 +641,7 @@ export class BookingService {
       where: { roomId: { in: roomIdsToBook }, holdBy: membershipNo.toString() },
     });
 
-    this.notificationService.notifyBooking(
+    this.notificationService.notifyMember(
       membershipNo,
       'Room Booking Confirmation',
       `New Room Booking: ${roomNumbers} from ${formatPakistanDate(checkInDate)} to ${formatPakistanDate(checkOutDate)}`
@@ -2123,7 +2123,7 @@ export class BookingService {
       },
     });
 
-    this.notificationService.notifyBooking(
+    this.notificationService.notifyMember(
       booking.Membership_No,
       'Room Booking Cancellation Request Received',
       'We have received your request to cancel your room booking. Our team will review it and get back to you shortly.'
@@ -2157,7 +2157,7 @@ export class BookingService {
       });
 
       if (booking) {
-        this.notificationService.notifyBooking(
+        this.notificationService.notifyMember(
           booking.Membership_No,
           `Room Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
           `Your request to cancel the room booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
@@ -2188,7 +2188,7 @@ export class BookingService {
       });
 
       if (booking?.member) {
-        this.notificationService.notifyBooking(
+        this.notificationService.notifyMember(
           booking.member.Membership_No,
           `Hall Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
           `Your request to cancel the hall booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
@@ -2219,7 +2219,7 @@ export class BookingService {
       });
 
       if (booking?.member) {
-        this.notificationService.notifyBooking(
+        this.notificationService.notifyMember(
           booking.member.Membership_No,
           `Lawn Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
           `Your request to cancel the lawn booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
@@ -2250,7 +2250,7 @@ export class BookingService {
       });
 
       if (booking?.member) {
-        this.notificationService.notifyBooking(
+        this.notificationService.notifyMember(
           booking.member.Membership_No,
           `Photoshoot Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
           `Your request to cancel the photoshoot booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
@@ -2281,7 +2281,7 @@ export class BookingService {
       });
 
       if (booking) {
-        this.notificationService.notifyBooking(
+        this.notificationService.notifyMember(
           booking.affiliatedMembershipNo,
           `Affiliated Club Room Booking Cancellation ${status === 'APPROVED' ? 'Approved' : 'Rejected'}`,
           `Your request to cancel the affiliated club room booking has been ${status.toLowerCase()}. ${remarks ? `Remarks: ${remarks}` : ''}`
@@ -3213,7 +3213,7 @@ export class BookingService {
         where: { hallId: hall.id, holdBy: membershipNo.toString() },
       });
 
-      this.notificationService.notifyBooking(
+      this.notificationService.notifyMember(
         membershipNo,
         'Hall Booking Confirmation',
         `New Hall Booking: ${hall.name} for ${formatPakistanDate(booking)} (${eventTime})`
@@ -3691,7 +3691,7 @@ export class BookingService {
     });
 
     if (member) {
-      this.notificationService.notifyBooking(
+      this.notificationService.notifyMember(
         member.Membership_No,
         'Hall Booking Cancellation Request Received',
         'We have received your request to cancel your hall booking. Our team will review it and get back to you shortly.'
@@ -4125,12 +4125,16 @@ export class BookingService {
         where: { lawnId: lawn.id, holdBy: membershipNo.toString() },
       });
 
-      this.notificationService.notifyBooking(
+      this.notificationService.notifyMember(
         membershipNo,
         'Lawn Booking Confirmation',
         `New Lawn Booking: ${lawn.description} for ${formatPakistanDate(booking)} (${eventTime})`
       );
-
+      this.notificationService.notifyMember(
+        membershipNo,
+        'Lawn Booking Confirmation',
+        `New Lawn Booking: ${lawn.description} for ${formatPakistanDate(booking)} (${eventTime})`
+      );
       return { ...booked, lawnName: lawn.description };
     });
   }
@@ -4505,7 +4509,7 @@ export class BookingService {
     });
 
     if (member) {
-      this.notificationService.notifyBooking(
+      this.notificationService.notifyMember(
         member.Membership_No,
         'Lawn Booking Cancellation Request Received',
         'We have received your request to cancel your lawn booking. Our team will review it and get back to you shortly.'
@@ -4753,7 +4757,7 @@ export class BookingService {
       });
     }
 
-    this.notificationService.notifyBooking(
+    this.notificationService.notifyMember(
       membershipNo,
       'Photoshoot Booking Confirmation',
       `New Photoshoot Booking for ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}`

@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { FeedbackStatus } from '@prisma/client';
 import { AddFeedbackRemarkDto, CreateFeedbackCategoryDto, CreateFeedbackDto, CreateFeedbackSubCategoryDto } from './dtos/feedback.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class FeedbackService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private notificationService: NotificationService
+    ) { }
 
     async findAll() {
         return this.prisma.feedback.findMany({
@@ -32,23 +36,41 @@ export class FeedbackService {
         const feedback = await this.prisma.feedback.findUnique({ where: { id } });
         if (!feedback) throw new NotFoundException('Feedback not found');
 
-        return this.prisma.feedback.update({
+        const updatedFeedback = await this.prisma.feedback.update({
             where: { id },
             data: { status },
         });
+
+        // Send notification to member
+        await this.notificationService.notifyMember(
+            feedback.memberNo,
+            'Feedback Status Updated',
+            `Your feedback "${feedback.subject}" status has been updated to ${status.replace(/_/g, ' ')}.`
+        );
+
+        return updatedFeedback;
     }
 
     async addRemark(id: number, dto: AddFeedbackRemarkDto) {
         const feedback = await this.prisma.feedback.findUnique({ where: { id } });
         if (!feedback) throw new NotFoundException('Feedback not found');
 
-        return this.prisma.feedbackRemark.create({
+        const remark = await this.prisma.feedbackRemark.create({
             data: {
                 feedbackId: id,
                 adminName: dto.adminName,
                 remark: dto.remark,
             },
         });
+
+        // Send notification to member
+        await this.notificationService.notifyMember(
+            feedback.memberNo,
+            'New Remark on Feedback',
+            `A new remark has been added to your feedback "${feedback.subject}" by ${dto.adminName}: ${dto.remark}`
+        );
+
+        return remark;
     }
 
     // Categories

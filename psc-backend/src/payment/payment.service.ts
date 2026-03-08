@@ -1013,11 +1013,11 @@ export class PaymentService {
     });
 
     // return voucher details
-    this.notificationService.notifyBooking(
-      String(bookingData.membership_no),
-      'Room Booking Invoice Generated',
-      `New Room Invoice generated for room type ${typeExists.type} from ${bookingData.from} to ${bookingData.to}. Amount: Rs. ${totalPrice}`
-    );
+    // this.notificationService.notifyMember(
+    //   String(bookingData.membership_no),
+    //   'Room Booking Invoice Generated',
+    //   `New Room Invoice generated for room type ${typeExists.type} from ${bookingData.from} to ${bookingData.to}. Amount: Rs. ${totalPrice}`
+    // );
 
     if (voucher) {
       return {
@@ -1332,11 +1332,11 @@ export class PaymentService {
     });
 
     // return voucher details
-    this.notificationService.notifyBooking(
-      String(bookingData.membership_no),
-      'Hall Booking Invoice Generated',
-      `New Hall Invoice generated for ${hallExists.name} on ${booking.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
-    );
+    // this.notificationService.notifyMember(
+    //   String(bookingData.membership_no),
+    //   'Hall Booking Invoice Generated',
+    //   `New Hall Invoice generated for ${hallExists.name} on ${booking.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
+    // );
 
     if (voucher) {
       return {
@@ -1617,11 +1617,11 @@ export class PaymentService {
     });
 
     // return voucher details
-    this.notificationService.notifyBooking(
-      String(bookingData.membership_no),
-      'Lawn Booking Invoice Generated',
-      `New Lawn Invoice generated for ${lawnExists.description} on ${booking.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
-    );
+    // this.notificationService.notifyMember(
+    //   String(bookingData.membership_no),
+    //   'Lawn Booking Invoice Generated',
+    //   `New Lawn Invoice generated for ${lawnExists.description} on ${booking.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
+    // );
 
     if (voucher) {
       return {
@@ -1784,11 +1784,11 @@ export class PaymentService {
     });
 
     // return voucher details
-    this.notificationService.notifyBooking(
-      String(bookingData.membership_no),
-      'Photoshoot Booking Invoice Generated',
-      `New Photoshoot Invoice generated for ${photoshootExists.description} on ${bookingDate.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
-    );
+    // this.notificationService.notifyMember(
+    //   String(bookingData.membership_no),
+    //   'Photoshoot Booking Invoice Generated',
+    //   `New Photoshoot Invoice generated for ${photoshootExists.description} on ${bookingDate.toLocaleDateString()}. Amount: Rs. ${totalPrice}`
+    // );
 
     if (voucher) {
       return {
