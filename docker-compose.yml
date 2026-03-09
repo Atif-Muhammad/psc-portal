@@ -1,19 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: mysql-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: psc_db
-    command: --lower_case_table_names=1
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      retries: 5
-
   backend:
     build:
       context: ./psc-backend
@@ -21,9 +6,6 @@ services:
     restart: always
     ports:
       - "3000:3000"
-    depends_on:
-      mysql:
-        condition: service_healthy
     volumes:
       - notification_data:/app/data
     env_file:
@@ -40,5 +22,4 @@ services:
       - backend
 
 volumes:
-  mysql_data:
   notification_data:

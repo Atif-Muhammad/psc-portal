@@ -301,7 +301,7 @@ function RootRedirect() {
 // Create protected page components
 const ProtectedDashboard = withPermissions(Dashboard);
 const ProtectedMembers = withPermissions(Members);
-const ProtectedAdmins = withPermissions(Admins, ['super_admin']);
+const ProtectedAdmins = withPermissions(Admins);
 const ProtectedAdminReservations = withPermissions(AdminReservations, ['super_admin', 'admin']);
 const ProtectedRoomTypes = withPermissions(RoomTypes);
 const ProtectedRooms = withPermissions(Rooms);

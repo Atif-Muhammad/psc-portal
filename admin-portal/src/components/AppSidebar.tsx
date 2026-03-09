@@ -67,7 +67,8 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/contents": "Contents",
   "/bookings": "Bookings",
   "/messing": "Messing",
-  "/feedback": "Feedback"
+  "/feedback": "Feedback",
+  "/search": "Search"
 };
 
 const menuItems = [
