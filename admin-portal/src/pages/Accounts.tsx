@@ -808,7 +808,7 @@ function MonthlyBillsTab() {
                       className="text-primary hover:bg-primary/10 hover:text-primary-foreground transition-all"
                       asChild
                     >
-                      <a href={bill.url.startsWith('https') ? bill.url : `http://localhost:3000${bill.url}`} target="_blank" rel="noreferrer">
+                      <a href={bill.url.startsWith('https') ? bill.url : `https://admin.peshawarservicesclub.com${bill.url}`} target="_blank" rel="noreferrer">
                         View Bill
                       </a>
                     </Button>
