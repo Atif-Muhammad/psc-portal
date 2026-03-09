@@ -33,6 +33,8 @@ import Bookings from "./pages/Bookings";
 import Content from "./pages/Content";
 import Messing from "./pages/Messing";
 import Feedback from "./pages/Feedback";
+import Search from "./pages/Search";
+
 
 const queryClient = new QueryClient();
 
@@ -61,8 +63,10 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/contents": "Contents",
   "/bookings": "Bookings",
   "/messing": "Messing",
-  "/feedback": "Feedback"
+  "/feedback": "Feedback",
+  "/search": "Search"
 };
+
 
 // All routes in order for redirect
 const ALL_ROUTES = [
@@ -87,8 +91,10 @@ const ALL_ROUTES = [
   { path: "/accounts", label: "Accounts" },
   { path: "/contents", label: "Contents" },
   { path: "/messing", label: "Messing" },
-  { path: "/feedback", label: "Feedback" }
+  { path: "/feedback", label: "Feedback" },
+  { path: "/search", label: "Search" }
 ];
+
 
 // Higher-order component to wrap pages with permission check
 function withPermissions(Component: React.ComponentType, allowedRoles: string[] = []) {
@@ -316,6 +322,8 @@ const ProtectedBookings = withPermissions(Bookings);
 const ProtectedContents = withPermissions(Content);
 const ProtectedMessing = withPermissions(Messing);
 const ProtectedFeedback = withPermissions(Feedback);
+const ProtectedSearch = withPermissions(Search);
+
 
 // Permission Denied page doesn't need permissions check
 function PermissionDeniedPage() {
@@ -366,6 +374,8 @@ function App() {
               <Route path="/contents" element={<ProtectedContents />} />
               <Route path="/messing" element={<ProtectedMessing />} />
               <Route path="/feedback" element={<ProtectedFeedback />} />
+              <Route path="/search" element={<ProtectedSearch />} />
+
             </Route>
 
             {/* Catch-all route */}

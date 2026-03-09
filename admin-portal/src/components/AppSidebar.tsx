@@ -19,8 +19,10 @@ import {
   NotebookTabsIcon,
   Text,
   Utensils,
-  MessageSquare
+  MessageSquare,
+  Search as SearchIcon
 } from "lucide-react";
+
 
 import {
   Sidebar,
@@ -70,7 +72,9 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Search", url: "/search", icon: SearchIcon },
   { title: "Members", url: "/members", icon: Users },
+
   { title: "Accounts", url: "/accounts", icon: Wallet },
   { title: "Admins", url: "/admins", icon: UserCog },
   { title: "Admin Reservations", url: "/admin-reservations", icon: CalendarDays },

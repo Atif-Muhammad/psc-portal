@@ -405,8 +405,8 @@ export function PhotoshootBookingDetailsCard({
                         <div className="font-medium text-blue-900">{booking.member.Name}</div>
                         <div className="text-sm text-blue-700">Membership: #{booking.member.Membership_No}</div>
                       </div>
-                      <div className={`text-sm font-bold ${getMemberBalanceColor(booking.member.Balance)}`}>
-                        Balance: {formatPrice(booking.member.Balance.toString())}
+                      <div className={`text-sm font-bold ${getMemberBalanceColor(booking.member?.Balance || 0)}`}>
+                        Balance: {formatPrice((booking.member?.Balance || 0).toString())}
                       </div>
                     </div>
                   </div>

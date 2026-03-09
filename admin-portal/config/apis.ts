@@ -2456,3 +2456,19 @@ export const assignFeedbackSubCategory = async (id: number, subCategoryId: numbe
     throw { message, status: error.response?.status || 500 };
   }
 };
+export const unifiedSearch = async (query: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/search?q=${query}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
