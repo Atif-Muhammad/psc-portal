@@ -2144,6 +2144,45 @@ export const getMemberBookings = async (membershipNo: string): Promise<any> => {
   }
 };
 
+export const uploadMonthlyBills = async (month: string, year: string, file: File): Promise<any> => {
+  try {
+    const formData = new FormData();
+    formData.append("month", month);
+    formData.append("year", year);
+    formData.append("file", file);
+
+    const response = await axios.post(`${base_url}/accounts/upload-bills`, formData, {
+      withCredentials: true,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error uploading bills", status: error.response?.status || 500 };
+  }
+};
+
+export const getMonthlyBill = async (membershipNo: string, month?: string, year?: string): Promise<any> => {
+  try {
+    const params = new URLSearchParams({ membershipNo });
+    if (month) params.append("month", month);
+    if (year) params.append("year", year);
+
+    const response = await axios.get(`${base_url}/accounts/bills?${params.toString()}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error fetching bill", status: error.response?.status || 500 };
+  }
+};
+
+export const listMonthlyBills = async (month: string, year: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/accounts/list-bills?month=${month}&year=${year}`, { withCredentials: true });
+    return response.data;
+  } catch (error: any) {
+    throw { message: error.response?.data?.message || "Error listing bills", status: error.response?.status || 500 };
+  }
+};
+
 // -------------------- MESSING -------------------- //
 
 export const createMessingCategory = async (data: any) => {

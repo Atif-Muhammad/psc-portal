@@ -7,15 +7,26 @@ import { Button } from "@/components/ui/button";
 import {
   Search, User, FileText, Download, Eye, Receipt,
   CreditCard, Calendar, ArrowUpRight, ArrowDownRight,
-  Wallet, Hash, Clock, X, ChevronRight
+  Wallet, Hash, Clock, X, ChevronRight, Filter, RefreshCcw,
+  Upload, FileArchive, AlertCircle
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 import { exportVoucherPDF } from "@/lib/pdfExport";
-import { getAccountMembers, getMemberVouchers, getMemberBookings, getBillPaymentHistory, cancelBalanceVoucher } from "../../config/apis";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getAccountMembers, getMemberVouchers, getMemberBookings, getBillPaymentHistory, cancelBalanceVoucher, listMonthlyBills } from "../../config/apis";
 import { DetailedCardSkeleton } from "@/components/Skeletons";
 import { formatDateForDisplay, formatDateTimeForDisplay } from "@/utils/pakDate";
+import BillUpload from "@/components/BillUpload";
 
 
 export default function Accounts() {
@@ -192,86 +203,100 @@ export default function Accounts() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by name, membership no..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 h-11 bg-background"
-        />
-      </div>
+      {/* Main Tabs */}
+      <Tabs defaultValue="members" className="w-full">
+        <TabsList className="grid w-fit grid-cols-2 mb-6">
+          <TabsTrigger value="members" className="px-8">Members</TabsTrigger>
+          <TabsTrigger value="upload-bills" className="px-8 font-semibold">Monthly Bills</TabsTrigger>
+        </TabsList>
 
-      {/* Member Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {members.map((member) => (
-          <Card
-            key={member.Sno}
-            className="cursor-pointer group hover:shadow-xl hover:border-primary/30 transition-all duration-300 overflow-hidden"
-            onClick={() => setSelectedMember(member)}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center ring-2 ring-primary/10">
-                    <User className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base group-hover:text-primary transition-colors">{member.Name}</CardTitle>
-                    <p className="text-xs text-muted-foreground font-mono">{member.Membership_No}</p>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-2.5 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    <Wallet className="h-3.5 w-3.5" /> Balance
-                  </span>
-                  <span className={`font-semibold tabular-nums ${Number(member.Balance) > 0 ? "text-red-600" : Number(member.Balance) < 0 ? "text-red-600" : "text-emerald-600"}`}>
-                    PKR {Number(member.Balance || 0).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" /> Last Booking
-                  </span>
-                  <span className="text-xs font-medium">{member.lastBookingDate ? formatDate(member.lastBookingDate) : '—'}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t">
-                  <span className="text-muted-foreground text-xs">Bookings: {member.totalBookings || 0}</span>
-                  <Badge variant={member.Status === "ACTIVE" || member.Status === "active" ? "default" : "secondary"} className="text-[10px] px-2 py-0">
-                    {member.Status}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <TabsContent value="members" className="space-y-6 animate-in fade-in duration-500">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, membership no..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-11 bg-background"
+            />
+          </div>
 
-      {/* Load More */}
-      {hasMore && (
-        <div
-          className="flex justify-center p-4"
-          ref={(el) => {
-            if (el) {
-              const observer = new IntersectionObserver(
-                (entries) => {
-                  if (entries[0].isIntersecting && !loadingMore) loadMore();
-                },
-                { threshold: 1.0 }
-              );
-              observer.observe(el);
-            }
-          }}
-        >
-          {loadingMore && <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>}
-        </div>
-      )}
+          {/* Member Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {members.map((member) => (
+              <Card
+                key={member.Sno}
+                className="cursor-pointer group hover:shadow-xl hover:border-primary/30 transition-all duration-300 overflow-hidden"
+                onClick={() => setSelectedMember(member)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center ring-2 ring-primary/10">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base group-hover:text-primary transition-colors">{member.Name}</CardTitle>
+                        <p className="text-xs text-muted-foreground font-mono">{member.Membership_No}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2.5 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Wallet className="h-3.5 w-3.5" /> Balance
+                      </span>
+                      <span className={`font-semibold tabular-nums ${Number(member.Balance) > 0 ? "text-red-600" : Number(member.Balance) < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                        PKR {Number(member.Balance || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" /> Last Booking
+                      </span>
+                      <span className="text-xs font-medium">{member.lastBookingDate ? formatDate(member.lastBookingDate) : '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1 border-t">
+                      <span className="text-muted-foreground text-xs">Bookings: {member.totalBookings || 0}</span>
+                      <Badge variant={member.Status === "ACTIVE" || member.Status === "active" ? "default" : "secondary"} className="text-[10px] px-2 py-0">
+                        {member.Status}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Load More */}
+          {hasMore && (
+            <div
+              className="flex justify-center p-4"
+              ref={(el) => {
+                if (el) {
+                  const observer = new IntersectionObserver(
+                    (entries) => {
+                      if (entries[0].isIntersecting && !loadingMore) loadMore();
+                    },
+                    { threshold: 1.0 }
+                  );
+                  observer.observe(el);
+                }
+              }}
+            >
+              {loadingMore && <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="upload-bills">
+          <MonthlyBillsTab />
+        </TabsContent>
+      </Tabs>
 
       {/* ──────────────── MAIN MEMBER DIALOG ──────────────── */}
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
@@ -289,11 +314,11 @@ export default function Accounts() {
             {/* Member summary cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
               <div className="bg-background/80 backdrop-blur-sm rounded-lg p-3 border shadow-sm">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Membership No</p>
+                <p className="text-[10px] uppercase tracking-wider text-black font-medium">Membership No</p>
                 <p className="font-semibold text-sm font-mono mt-0.5">{selectedMember?.Membership_No}</p>
               </div>
               <div className="bg-background/80 backdrop-blur-sm rounded-lg p-3 border shadow-sm">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Balance</p>
+                <p className="text-[10px] uppercase tracking-wider text-black font-medium">Balance</p>
                 <p className={`font-semibold text-sm mt-0.5 tabular-nums ${Number(selectedMember?.Balance) > 0 ? "text-red-600" : "text-emerald-600"}`}>
                   PKR {Number(selectedMember?.Balance || 0).toLocaleString()}
                 </p>
@@ -623,6 +648,182 @@ export default function Accounts() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function MonthlyBillsTab() {
+  const [month, setMonth] = useState<string>((new Date().getMonth() + 1).toString().padStart(2, "0"));
+  const [year, setYear] = useState<string>(new Date().getFullYear().toString());
+  const [bills, setBills] = useState<any[]>([]);
+  const [fetching, setFetching] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  const months = [
+    { value: "01", label: "January" },
+    { value: "02", label: "February" },
+    { value: "03", label: "March" },
+    { value: "04", label: "April" },
+    { value: "05", label: "May" },
+    { value: "06", label: "June" },
+    { value: "07", label: "July" },
+    { value: "08", label: "August" },
+    { value: "09", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ];
+
+  const years = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - 2 + i).toString());
+
+  const fetchBills = async () => {
+    try {
+      setFetching(true);
+      const data = await listMonthlyBills(month, year);
+      setBills(data);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to fetch bills");
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBills();
+  }, []);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <Card className="border-primary/10 shadow-sm bg-background">
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row items-end gap-4">
+            <div className="space-y-2 flex-1">
+              <label className="text-sm font-semibold text-muted-foreground ml-1 flex items-center gap-2">
+                <Calendar className="h-3 w-3 text-primary" /> Select Period
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Select value={year} onValueChange={setYear}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((y) => (
+                      <SelectItem key={y} value={y}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={month} onValueChange={setMonth}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 w-full md:w-auto">
+              <Button
+                variant="outline"
+                className="flex-1 md:flex-none border-primary/20 hover:bg-primary/5 hover:text-primary transition-all group"
+                onClick={fetchBills}
+                disabled={fetching}
+              >
+                {fetching ? <RefreshCcw className="h-4 w-4 animate-spin mr-2" /> : <Filter className="h-4 w-4 mr-2 text-primary group-hover:scale-110 transition-transform" />}
+                Fetch Bills
+              </Button>
+
+              <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+                <DialogTrigger asChild>
+                  <Button className="flex-1 md:flex-none shadow-lg shadow-primary/10 transition-all active:scale-95">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Bills
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-none shadow-2xl">
+                  <div className="p-6 bg-background">
+                    <DialogHeader className="mb-4">
+                      <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-primary">
+                        <Upload className="h-6 w-6 text-primary" /> Upload Monthly Bills
+                      </DialogTitle>
+                      <DialogDescription>
+                        Select a month and year to upload a ZIP file containing member bills.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <BillUpload onUploadSuccess={() => {
+                      setIsUploadOpen(false);
+                      fetchBills();
+                    }} />
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-primary/10 shadow-md overflow-hidden bg-background">
+        <Table>
+          <TableHeader className="bg-muted/30 border-b">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="font-semibold text-black px-6 py-4">Membership No</TableHead>
+              <TableHead className="font-semibold text-black py-4 text-center">Month/Year</TableHead>
+              <TableHead className="font-semibold text-black py-4">Filename</TableHead>
+              <TableHead className="font-semibold text-black py-4 text-right pr-6">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {fetching ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell className="px-6 py-4"><div className="h-4 bg-muted animate-pulse rounded w-20" /></TableCell>
+                  <TableCell className="py-4 text-center"><div className="h-4 bg-muted animate-pulse rounded w-16 mx-auto" /></TableCell>
+                  <TableCell className="py-4"><div className="h-4 bg-muted animate-pulse rounded w-32" /></TableCell>
+                  <TableCell className="text-right pr-6 py-4"><div className="h-8 bg-muted animate-pulse rounded w-24 ml-auto" /></TableCell>
+                </TableRow>
+              ))
+            ) : bills.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="h-64 text-center">
+                  <div className="flex flex-col items-center justify-center text-muted-foreground gap-3">
+                    <FileArchive className="h-12 w-12 text-primary opacity-20" />
+                    <p className="text-lg font-medium">No bills found for this period</p>
+                    <p className="text-sm">Try selecting a different month or year</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              bills.map((bill) => (
+                <TableRow key={bill.membershipNo} className="hover:bg-accent/5 transition-colors group">
+                  <TableCell className="font-mono px-6 py-4">{bill.membershipNo}</TableCell>
+                  <TableCell className="text-center py-4">{month}/{year}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm py-4">{bill.filename}</TableCell>
+                  <TableCell className="text-right pr-6 py-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-primary hover:bg-primary/10 hover:text-primary-foreground transition-all"
+                      asChild
+                    >
+                      <a href={bill.url.startsWith('https') ? bill.url : `http://localhost:3000${bill.url}`} target="_blank" rel="noreferrer">
+                        View Bill
+                      </a>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <div className="flex items-center gap-2 justify-center text-xs text-muted-foreground py-2 italic">
+        <AlertCircle className="h-3 w-3" />
+        Note: Bills are stored as individual PDF files extracted from ZIP uploads.
+      </div>
     </div>
   );
 }

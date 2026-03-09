@@ -23,6 +23,7 @@ import { ContentModule } from './content/content.module';
 import { MessingModule } from './messing/messing.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { AccountsModule } from './accounts/accounts.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { FeedbackModule } from './feedback/feedback.module';
     MessingModule,
     RealtimeModule,
     FeedbackModule,
+    AccountsModule,
   ],
   controllers: [],
   providers: [MailerService],
