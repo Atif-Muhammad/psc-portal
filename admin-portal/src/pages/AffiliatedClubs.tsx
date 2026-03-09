@@ -264,7 +264,7 @@ export default function AffiliatedClubs() {
       numberOfAdults: booking.numberOfAdults || 1,
       numberOfChildren: booking.numberOfChildren || 0,
       specialRequests: booking.specialRequests || "",
-      paymentStatus: "", // Default to empty to avoid confusing the user
+      paymentStatus: booking.paymentStatus,
       paymentMode: (booking.paymentMode as Booking["paymentMode"]) || "CASH",
       paidAmount: Number(booking.paidAmount),
       existingPaidAmount: Number(booking.paidAmount),
@@ -409,16 +409,17 @@ export default function AffiliatedClubs() {
           );
           const headsTotal = newForm.heads.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0);
           const totalPrice = (basePrice * selectedRoomIds.length) + headsTotal;
-          const oldTotal = Number(prev.totalPrice) || 0;
-          const oldPaid = Number(prev.paidAmount) || 0;
-          const oldPending = Number(prev.pendingAmount) || 0;
-          const oldPaymentStatus = prev.paymentStatus;
+          const oldTotal = isEdit ? (Number(editBooking?.totalPrice) || 0) : (Number(prev.totalPrice) || 0);
+          const oldPaid = isEdit ? (Number(editBooking?.paidAmount) || 0) : (Number(prev.paidAmount) || 0);
+          const oldPending = isEdit ? (Number(editBooking?.pendingAmount) || 0) : (Number(prev.pendingAmount) || 0);
+          const oldPaymentStatus = isEdit ? (editBooking?.paymentStatus || "UNPAID") : prev.paymentStatus;
 
           newForm.totalPrice = totalPrice;
 
           // Maintain the same price increase/decrease logic as RoomBookings.tsx
           if (isEdit) {
             if (totalPrice > oldTotal) {
+              // PRICE INCREASE
               if (oldPaymentStatus === "PAID") {
                 // Only downgrade if the new price actually exceeds what was already paid
                 if (totalPrice > oldPaid) {
@@ -432,11 +433,17 @@ export default function AffiliatedClubs() {
               newForm.newPaymentAmount = 0;
               newForm.pendingAmount = totalPrice - oldPaid;
             } else if (totalPrice < oldTotal) {
+              // PRICE DECREASE
               newForm.paidAmount = oldPaid;
               newForm.existingPaidAmount = oldPaid;
               newForm.newPaymentAmount = 0;
               newForm.pendingAmount = totalPrice - oldPaid;
-              if (newForm.pendingAmount <= 0) newForm.paymentStatus = "PAID";
+
+              if (newForm.pendingAmount <= 0) {
+                newForm.paymentStatus = "PAID";
+              } else if (oldPaymentStatus === "PAID" || oldPaymentStatus === "HALF_PAID") {
+                newForm.paymentStatus = "HALF_PAID";
+              }
             } else {
               newForm.paidAmount = oldPaid;
               newForm.existingPaidAmount = oldPaid;
@@ -484,7 +491,7 @@ export default function AffiliatedClubs() {
 
       return newForm;
     });
-  }, [roomTypes, selectedRoomIds]);
+  }, [roomTypes, selectedRoomIds, editBooking]);
 
   const handleRoomSelection = useCallback((roomId: string) => {
     setSelectedRoomIds(prev => {
@@ -493,16 +500,61 @@ export default function AffiliatedClubs() {
       const updateForm = (f: BookingForm) => {
         const basePrice = calculatePrice(f.roomTypeId, "guest", f.checkIn, f.checkOut, roomTypes);
         const headsTotal = f.heads.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0);
-        const newTotal = (basePrice * newIds.length) + headsTotal;
+        const totalPrice = (basePrice * newIds.length) + headsTotal;
         const isEdit = !!editBooking;
-        const { paid, pendingAmount } = calculateAccountingValues(f.paymentStatus, newTotal, f.paidAmount);
+
+        let newPaid = f.paidAmount;
+        let newPending = 0;
+        let newStatus = f.paymentStatus;
+        let newPaymentAmount = f.newPaymentAmount;
+
+        if (isEdit) {
+          const oldTotal = Number(editBooking?.totalPrice) || 0;
+          const oldPaid = Number(editBooking?.paidAmount) || 0;
+          const oldPaymentStatus = editBooking?.paymentStatus || "UNPAID";
+
+          if (totalPrice > oldTotal) {
+            // PRICE INCREASE
+            if (oldPaymentStatus === "PAID") {
+              if (totalPrice > oldPaid) {
+                newStatus = "HALF_PAID";
+              } else {
+                newStatus = "PAID";
+              }
+            }
+            newPaid = oldPaid;
+            newPending = totalPrice - oldPaid;
+            newPaymentAmount = 0;
+          } else if (totalPrice < oldTotal) {
+            // PRICE DECREASE
+            newPaid = oldPaid;
+            newPending = totalPrice - oldPaid;
+            if (newPending <= 0) {
+              newStatus = "PAID";
+            } else if (oldPaymentStatus === "PAID" || oldPaymentStatus === "HALF_PAID") {
+              newStatus = "HALF_PAID";
+            }
+            newPaymentAmount = 0;
+          } else {
+            newPaid = oldPaid;
+            newPending = totalPrice - oldPaid;
+            newPaymentAmount = 0;
+          }
+        } else {
+          const accounting = calculateAccountingValues(newStatus, totalPrice, f.paidAmount);
+          newPaid = accounting.paid;
+          newPending = accounting.pendingAmount;
+          newPaymentAmount = newPaid;
+        }
+
         return {
           ...f,
-          totalPrice: newTotal,
-          paidAmount: paid,
+          totalPrice,
+          paidAmount: newPaid,
+          paymentStatus: newStatus,
           existingPaidAmount: isEdit ? (Number(editBooking?.paidAmount) || 0) : 0,
-          newPaymentAmount: isEdit ? (paid - (Number(editBooking?.paidAmount) || 0)) : paid,
-          pendingAmount
+          newPaymentAmount,
+          pendingAmount: newPending
         };
       };
 
@@ -1000,55 +1052,25 @@ export default function AffiliatedClubs() {
             </TabsList>
           </Tabs>
 
-          {detailBooking ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>
-                  <X className="h-4 w-4 mr-2" />Back to list
-                </Button>
-                {bookingTab === "REQUESTS" && detailBooking.cancellationRequests?.some((r: { status: string }) => r.status === "PENDING") && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => updateBookingCancellationMutation.mutate({ bookID: String(detailBooking.id), status: "REJECTED", remarks: "Rejected by admin" })}
-                      disabled={updateBookingCancellationMutation.isPending}
-                    >
-                      Reject Cancellation
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => updateBookingCancellationMutation.mutate({ bookID: String(detailBooking.id), status: "APPROVED", remarks: "Approved by admin" })}
-                      disabled={updateBookingCancellationMutation.isPending}
-                    >
-                      Approve Cancellation
-                    </Button>
-                  </div>
-                )}
+          <div className="space-y-4">
+            <BookingsTable
+              bookings={affiliatedBookings?.data || []}
+              isLoading={isLoadingBookings}
+              onDetail={(booking) => setDetailBooking(booking)}
+              onEdit={bookingTab !== "CLOSED" ? (booking) => handleEditBooking(booking) : undefined}
+              onCancel={bookingTab !== "CLOSED" ? (booking) => setCancelBooking(booking) : undefined}
+              onClose={bookingTab === "ACTIVE" ? (booking) => setCloseBookingTarget(booking) : undefined}
+              onViewVouchers={(booking) => setViewVouchers(booking)}
+              getPaymentBadge={getPaymentBadge}
+            />
+            {affiliatedBookings?.lastPage > 1 && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button variant="outline" size="sm" onClick={() => setBookingPage(p => Math.max(1, p - 1))} disabled={bookingPage === 1}>Previous</Button>
+                <span className="flex items-center text-sm px-4">Page {bookingPage} of {affiliatedBookings.lastPage}</span>
+                <Button variant="outline" size="sm" onClick={() => setBookingPage(p => Math.min(affiliatedBookings.lastPage, p + 1))} disabled={bookingPage === affiliatedBookings.lastPage}>Next</Button>
               </div>
-              <DetailBookingView booking={detailBooking} />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <BookingsTable
-                bookings={affiliatedBookings?.data || []}
-                isLoading={isLoadingBookings}
-                onDetail={(booking) => setDetailBooking(booking)}
-                onEdit={bookingTab !== "CLOSED" ? (booking) => handleEditBooking(booking) : undefined}
-                onCancel={bookingTab !== "CLOSED" ? (booking) => setCancelBooking(booking) : undefined}
-                onClose={bookingTab === "ACTIVE" ? (booking) => setCloseBookingTarget(booking) : undefined}
-                onViewVouchers={(booking) => setViewVouchers(booking)}
-                getPaymentBadge={getPaymentBadge}
-              />
-              {affiliatedBookings?.lastPage > 1 && (
-                <div className="flex justify-center gap-2 mt-4">
-                  <Button variant="outline" size="sm" onClick={() => setBookingPage(p => Math.max(1, p - 1))} disabled={bookingPage === 1}>Previous</Button>
-                  <span className="flex items-center text-sm px-4">Page {bookingPage} of {affiliatedBookings.lastPage}</span>
-                  <Button variant="outline" size="sm" onClick={() => setBookingPage(p => Math.min(affiliatedBookings.lastPage, p + 1))} disabled={bookingPage === affiliatedBookings.lastPage}>Next</Button>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </TabsContent>
 
         {/* ─── Stats Tab ─── */}
@@ -1400,6 +1422,43 @@ export default function AffiliatedClubs() {
         }}
         isClosing={false}
       />
+
+      <Dialog open={!!detailBooking} onOpenChange={(open) => !open && setDetailBooking(null)}>
+        <DialogContent className="max-w-[80vw] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row justify-between items-center pr-10">
+            <DialogTitle>Booking Detail</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {detailBooking && (
+              <>
+                {bookingTab === "REQUESTS" && detailBooking.cancellationRequests?.some((r: { status: string }) => r.status === "PENDING") && (
+                  <div className="flex justify-end gap-2 border-b pb-4 mb-4">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => updateBookingCancellationMutation.mutate({ bookID: String(detailBooking.id), status: "REJECTED", remarks: "Rejected by admin" })}
+                      disabled={updateBookingCancellationMutation.isPending}
+                    >
+                      Reject Cancellation
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => updateBookingCancellationMutation.mutate({ bookID: String(detailBooking.id), status: "APPROVED", remarks: "Approved by admin" })}
+                      disabled={updateBookingCancellationMutation.isPending}
+                    >
+                      Approve Cancellation
+                    </Button>
+                  </div>
+                )}
+                <DetailBookingView booking={detailBooking} />
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailBooking(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

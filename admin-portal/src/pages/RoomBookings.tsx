@@ -578,7 +578,7 @@ export default function RoomBookings() {
           ? convertToDateTimeLocal(editBooking.checkOut)
           : "",
         totalPrice: Number(editBooking.totalPrice) || 0,
-        paymentStatus: "", // Default to empty to avoid confusing the user
+        paymentStatus: editBooking.paymentStatus,
         paidAmount: Number(editBooking.paidAmount) || 0,
         existingPaidAmount: Number(editBooking.paidAmount) || 0,
         newPaymentAmount: 0,
