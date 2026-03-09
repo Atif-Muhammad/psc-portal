@@ -451,15 +451,15 @@ export function LawnBookingDetailsCard({
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-gray-600">Base Lawn Rent:</span>
                           <span className="font-medium text-gray-800">
-                            {formatPrice((Number(booking.totalPrice) - (booking as any).extraCharges.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0)).toString())}
+                            {formatPrice(((Number(booking?.totalPrice || 0) - ((booking as any)?.extraCharges?.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0) || 0))).toString())}
                           </span>
                         </div>
                         <div className="space-y-1">
                           <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider block mb-1">Extra Charges Breakdown:</span>
-                          {(booking as any).extraCharges.map((h: any, i: number) => (
+                          {(booking as any)?.extraCharges?.map((h: any, i: number) => (
                             <div key={i} className="flex justify-between items-center text-xs text-blue-900 font-medium">
                               <span className="text-emerald-700">{h.head}</span>
-                              <span className="font-mono tracking-tighter">{formatPrice(h.amount.toString())}</span>
+                              <span className="font-mono tracking-tighter">{formatPrice((h.amount || 0).toString())}</span>
                             </div>
                           ))}
                         </div>
@@ -468,16 +468,16 @@ export function LawnBookingDetailsCard({
 
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700 font-bold">Total Amount:</span>
-                      <span className="text-2xl font-black text-slate-900">{formatPrice(booking.totalPrice)}</span>
+                      <span className="text-2xl font-black text-slate-900">{formatPrice((booking?.totalPrice || 0).toString())}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-1">
                       <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Paid</span>
-                        <span className="text-lg font-bold text-green-700">{formatPrice(booking.paidAmount || 0)}</span>
+                        <span className="text-lg font-bold text-green-700">{formatPrice((booking?.paidAmount || 0).toString())}</span>
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Pending</span>
-                        <span className="text-lg font-bold text-red-700">{formatPrice(booking.pendingAmount || 0)}</span>
+                        <span className="text-lg font-bold text-red-700">{formatPrice((booking?.pendingAmount || 0).toString())}</span>
                       </div>
                     </div>
                     {(booking.card_number || booking.check_number || booking.bank_name) && (

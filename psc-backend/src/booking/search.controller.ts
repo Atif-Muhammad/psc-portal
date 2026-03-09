@@ -15,4 +15,12 @@ export class SearchController {
     async unifiedSearch(@Query('q') query: string) {
         return await this.searchService.unifiedSearch(query);
     }
+
+    @Get('booking')
+    async getUnifiedBooking(
+        @Query('type') type: string,
+        @Query('id') id: string
+    ) {
+        return await this.searchService.getUnifiedBooking(type, parseInt(id));
+    }
 }

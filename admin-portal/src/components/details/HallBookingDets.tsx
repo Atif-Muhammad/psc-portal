@@ -437,16 +437,16 @@ export function HallBookingDetailsCard({
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700 font-bold">Total Amount:</span>
-                      <span className="text-2xl font-black text-slate-900">{formatPrice(booking.totalPrice)}</span>
+                      <span className="text-2xl font-black text-slate-900">{formatPrice((booking?.totalPrice || 0).toString())}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-1">
                       <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Paid</span>
-                        <span className="text-lg font-bold text-green-700">{formatPrice(booking.paidAmount)}</span>
+                        <span className="text-lg font-bold text-green-700">{formatPrice((booking?.paidAmount || 0).toString())}</span>
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Pending</span>
-                        <span className="text-lg font-bold text-red-700">{formatPrice(booking.pendingAmount)}</span>
+                        <span className="text-lg font-bold text-red-700">{formatPrice((booking?.pendingAmount || 0).toString())}</span>
                       </div>
                     </div>
                     {(booking.card_number || booking.check_number || booking.bank_name) && (

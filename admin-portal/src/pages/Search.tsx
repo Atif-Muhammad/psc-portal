@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { unifiedSearch, getVouchers } from "../../config/apis";
+import { unifiedSearch, getVouchers, getUnifiedBooking } from "../../config/apis";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search as SearchIcon, Loader2, User, Calendar, CreditCard, ArrowRight } from "lucide-react";
@@ -50,15 +50,39 @@ export default function Search() {
 
     // Unified Detail View Component
     const UnifiedDetailView = ({ result }: { result: any }) => {
-        const { category, booking } = result;
+        const { category, bookingId, booking: initialBooking } = result;
         const cat = category.toUpperCase();
+
+        // Query for full booking details if not already present
+        // Ensure we don't use initialData if it's just a summary/voucher hit metadata
+        const hasFullBooking = initialBooking && (initialBooking.totalPrice !== undefined || initialBooking.paidAmount !== undefined);
+
+        const { data: booking, isLoading: loadingBooking } = useQuery({
+            queryKey: ['unifiedBooking', cat, bookingId],
+            queryFn: () => getUnifiedBooking(cat, bookingId.toString()),
+            enabled: !hasFullBooking && !!cat && !!bookingId,
+            initialData: hasFullBooking ? initialBooking : undefined
+        });
 
         // Secondary query for vouchers for ANY booking category
         const { data: vouchers = [], isLoading: loadingVouchers } = useQuery({
-            queryKey: ['vouchers', cat, booking.id],
-            queryFn: () => getVouchers(cat, booking.id.toString()),
-            enabled: !!cat && !!booking.id,
+            queryKey: ['vouchers', cat, bookingId],
+            queryFn: () => getVouchers(cat, bookingId.toString()),
+            enabled: !!cat && !!bookingId,
         });
+
+        if (loadingBooking) {
+            return (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                    <Loader2 className="h-12 w-12 animate-spin text-amber-500" />
+                    <p className="text-lg font-medium text-muted-foreground">Loading booking details...</p>
+                </div>
+            );
+        }
+
+        if (!booking) {
+            return <div className="p-8 text-center text-red-500">Failed to load booking details.</div>;
+        }
 
         const commonProps = {
             booking: booking,
@@ -67,10 +91,7 @@ export default function Search() {
             showFullDetails: true
         };
 
-        if (cat === 'ROOM' || cat === 'AFF_ROOM') {
-            return <RoomDetailView {...commonProps} />;
-        }
-
+        if (cat === 'ROOM' || cat === 'AFF_ROOM') return <RoomDetailView {...commonProps} />;
         if (cat === 'HALL') return <HallDetailView {...commonProps} />;
         if (cat === 'LAWN') return <LawnDetailView {...commonProps} />;
         if (cat === 'PHOTOSHOOT') return <PhotoshootDetailView {...commonProps} />;
@@ -140,7 +161,7 @@ export default function Search() {
                 <div className="grid gap-6">
                     {results.map((res: any, idx: number) => {
                         const booking = res.booking;
-                        const member = booking?.member || booking?.affiliatedClub;
+                        const member = booking?.member || booking?.affiliatedClub || res.member;
                         const dateStr = booking?.checkIn || booking?.bookingDate || booking?.requestedDate;
 
                         return (
@@ -174,7 +195,7 @@ export default function Search() {
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-lg leading-tight">{member?.Name || member?.name || "Guest Booking"}</span>
-                                                        <span className="text-xs text-muted-foreground font-medium">({member?.Membership_No || member?.membershipNo || "N/A"})</span>
+                                                        <span className="text-xs text-muted-foreground font-medium">({member?.Membership_No || member?.membershipNo || booking?.affiliatedMembershipNo || "N/A"})</span>
                                                     </div>
                                                 </div>
 
@@ -183,8 +204,21 @@ export default function Search() {
                                                         <Calendar className="h-5 w-5 text-primary/70" />
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="font-bold text-lg leading-tight">{dateStr ? format(new Date(dateStr), "MMMM do, yyyy") : "N/A"}</span>
-                                                        <span className="text-xs text-muted-foreground font-medium">Check-in / Date</span>
+                                                        {res.type === 'Voucher' ? (
+                                                            <>
+                                                                <span className="font-bold text-lg leading-tight">
+                                                                    {res.issuedAt ? format(new Date(res.issuedAt), "MMM do, yy - hh:mm a") : "N/A"}
+                                                                </span>
+                                                                <span className="text-[10px] uppercase text-muted-foreground font-bold leading-none mt-0.5">Issued At</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="font-bold text-lg leading-tight">
+                                                                    {dateStr ? format(new Date(dateStr), "MMMM do, yyyy") : "N/A"}
+                                                                </span>
+                                                                <span className="text-xs text-muted-foreground font-medium">Check-in / Date</span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -193,10 +227,52 @@ export default function Search() {
                                                         <CreditCard className="h-5 w-5 text-primary/70" />
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-lg font-bold leading-tight">Rs. {Number(booking?.totalPrice || 0).toLocaleString()}</span>
-                                                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600/90">{booking?.paymentStatus || "UNPAID"}</span>
+                                                        <span className="text-lg font-bold leading-tight">
+                                                            {booking ? `Rs. ${Number(booking.totalPrice || 0).toLocaleString()}` : res.amount ? `Rs. ${Number(res.amount).toLocaleString()}` : "N/A"}
+                                                        </span>
+                                                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600/90">
+                                                            {booking?.paymentStatus || res.status || "PENDING"}
+                                                        </span>
                                                     </div>
                                                 </div>
+
+                                                {res.type === 'Voucher' && res.paidAt && (
+                                                    <div className="flex items-center gap-4 text-foreground/70 group-hover:text-foreground transition-colors">
+                                                        <div className="h-10 w-10 rounded-full bg-green-500/5 flex items-center justify-center shrink-0 border border-green-500/10">
+                                                            <Calendar className="h-4 w-4 text-green-500/50" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold tracking-tight text-green-600/80">
+                                                                {format(new Date(res.paidAt), "MMM do, yy - hh:mm a")}
+                                                            </span>
+                                                            <span className="text-[10px] uppercase text-muted-foreground font-bold">Paid At</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {res.type === 'Voucher' && res.issuedBy && (
+                                                    <div className="flex items-center gap-4 text-foreground/70 group-hover:text-foreground transition-colors">
+                                                        <div className="h-10 w-10 rounded-full bg-blue-500/5 flex items-center justify-center shrink-0 border border-blue-500/10">
+                                                            <User className="h-4 w-4 text-blue-500/50" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold tracking-tight text-blue-600/80">{res.issuedBy}</span>
+                                                            <span className="text-[10px] uppercase text-muted-foreground font-bold">Issued By</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {res.type === 'Voucher' && res.paymentMode && (
+                                                    <div className="flex items-center gap-4 text-foreground/70 group-hover:text-foreground transition-colors">
+                                                        <div className="h-10 w-10 rounded-full bg-purple-500/5 flex items-center justify-center shrink-0 border border-purple-500/10">
+                                                            <CreditCard className="h-4 w-4 text-purple-500/50" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold tracking-tight text-purple-600/80">{res.paymentMode}</span>
+                                                            <span className="text-[10px] uppercase text-muted-foreground font-bold">Payment Mode</span>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {res.consumerNumber && (
                                                     <div className="flex items-center gap-4 text-foreground/70 group-hover:text-foreground transition-colors">

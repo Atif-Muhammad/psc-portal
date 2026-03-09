@@ -13,6 +13,7 @@ export class SearchService {
         const trimmedQuery = query.trim();
         const results: any[] = [];
 
+
         // 1. Search by Consumer Number or Voucher No in PaymentVoucher
         let voucher = await this.prisma.paymentVoucher.findUnique({
             where: { consumer_number: trimmedQuery },
@@ -25,53 +26,33 @@ export class SearchService {
         }
 
         if (voucher && voucher.booking_id && voucher.booking_type) {
-            const booking = await this.getBookingDetails(voucher.booking_type, voucher.booking_id);
-            if (booking) {
-                results.push({
-                    type: 'Voucher',
-                    category: voucher.booking_type,
-                    bookingId: voucher.booking_id,
-                    consumerNumber: voucher.consumer_number,
-                    voucherNo: voucher.voucher_no,
-                    amount: voucher.amount,
-                    status: voucher.status,
-                    booking: booking,
-                });
-            }
+            // Fetch minimal member info for the search card
+            const member = await this.prisma.member.findUnique({
+                where: { Membership_No: voucher.membership_no },
+                select: { Name: true, Membership_No: true },
+            });
+
+            results.push({
+                type: 'Voucher',
+                category: voucher.booking_type,
+                bookingId: voucher.booking_id,
+                consumerNumber: voucher.consumer_number,
+                voucherNo: voucher.voucher_no,
+                amount: voucher.amount,
+                status: voucher.status,
+                issuedAt: voucher.issued_at,
+                paidAt: voucher.paid_at,
+                issuedBy: voucher.issued_by,
+                paymentMode: voucher.payment_mode,
+                member: member,
+            });
         }
 
-        // 2. Search by Booking ID (if query is numeric)
-        const bookingId = parseInt(trimmedQuery);
-        if (!isNaN(bookingId)) {
-            // Search in all booking tables
-            const roomBooking = await this.getBookingDetails('ROOM', bookingId);
-            if (roomBooking) results.push({ type: 'Booking', category: 'ROOM', bookingId, booking: roomBooking });
+        return results;
+    }
 
-            const hallBooking = await this.getBookingDetails('HALL', bookingId);
-            if (hallBooking) results.push({ type: 'Booking', category: 'HALL', bookingId, booking: hallBooking });
-
-            const lawnBooking = await this.getBookingDetails('LAWN', bookingId);
-            if (lawnBooking) results.push({ type: 'Booking', category: 'LAWN', bookingId, booking: lawnBooking });
-
-            const photoshootBooking = await this.getBookingDetails('PHOTOSHOOT', bookingId);
-            if (photoshootBooking) results.push({ type: 'Booking', category: 'PHOTOSHOOT', bookingId, booking: photoshootBooking });
-
-            const affBooking = await this.getBookingDetails('AFF_ROOM', bookingId);
-            if (affBooking) results.push({ type: 'Booking', category: 'AFF_ROOM', bookingId, booking: affBooking });
-        }
-
-        // De-duplicate results by category and bookingId
-        const uniqueResults: any[] = [];
-        const seen = new Set();
-        for (const res of results) {
-            const key = `${res.category}-${res.bookingId}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                uniqueResults.push(res);
-            }
-        }
-
-        return uniqueResults;
+    async getUnifiedBooking(type: string, id: number) {
+        return await this.getBookingDetails(type, id);
     }
 
     private async getBookingDetails(type: string, id: number) {

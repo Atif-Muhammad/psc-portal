@@ -2472,3 +2472,20 @@ export const unifiedSearch = async (query: string): Promise<any> => {
     throw { message, status: error.response?.status || 500 };
   }
 };
+
+export const getUnifiedBooking = async (type: string, id: string): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/search/booking?type=${type}&id=${id}`, {
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to fetch booking details";
+
+    throw { message, status: error.response?.status || 500 };
+  }
+};
