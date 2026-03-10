@@ -124,6 +124,26 @@ export const CloseBookingDialog: React.FC<CloseBookingDialogProps> = ({
                                     PKR {booking.totalPrice?.toLocaleString()}
                                 </span>
                             </div>
+
+                            {/* Extra Charges Breakdown */}
+                            {booking.extraCharges && booking.extraCharges.length > 0 && (
+                                <div className="ml-4 space-y-1 py-1 border-l-2 border-blue-100 pl-3">
+                                    <div className="flex justify-between text-[11px]">
+                                        <span className="text-muted-foreground italic">Base Rent</span>
+                                        <span className="text-slate-600 font-medium">
+                                            PKR {(Number(booking.totalPrice || 0) - (booking.extraCharges.reduce((sum, h) => sum + (Number(h.amount) || 0), 0))).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    {booking.extraCharges.map((head, idx) => (
+                                        <div key={idx} className="flex justify-between text-[11px]">
+                                            <span className="text-muted-foreground italic">{head.head}</span>
+                                            <span className="text-slate-600 font-medium font-mono">
+                                                + PKR {Number(head.amount).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Paid Amount</span>
                                 <span className="font-medium">

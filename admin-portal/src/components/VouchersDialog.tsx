@@ -45,6 +45,8 @@ export const VouchersDialog = React.memo(({
         return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
       case "CANCELLED":
         return <Badge variant="destructive">Cancelled</Badge>;
+      case "EXPIRED":
+        return <Badge variant="outline" className="text-gray-500 border-gray-300">Expired</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -78,7 +80,15 @@ export const VouchersDialog = React.memo(({
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         {getVoucherBadge(voucher.voucher_type)}
-                        {getStatusBadge(voucher.status)}
+                        {(() => {
+                          let status = voucher.status;
+                          if (status === "PENDING" && voucher.payment_mode === "KUICKPAY" && voucher.expiresAt) {
+                            if (new Date(voucher.expiresAt) < new Date()) {
+                              status = "EXPIRED";
+                            }
+                          }
+                          return getStatusBadge(status);
+                        })()}
                       </div>
                       <div className="text-sm font-mono text-muted-foreground">
                         Consumer Number: {voucher.consumer_number}

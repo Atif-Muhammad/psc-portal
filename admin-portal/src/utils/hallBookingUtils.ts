@@ -64,6 +64,8 @@ export const hallInitialFormState: HallBookingForm = {
   remarks: "",
   endDate: "",
   numberOfDays: 1,
+  newPaymentAmount: 0,
+  existingPaidAmount: 0,
   bookingDetails: [],
   heads: [],
 };
@@ -103,8 +105,10 @@ export const calculateHallAccountingValues = (
   let owed = totalPrice;
 
   if (paymentStatus === "PAID") {
-    paid = totalPrice;
-    owed = 0;
+    // If PAID, but paidAmount is already greater than totalPrice (overpayment), 
+    // keep the overpayment instead of capping at totalPrice.
+    paid = Math.max(totalPrice, paidAmount);
+    owed = totalPrice - paid;
   } else if (paymentStatus === "HALF_PAID" || paymentStatus === "ADVANCE_PAYMENT") {
     paid = paidAmount;
     owed = totalPrice - paidAmount;

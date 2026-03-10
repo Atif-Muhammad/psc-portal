@@ -182,6 +182,8 @@ const getVoucherStatusBadge = (status: string) => {
       return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending</Badge>;
     case "CANCELLED":
       return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
+    case "EXPIRED":
+      return <Badge variant="outline" className="text-gray-500 border-gray-300 text-xs">Expired</Badge>;
     default:
       return <Badge className="text-xs">{status}</Badge>;
   }
@@ -214,7 +216,7 @@ export function BookingDetailsCard({
   const roomType = rooms[0]?.roomType?.type || rooms[0]?.room?.roomType?.type || booking.room?.roomType?.type || "N/A";
 
   return (
-    <Card className={`overflow-auto h-[90vh] border shadow-sm hover:shadow-md transition-shadow  ${className}`}>
+    <Card className={`border shadow-sm hover:shadow-md transition-shadow  ${className}`}>
       <CardHeader className="pb-3 bg-gradient-to-r from-gray-50 to-white">
         <div className="flex justify-between items-start">
           <div>
@@ -490,7 +492,15 @@ export function BookingDetailsCard({
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               {getVoucherTypeBadge(voucher.voucher_type)}
-                              {getVoucherStatusBadge(voucher.status)}
+                              {(() => {
+                                let status = voucher.status;
+                                if (status === "PENDING" && voucher.payment_mode === "KUICKPAY" && voucher.expiresAt) {
+                                  if (new Date(voucher.expiresAt) < new Date()) {
+                                    status = "EXPIRED";
+                                  }
+                                }
+                                return getVoucherStatusBadge(status);
+                              })()}
                             </div>
                             <div className="text-xs font-mono text-muted-foreground">
                               Consumer: {voucher.consumer_number}

@@ -71,7 +71,7 @@ const getPaymentStatusBadge = (status: string) => {
   switch (status) {
     case "PAID":
       return (
-        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
           <CheckCircle className="h-3 w-3 mr-1" />
           Paid
         </Badge>
@@ -148,7 +148,7 @@ const getPaidByBadge = (paidBy: string) => {
 };
 
 const getMemberBalanceColor = (balance: number) => {
-  if (balance >= 0) return "text-green-600";
+  if (balance >= 0) return "text-blue-600";
   return "text-red-600";
 };
 
@@ -166,7 +166,7 @@ const getTimeSlotIcon = (time: string) => {
 const getVoucherTypeBadge = (type: string) => {
   switch (type) {
     case "FULL_PAYMENT":
-      return <Badge className="bg-green-100 text-green-800 text-xs">Full Payment</Badge>;
+      return <Badge className="bg-blue-100 text-blue-800 text-xs">Full Payment</Badge>;
     case "HALF_PAYMENT":
       return <Badge className="bg-blue-100 text-blue-800 text-xs">Half Payment</Badge>;
     case "ADVANCE_PAYMENT":
@@ -185,11 +185,13 @@ const getVoucherTypeBadge = (type: string) => {
 const getVoucherStatusBadge = (status: string) => {
   switch (status) {
     case "CONFIRMED":
-      return <Badge className="bg-green-100 text-green-800 text-xs">Confirmed</Badge>;
+      return <Badge className="bg-blue-100 text-blue-800 text-xs">Confirmed</Badge>;
     case "PENDING":
       return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending</Badge>;
     case "CANCELLED":
       return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
+    case "EXPIRED":
+      return <Badge variant="outline" className="text-gray-500 border-gray-300 text-xs">Expired</Badge>;
     default:
       return <Badge className="text-xs">{status}</Badge>;
   }
@@ -200,7 +202,7 @@ const getRequestStatusBadge = (status: string) => {
     case "PENDING":
       return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
     case "APPROVED":
-      return <Badge className="bg-green-100 text-green-800">Approved</Badge>;
+      return <Badge className="bg-blue-100 text-blue-800">Approved</Badge>;
     case "REJECTED":
       return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
     default:
@@ -219,12 +221,12 @@ export function LawnBookingDetailsCard({
   const hasGuestInfo = booking.guestName && booking.pricingType === "guest";
 
   return (
-    <Card className={`overflow-auto h-[90vh] border shadow-sm hover:shadow-md transition-shadow ${className}`}>
-      <CardHeader className="pb-3 bg-gradient-to-r from-green-50 to-emerald-50">
+    <Card className={`border shadow-sm hover:shadow-md transition-shadow ${className}`}>
+      <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Palmtree className="h-5 w-5 text-green-600" />
+              <Palmtree className="h-5 w-5 text-blue-600" />
               Lawn Booking #{booking.id} - {booking.lawn?.description}
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
@@ -350,8 +352,38 @@ export function LawnBookingDetailsCard({
                 )}
               </div>
 
-              {/* Right Column - Member info */}
+              {/* Right Column - Financial & Member info */}
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
+                    <DollarSign className="h-4 w-4" />
+                    Financial Summary
+                  </h3>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md space-y-2 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-blue-700 font-medium">Total Booking Amount</span>
+                      <span className="text-sm font-bold text-blue-800">
+                        {formatPrice((booking?.totalPrice || 0).toString())}
+                      </span>
+                    </div>
+
+                    {(booking as any).extraCharges && (booking as any).extraCharges.length > 0 && (
+                      <div className="pt-2 border-t border-blue-200 space-y-1">
+                        <div className="flex justify-between text-[10px] text-blue-600 italic">
+                          <span>Base Lawn Rent</span>
+                          <span>{formatPrice(((Number(booking?.totalPrice || 0) - ((booking as any)?.extraCharges?.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0) || 0))).toString())}</span>
+                        </div>
+                        {(booking as any).extraCharges.map((head: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-[10px] text-blue-600 italic">
+                            <span>{head.head}</span>
+                            <span>+ {formatPrice((head.amount || 0).toString())}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                     <User className="h-4 w-4" />
@@ -443,11 +475,11 @@ export function LawnBookingDetailsCard({
                   <CreditCard className="h-4 w-4" />
                   Payment Summary
                 </h3>
-                <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border border-green-200 rounded-xl shadow-sm">
+                <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border border-blue-200 rounded-xl shadow-sm">
                   <div className="space-y-4">
                     {/* Price Breakdown */}
                     {(booking as any).extraCharges && (booking as any).extraCharges.length > 0 && (
-                      <div className="space-y-2 pb-3 border-b border-green-200/50">
+                      <div className="space-y-2 pb-3 border-b border-blue-200/50">
                         <div className="flex justify-between items-center text-sm">
                           <span className="text-gray-600">Base Lawn Rent:</span>
                           <span className="font-medium text-gray-800">
@@ -455,10 +487,10 @@ export function LawnBookingDetailsCard({
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider block mb-1">Extra Charges Breakdown:</span>
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Extra Charges Breakdown:</span>
                           {(booking as any)?.extraCharges?.map((h: any, i: number) => (
                             <div key={i} className="flex justify-between items-center text-xs text-blue-900 font-medium">
-                              <span className="text-emerald-700">{h.head}</span>
+                              <span className="text-blue-700">{h.head}</span>
                               <span className="font-mono tracking-tighter">{formatPrice((h.amount || 0).toString())}</span>
                             </div>
                           ))}
@@ -472,8 +504,8 @@ export function LawnBookingDetailsCard({
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-1">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Paid</span>
-                        <span className="text-lg font-bold text-green-700">{formatPrice((booking?.paidAmount || 0).toString())}</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Paid</span>
+                        <span className="text-lg font-bold text-blue-700">{formatPrice((booking?.paidAmount || 0).toString())}</span>
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Pending</span>
@@ -481,14 +513,14 @@ export function LawnBookingDetailsCard({
                       </div>
                     </div>
                     {(booking.card_number || booking.check_number || booking.bank_name) && (
-                      <div className="pt-3 border-t border-green-100 grid grid-cols-2 gap-2 text-xs">
+                      <div className="pt-3 border-t border-blue-100 grid grid-cols-2 gap-2 text-xs">
                         {booking.paymentMode && <div><Label>Mode</Label><Value className="font-bold">{booking.paymentMode}</Value></div>}
                         {booking.bank_name && <div><Label>Bank</Label><Value>{booking.bank_name}</Value></div>}
                         {booking.check_number && <div><Label>Cheque #</Label><Value className="font-mono">{booking.check_number}</Value></div>}
                         {booking.card_number && <div><Label>Card #</Label><Value className="font-mono">****{booking.card_number}</Value></div>}
                       </div>
                     )}
-                    <div className="pt-3 border-t border-green-200 flex justify-between items-center">
+                    <div className="pt-3 border-t border-blue-200 flex justify-between items-center">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Payment By:</span>
                       {getPaidByBadge(booking.paidBy || "MEMBER")}
                     </div>
@@ -516,37 +548,57 @@ export function LawnBookingDetailsCard({
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 {getVoucherTypeBadge(voucher.voucher_type)}
-                                {getVoucherStatusBadge(voucher.status)}
+                                {(() => {
+                                  let status = voucher.status;
+                                  if (status === "PENDING" && voucher.payment_mode === "KUICKPAY" && voucher.expiresAt) {
+                                    if (new Date(voucher.expiresAt) < new Date()) {
+                                      status = "EXPIRED";
+                                    }
+                                  }
+                                  return getVoucherStatusBadge(status);
+                                })()}
                               </div>
                               <div className="text-xs font-mono text-muted-foreground flex items-center gap-1.5">
-                                <span className="bg-muted px-1 rounded">Consumer: {voucher.consumer_number}</span>
-                                {voucher.voucher_no && (
+                                <span className="bg-muted px-1 rounded">Consumer Number: {voucher.consumer_number}</span>
+                                {/* {voucher.voucher_no && (
                                   <span className="bg-muted px-1 rounded">Voucher: {voucher.voucher_no}</span>
-                                )}
+                                )} */}
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className={`text-base font-bold ${voucher.voucher_type === 'REFUND' || voucher.voucher_type === 'ADJUSTMENT'
-                                ? 'text-red-600'
-                                : 'text-green-600'
-                                }`}>
-                                PKR {Number(voucher.amount).toLocaleString()}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
-                                {voucher.payment_mode.toLowerCase() === 'check' ? 'cheque' : voucher.payment_mode}
-                              </div>
-                            </div>
+                          <div className={`text-base font-bold ${voucher.voucher_type === 'REFUND' || voucher.voucher_type === 'ADJUSTMENT'
+                            ? 'text-red-600'
+                            : 'text-blue-600'
+                            }`}>
+                            PKR {Number(voucher.amount).toLocaleString()}
                           </div>
-                          <div className="grid grid-cols-1 gap-1 text-[10px] text-muted-foreground">
-                            <div className="flex justify-between border-t pt-1">
-                              <span>Issued: {new Date(voucher.issued_at).toLocaleDateString()}</span>
-                              <span>By: {voucher.issued_by}</span>
-                            </div>
-                            {voucher.paid_at && (
-                              <div className="text-green-600 font-medium">Paid At: {formatDateTimeForDisplay(voucher.paid_at)}</div>
-                            )}
+                          <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
+                            {voucher.payment_mode.toLowerCase() === 'check' ? 'cheque' : voucher.payment_mode}
                           </div>
                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">Issued At:</span> {formatDateTimeForDisplay(voucher.issued_at)}
+                          <span className="font-medium">Paid At:</span> {voucher.paid_at ? formatDateTimeForDisplay(voucher.paid_at) : "Not Paid"}
+                        </div>
+                        <div>
+                          <span className="font-medium">By:</span> {voucher.issued_by}
+                        </div>
+                      </div>
+                      {(voucher.card_number || voucher.check_number || voucher.bank_name) && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                          {voucher.card_number && <div><span className="">Card:</span> •••• {voucher.card_number}</div>}
+                          {voucher.check_number && <div><span className="">Cheque:</span> {voucher.check_number}</div>}
+                          {voucher.bank_name && <div><span className="font-medium">Bank:</span> {voucher.bank_name}</div>}
+                        </div>
+                      )}
+                      {voucher.transaction_id && (
+                        <div className="mt-2 text-xs">
+                          <span className="font-medium">Transaction ID:</span> <span className="font-mono text-muted-foreground">{voucher.transaction_id}</span>
+                        </div>
+                      )}
+                    </div>
                       ))}
                     </div>
                   )}
@@ -570,14 +622,14 @@ export function LawnBookingDetailsCard({
                   .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .map((request: any, index: number) => (
                     <div key={index} className={`p-4 rounded-lg border ${request.status === 'PENDING' ? 'bg-orange-50 border-orange-200' :
-                      request.status === 'APPROVED' ? 'bg-green-50 border-green-200' :
+                      request.status === 'APPROVED' ? 'bg-blue-50 border-blue-200' :
                         'bg-red-50 border-red-200'
                       }`}>
                       <div className="flex items-start gap-3 mb-3">
                         {request.status === 'PENDING' ? (
                           <Ban className="h-5 w-5 text-orange-600 mt-0.5" />
                         ) : request.status === 'APPROVED' ? (
-                          <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                          <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                         ) : (
                           <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
                         )}
@@ -624,7 +676,7 @@ export function LawnBookingDetailsCard({
               </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground bg-gray-50 rounded-xl border border-dashed">
-                <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30 text-green-500" />
+                <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30 text-blue-500" />
                 <p className="text-lg font-medium">No Cancellation Request</p>
                 <p className="text-sm mt-1">This booking has not been requested for cancellation</p>
               </div>

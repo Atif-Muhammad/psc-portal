@@ -655,6 +655,8 @@ export default function Accounts() {
 function MonthlyBillsTab() {
   const [month, setMonth] = useState<string>((new Date().getMonth() + 1).toString().padStart(2, "0"));
   const [year, setYear] = useState<string>(new Date().getFullYear().toString());
+  const [fetchedMonth, setFetchedMonth] = useState<string>("");
+  const [fetchedYear, setFetchedYear] = useState<string>("");
   const [bills, setBills] = useState<any[]>([]);
   const [fetching, setFetching] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -681,6 +683,8 @@ function MonthlyBillsTab() {
       setFetching(true);
       const data = await listMonthlyBills(month, year);
       setBills(data);
+      setFetchedMonth(month);
+      setFetchedYear(year);
     } catch (error: any) {
       toast.error(error.message || "Failed to fetch bills");
     } finally {
@@ -797,9 +801,9 @@ function MonthlyBillsTab() {
               </TableRow>
             ) : (
               bills.map((bill) => (
-                <TableRow key={bill.membershipNo} className="hover:bg-accent/5 transition-colors group">
+                <TableRow key={`${bill.membershipNo}-${bill.filename}`} className="hover:bg-accent/5 transition-colors group">
                   <TableCell className="font-mono px-6 py-4">{bill.membershipNo}</TableCell>
-                  <TableCell className="text-center py-4">{month}/{year}</TableCell>
+                  <TableCell className="text-center py-4">{fetchedMonth}/{fetchedYear}</TableCell>
                   <TableCell className="text-muted-foreground text-sm py-4">{bill.filename}</TableCell>
                   <TableCell className="text-right pr-6 py-4">
                     <Button

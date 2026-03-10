@@ -1348,7 +1348,7 @@ export default function RoomBookings() {
       />
 
       <Dialog open={openDetails} onOpenChange={setOpenDetails}>
-        <DialogContent className="p-0 max-w-5xl min-w-[60vw] overflow-hidden">
+        <DialogContent className="p-0 max-w-5xl min-w-[60vw] max-h-[90vh] overflow-y-auto">
           {detailBooking && (
             <DetailBookingView booking={detailBooking} />
           )}

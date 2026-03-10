@@ -1478,6 +1478,222 @@ export class BookingService {
     return { message: 'Booking closed successfully' };
   }
 
+  async gClosedBookingsHall(page?: number, limit?: number) {
+    const args: any = {
+      where: { isClosed: true, isCancelled: false },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        hall: true,
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.hallBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
+  }
+
+  async closeBookingHall(
+    bookingId: number,
+    refundPayload?: {
+      paymentMode: string;
+      transaction_id?: string;
+      bank_name?: string;
+      check_number?: string;
+      paid_at?: string;
+    },
+    closedBy: string = 'admin',
+  ) {
+    const booking = await this.prismaService.hallBooking.findUnique({
+      where: { id: bookingId },
+      include: { hall: true, member: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.isCancelled) throw new BadRequestException('Booking is already cancelled');
+    if ((booking as any).isClosed) throw new BadRequestException('Booking is already closed');
+
+    const pending = Number(booking.pendingAmount);
+    if (pending > 0) {
+      throw new BadRequestException(
+        `Cannot close booking: outstanding balance of PKR ${pending.toLocaleString()}`
+      );
+    }
+
+    if (pending < 0) {
+      if (!refundPayload) {
+        throw new BadRequestException('Refund payload required for overpaid booking');
+      }
+
+      const refundAmount = Math.abs(pending);
+      const vno = generateNumericVoucherNo();
+
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          booking_type: 'HALL',
+          booking_id: bookingId,
+          membership_no: booking.member.Membership_No,
+          amount: refundAmount,
+          payment_mode: (refundPayload.paymentMode?.toUpperCase() as any) || 'CASH',
+          voucher_type: 'REFUND' as any,
+          status: 'CONFIRMED' as any,
+          issued_by: closedBy,
+          paid_at: refundPayload.paid_at ? new Date(refundPayload.paid_at) : new Date(),
+          transaction_id: refundPayload.transaction_id || null,
+          bank_name: refundPayload.bank_name || null,
+          check_number: refundPayload.check_number || null,
+          remarks: `Refund on booking close | Hall: ${booking.hall.name} | Amount: ${refundAmount}`,
+        } as any,
+      });
+
+      await this.prismaService.hallBooking.update({
+        where: { id: bookingId },
+        data: {
+          pendingAmount: 0,
+          paidAmount: Number(booking.totalPrice),
+          paymentStatus: 'PAID' as any,
+          refundAmount: refundAmount,
+          isClosed: true,
+          updatedBy: closedBy,
+        },
+      });
+    } else {
+      await this.prismaService.hallBooking.update({
+        where: { id: bookingId },
+        data: {
+          isClosed: true,
+          updatedBy: closedBy,
+        },
+      });
+    }
+
+    return { message: 'Booking closed successfully' };
+  }
+
+  async gClosedBookingsLawn(page?: number, limit?: number) {
+    const args: any = {
+      where: { isClosed: true, isCancelled: false },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        lawn: true,
+        member: {
+          select: {
+            Membership_No: true,
+            Name: true,
+            Balance: true,
+            Status: true,
+            Actual_Status: true,
+            drAmount: true,
+            crAmount: true,
+          },
+        },
+        cancellationRequests: true,
+      },
+    };
+
+    if (page && limit) {
+      args.skip = (Number(page) - 1) * Number(limit);
+      args.take = Number(limit);
+    }
+
+    const bookings = await this.prismaService.lawnBooking.findMany(args);
+    return bookings.map((b) => this.attachActiveCancellationRequest(b));
+  }
+
+  async closeBookingLawn(
+    bookingId: number,
+    refundPayload?: {
+      paymentMode: string;
+      transaction_id?: string;
+      bank_name?: string;
+      check_number?: string;
+      paid_at?: string;
+    },
+    closedBy: string = 'admin',
+  ) {
+    const booking = await this.prismaService.lawnBooking.findUnique({
+      where: { id: bookingId },
+      include: { lawn: true, member: true },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.isCancelled) throw new BadRequestException('Booking is already cancelled');
+    if ((booking as any).isClosed) throw new BadRequestException('Booking is already closed');
+
+    const pending = Number(booking.pendingAmount);
+    if (pending > 0) {
+      throw new BadRequestException(
+        `Cannot close booking: outstanding balance of PKR ${pending.toLocaleString()}`
+      );
+    }
+
+    if (pending < 0) {
+      if (!refundPayload) {
+        throw new BadRequestException('Refund payload required for overpaid booking');
+      }
+
+      const refundAmount = Math.abs(pending);
+      const vno = generateNumericVoucherNo();
+
+      await this.prismaService.paymentVoucher.create({
+        data: {
+          consumer_number: generateConsumerNumber(Number(vno)),
+          voucher_no: vno,
+          booking_type: 'LAWN',
+          booking_id: bookingId,
+          membership_no: booking.member.Membership_No,
+          amount: refundAmount,
+          payment_mode: (refundPayload.paymentMode?.toUpperCase() as any) || 'CASH',
+          voucher_type: 'REFUND' as any,
+          status: 'CONFIRMED' as any,
+          issued_by: closedBy,
+          paid_at: refundPayload.paid_at ? new Date(refundPayload.paid_at) : new Date(),
+          transaction_id: refundPayload.transaction_id || null,
+          bank_name: refundPayload.bank_name || null,
+          check_number: refundPayload.check_number || null,
+          remarks: `Refund on booking close | Lawn: ${booking.lawn.description || 'Lawn'} | Amount: ${refundAmount}`,
+        } as any,
+      });
+
+      await this.prismaService.lawnBooking.update({
+        where: { id: bookingId },
+        data: {
+          pendingAmount: 0,
+          paidAmount: Number(booking.totalPrice),
+          paymentStatus: 'PAID' as any,
+          refundAmount: refundAmount,
+          isClosed: true,
+          updatedBy: closedBy,
+        },
+      });
+    } else {
+      await this.prismaService.lawnBooking.update({
+        where: { id: bookingId },
+        data: {
+          isClosed: true,
+          updatedBy: closedBy,
+        },
+      });
+    }
+
+    return { message: 'Booking closed successfully' };
+  }
+
   async closeBookingRoomAff(
     bookingId: number,
     refundPayload?: {
@@ -2777,6 +2993,7 @@ export class BookingService {
     const args: any = {
       where: {
         isCancelled: false,
+        isClosed: false,
         cancellationRequests: {
           none: { status: 'PENDING' }
         }
@@ -3149,7 +3366,9 @@ export class BookingService {
           numberOfDays: numberOfDays,
           bookingDetails: normalizedDetails,
           totalPrice: total,
-          paymentStatus: paymentStatus as any,
+          paymentStatus: isKuickpay
+            ? PaymentStatus.UNPAID
+            : (paymentStatus as unknown as PaymentStatus),
           pricingType,
           numberOfGuests: Number(numberOfGuests!),
           paidAmount: bookingPaidAmount,
@@ -3509,21 +3728,28 @@ export class BookingService {
       const currPaid = Number(existing.paidAmount);
       const currStatus = existing.paymentStatus as unknown as PaymentStatus;
 
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+
       // Favor payload values, fall back to current values
-      let newPaymentStatus: PaymentStatus =
-        (paymentStatus as unknown as PaymentStatus) || currStatus;
+      let newPaymentStatus: PaymentStatus;
+      if (isKuickpay && paidAmount !== undefined && Number(paidAmount) > currPaid) {
+        newPaymentStatus = currStatus;
+      } else {
+        newPaymentStatus = (paymentStatus as unknown as PaymentStatus) || currStatus;
+      }
       const newTotal = totalPrice !== undefined ? Number(totalPrice) : currTotal;
 
       // Check for price increase without explicit payment change
       const isPriceIncrease = newTotal > currPaid;
-      const isExplicitStatusChange = paymentStatus !== undefined;
       const isExplicitPaidAmount = paidAmount !== undefined;
+      // Only trust frontend's paidAmount when the payment status actually changed from DB
+      const statusActuallyChanged = String(newPaymentStatus) !== String(currStatus);
 
       let newPaid = currPaid;
 
       // Respect manual status changes and amounts from UI
       if (String(newPaymentStatus) === 'PAID') {
-        newPaid = isExplicitPaidAmount ? Number(paidAmount) : Math.max(newTotal, currPaid);
+        newPaid = (statusActuallyChanged && isExplicitPaidAmount) ? Number(paidAmount) : currPaid;
       } else if (String(newPaymentStatus) === 'UNPAID') {
         newPaid = 0;
       } else if (String(newPaymentStatus) === 'TO_BILL' || newPaymentStatus === (PaymentStatus.TO_BILL as unknown)) {
@@ -3531,10 +3757,10 @@ export class BookingService {
         // newPaid stays as whatever cash was previously paid.
         newPaid = currPaid;
       } else {
-        newPaid = isExplicitPaidAmount ? Number(paidAmount) : currPaid;
+        newPaid = (statusActuallyChanged && isExplicitPaidAmount) ? Number(paidAmount) : currPaid;
       }
 
-      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+
       const isOnline = paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode).toUpperCase() === 'ONLINE';
 
       // Only stagnate db ledger (paidAmount) for KUICKPAY (automated gateway, awaiting confirmation).
@@ -3795,6 +4021,7 @@ export class BookingService {
     const args: any = {
       where: {
         isCancelled: false,
+        isClosed: false,
         cancellationRequests: {
           none: { status: 'PENDING' }
         }
@@ -4064,7 +4291,9 @@ export class BookingService {
           numberOfDays: numberOfDays,
           guestsCount: Number(numberOfGuests!),
           totalPrice: total,
-          paymentStatus: paymentStatus as any,
+          paymentStatus: isKuickpay
+            ? PaymentStatus.UNPAID
+            : (paymentStatus as unknown as PaymentStatus),
           pricingType,
           paidAmount: bookingPaidAmount,
           pendingAmount: bookingPendingAmount,
@@ -4417,8 +4646,14 @@ export class BookingService {
         ? Number(totalPrice)
         : Number(basePrice) * numberOfDays;
 
-      let newPaymentStatus =
-        (paymentStatus as unknown as PaymentStatus) || currStatus;
+      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+
+      let newPaymentStatus: PaymentStatus;
+      if (isKuickpay && paidAmount !== undefined && Number(paidAmount) > currPaid) {
+        newPaymentStatus = currStatus;
+      } else {
+        newPaymentStatus = (paymentStatus as unknown as PaymentStatus) || currStatus;
+      }
 
       // Auto-downgrade status if price increases and was previously PAID
       if (
@@ -4430,12 +4665,16 @@ export class BookingService {
         newPaymentStatus = PaymentStatus.HALF_PAID as unknown as PaymentStatus;
       }
 
+      const isExplicitPaidAmount = paidAmount !== undefined;
+      // Only trust frontend's paidAmount when the payment status actually changed from DB
+      const statusActuallyChanged = String(newPaymentStatus) !== String(currStatus);
+
       let intendedPaid = currPaid;
       if (
         newPaymentStatus === (PaymentStatus.PAID as unknown) ||
         String(newPaymentStatus) === 'PAID'
       ) {
-        intendedPaid = newTotal;
+        intendedPaid = (statusActuallyChanged && isExplicitPaidAmount) ? Number(paidAmount) : currPaid;
       } else if (
         newPaymentStatus === (PaymentStatus.UNPAID as unknown) ||
         String(newPaymentStatus) === 'UNPAID'
@@ -4447,11 +4686,10 @@ export class BookingService {
         newPaymentStatus === (PaymentStatus.ADVANCE_PAYMENT as unknown) ||
         String(newPaymentStatus) === 'ADVANCE_PAYMENT'
       ) {
-        intendedPaid =
-          paidAmount !== undefined ? Number(paidAmount) : currPaid;
+        intendedPaid = (statusActuallyChanged && isExplicitPaidAmount) ? Number(paidAmount) : currPaid;
       }
 
-      const isKuickpay = (paymentMode as any) === ((PaymentMode as any).KUICKPAY) || String(paymentMode).toUpperCase() === 'KUICKPAY';
+
       const isOnline =
         paymentMode === (PaymentMode.ONLINE as unknown) || String(paymentMode).toUpperCase() === 'ONLINE';
 
@@ -6424,7 +6662,7 @@ export class BookingService {
     const paid = intendedPaid;
     const owed = total - paid;
 
-    
+
     const isHalfPaid =
       String(paymentStatus) === 'HALF_PAID' ||
       paymentStatus === (PaymentStatus.HALF_PAID as unknown);

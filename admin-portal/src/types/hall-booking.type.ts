@@ -142,6 +142,8 @@ export interface HallBookingForm {
   guestCNIC?: "";
   endDate: string;
   numberOfDays: number;
+  newPaymentAmount?: number;
+  existingPaidAmount?: number;
   bookingDetails: { date: string; timeSlot: string; eventType?: string; reservationId?: number | string }[];
   remarks?: string;
   heads?: { head: string; amount: number }[];

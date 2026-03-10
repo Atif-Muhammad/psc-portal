@@ -197,6 +197,7 @@ model HallBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  isClosed       Boolean @default(false)
   extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
   cancellationRequests HallCancellationRequest[]
 
@@ -241,6 +242,7 @@ model LawnBooking {
   refundReturned Boolean @default(false)
   isConfirmed    Boolean @default(false)
   isCancelled    Boolean @default(false)
+  isClosed       Boolean @default(false)
   extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
   cancellationRequests LawnCancellationRequest[]
 

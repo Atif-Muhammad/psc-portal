@@ -187,6 +187,8 @@ const getVoucherStatusBadge = (status: string) => {
       return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending</Badge>;
     case "CANCELLED":
       return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
+    case "EXPIRED":
+      return <Badge variant="outline" className="text-gray-500 border-gray-300 text-xs">Expired</Badge>;
     default:
       return <Badge className="text-xs">{status}</Badge>;
   }
@@ -215,7 +217,7 @@ export function HallBookingDetailsCard({
   const hasGuestInfo = booking.guestName && booking.pricingType === "guest";
 
   return (
-    <Card className={`overflow-auto h-[90vh] border shadow-sm hover:shadow-md transition-shadow ${className}`}>
+    <Card className={`border shadow-sm hover:shadow-md transition-shadow ${className}`}>
       <CardHeader className="pb-3 bg-gradient-to-r from-gray-50 to-white">
         <div className="flex justify-between items-start">
           <div>
@@ -343,8 +345,38 @@ export function HallBookingDetailsCard({
                 )}
               </div>
 
-              {/* Right Column - Member info */}
+              {/* Right Column - Financial & Member info */}
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
+                    <DollarSign className="h-4 w-4" />
+                    Financial Summary
+                  </h3>
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-emerald-700 font-medium">Total Booking Amount</span>
+                      <span className="text-sm font-bold text-emerald-800">
+                        {formatPrice(booking.totalPrice.toString())}
+                      </span>
+                    </div>
+
+                    {booking.extraCharges && booking.extraCharges.length > 0 && (
+                      <div className="pt-2 border-t border-emerald-200 space-y-1">
+                        <div className="flex justify-between text-[10px] text-emerald-600 italic">
+                          <span>Base Hall Rent</span>
+                          <span>{formatPrice((Number(booking.totalPrice || 0) - (booking.extraCharges.reduce((sum, h) => sum + (Number(h.amount) || 0), 0))).toString())}</span>
+                        </div>
+                        {booking.extraCharges.map((head, idx) => (
+                          <div key={idx} className="flex justify-between text-[10px] text-emerald-600 italic">
+                            <span>{head.head}</span>
+                            <span>+ {formatPrice(head.amount.toString())}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm flex items-center gap-2 text-gray-700">
                     <User className="h-4 w-4" />
@@ -435,6 +467,27 @@ export function HallBookingDetailsCard({
                 </h3>
                 <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-xl shadow-sm">
                   <div className="space-y-4">
+                    {/* Price Breakdown */}
+                    {(booking as any).extraCharges && (booking as any).extraCharges.length > 0 && (
+                      <div className="space-y-2 pb-3 border-b border-blue-200/50">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Base Hall Rent:</span>
+                          <span className="font-medium text-gray-800">
+                            {formatPrice(((Number(booking?.totalPrice || 0) - ((booking as any)?.extraCharges?.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0) || 0))).toString())}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block mb-1">Extra Charges Breakdown:</span>
+                          {(booking as any)?.extraCharges?.map((h: any, i: number) => (
+                            <div key={i} className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500">{h.head}</span>
+                              <span className="text-slate-700 font-mono tracking-tighter">{formatPrice((h.amount || 0).toString())}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700 font-bold">Total Amount:</span>
                       <span className="text-2xl font-black text-slate-900">{formatPrice((booking?.totalPrice || 0).toString())}</span>
@@ -479,16 +532,24 @@ export function HallBookingDetailsCard({
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               {getVoucherTypeBadge(voucher.voucher_type)}
-                              {getVoucherStatusBadge(voucher.status)}
+                              {(() => {
+                                let status = voucher.status;
+                                if (status === "PENDING" && voucher.payment_mode === "KUICKPAY" && voucher.expiresAt) {
+                                  if (new Date(voucher.expiresAt) < new Date()) {
+                                    status = "EXPIRED";
+                                  }
+                                }
+                                return getVoucherStatusBadge(status);
+                              })()}
                             </div>
                             <div className="text-xs font-mono text-muted-foreground">
-                              Consumer: {voucher.consumer_number}
+                              Consumer Number: {voucher.consumer_number}
                             </div>
-                            {voucher.voucher_no && (
+                            {/* {voucher.voucher_no && (
                               <div className="text-xs font-mono text-muted-foreground">
                                 Voucher: {voucher.voucher_no}
                               </div>
-                            )}
+                            )} */}
                           </div>
                           <div className="text-right">
                             <div className={`text-base font-bold ${voucher.voucher_type === 'REFUND' || voucher.voucher_type === 'ADJUSTMENT'
@@ -502,15 +563,27 @@ export function HallBookingDetailsCard({
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 gap-1 text-[10px] text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Issued At: {formatDateTimeForDisplay(voucher.issued_at)}</span>
-                            <span>By: {voucher.issued_by}</span>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">Issued At:</span> {formatDateTimeForDisplay(voucher.issued_at)}
+                            <span className="font-medium">Paid At:</span> {voucher.paid_at ? formatDateTimeForDisplay(voucher.paid_at) : "Not Paid"}
                           </div>
-                          {voucher.paid_at && (
-                            <div>Paid At: {formatDateTimeForDisplay(voucher.paid_at)}</div>
-                          )}
+                          <div>
+                            <span className="font-medium">By:</span> {voucher.issued_by}
+                          </div>
                         </div>
+                        {(voucher.card_number || voucher.check_number || voucher.bank_name) && (
+                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                            {voucher.card_number && <div><span className="">Card:</span> •••• {voucher.card_number}</div>}
+                            {voucher.check_number && <div><span className="">Cheque:</span> {voucher.check_number}</div>}
+                            {voucher.bank_name && <div><span className="font-medium">Bank:</span> {voucher.bank_name}</div>}
+                          </div>
+                        )}
+                        {voucher.transaction_id && (
+                          <div className="mt-2 text-xs">
+                            <span className="font-medium">Transaction ID:</span> <span className="font-mono text-muted-foreground">{voucher.transaction_id}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

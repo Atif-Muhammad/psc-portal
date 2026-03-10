@@ -11,7 +11,7 @@ import {
   CreateAffiliatedClubRequestDto,
 } from './dtos/affiliation.dto';
 import { MailerService } from 'src/mailer/mailer.service';
-import { createRequestEmailContent } from 'src/common/utils/messages';
+import { createRequestEmailContent } from 'src/utils/messages';
 
 @Injectable()
 export class AffiliationService {
@@ -214,15 +214,7 @@ export class AffiliationService {
       throw new HttpException('Member not found', HttpStatus.NOT_FOUND);
     }
 
-    const mailSent = this.sendRequestEmail(member.Email!, club, payload);
-    if (!mailSent) {
-      throw new HttpException(
-        'Mail not sent',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-
-    return await this.prismaService.affiliatedClubRequest.create({
+    const request = await this.prismaService.affiliatedClubRequest.create({
       data: {
         membershipNo: payload.membershipNo.toString(),
         affiliatedClubId: payload.affiliatedClubId,
@@ -234,6 +226,13 @@ export class AffiliationService {
         affiliatedClub: true,
       },
     });
+
+    // Send email after request is created so we have the ID
+    this.sendRequestEmail(member.Email!, club, request).catch(err => {
+      console.error('Failed to send affiliation request email:', err);
+    });
+
+    return request;
   }
 
   private async sendRequestEmail(member: string, club: any, request: any) {

@@ -209,6 +209,10 @@ export class BookingController {
   ) {
     if (bookingFor === 'rooms')
       return this.bookingService.gClosedBookingsRoom(page, limit);
+    if (bookingFor === 'halls')
+      return this.bookingService.gClosedBookingsHall(page, limit);
+    if (bookingFor === 'lawns')
+      return this.bookingService.gClosedBookingsLawn(page, limit);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -240,6 +244,10 @@ export class BookingController {
       return this.bookingService.closeBookingRoom(Number(bookID), refundPayload, adminName);
     if (bookingFor === 'room_aff')
       return this.bookingService.closeBookingRoomAff(Number(bookID), refundPayload, adminName);
+    if (bookingFor === 'halls')
+      return this.bookingService.closeBookingHall(Number(bookID), refundPayload, adminName);
+    if (bookingFor === 'lawns')
+      return this.bookingService.closeBookingLawn(Number(bookID), refundPayload, adminName);
   }
 
   // @UseGuards(JwtAccGuard)

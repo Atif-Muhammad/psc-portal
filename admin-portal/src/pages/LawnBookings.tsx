@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon, Ban, Eye, CheckCircle, AlertTriangle } from "lucide-react";
+import { Plus, Edit, XCircle, Loader2, User, Search, Receipt, NotepadText, Calendar as CalendarIcon, Ban, Eye, CheckCircle, AlertTriangle, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -16,8 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses, updateCancellationReq, getCancelledBookings, getCancellationRequests } from "../../config/apis";
-import { FormInput } from "@/components/FormInputs";
+import { getLawnCategories, getBookings, createBooking, updateBooking, cancelReqBooking, searchMembers, getVouchers, getLawnDateStatuses, updateCancellationReq, getCancelledBookings, getCancellationRequests, closeBooking } from "../../config/apis";
+import { FormInput, PaidAmountInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, addYears, startOfDay, addDays, differenceInCalendarDays } from "date-fns";
 import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
@@ -26,6 +26,7 @@ import { Voucher } from "@/types/room-booking.type";
 import { MemberSearchComponent } from "@/components/MemberSearch";
 import paymentRules from "../config/paymentRules.json";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
+import { CloseBookingDialog } from "@/components/CloseBookingDialog";
 
 interface Member {
   id: number;
@@ -89,6 +90,8 @@ export interface LawnBookingForm {
   bank_name?: string;
   transaction_id?: string;
   paid_at?: string;
+  existingPaidAmount?: number;
+  newPaymentAmount?: number;
 }
 
 export interface LawnBooking {
@@ -149,25 +152,14 @@ const LawnPaymentSection = React.memo(
     form,
     onChange,
   }: {
-    form: {
-      paymentStatus: string;
-      totalPrice: number;
-      paidAmount: number;
-      pendingAmount: number;
-      paymentMode?: string;
-      card_number?: string;
-      check_number?: string;
-      bank_name?: string;
-      transaction_id?: string;
-      paid_at?: string;
-    };
+    form: LawnBookingForm;
     onChange: (field: string, value: any) => void;
   }) => {
-    const accounting = {
-      paid: form.paidAmount || 0,
-      owed: form.pendingAmount || 0,
-      total: form.totalPrice || 0
-    };
+    const total = Number(form.totalPrice) || 0;
+    const existing = Number(form.existingPaidAmount) || 0;
+    const newPaid = Number(form.newPaymentAmount) || 0;
+    const totalPaid = existing + newPaid;
+    const pending = total - totalPaid;
 
     return (
       <div className="md:col-span-2 border-t pt-4">
@@ -178,7 +170,7 @@ const LawnPaymentSection = React.memo(
           <Input
             type="text"
             className="mt-2 font-bold text-lg"
-            value={`PKR ${form.totalPrice.toLocaleString()}`}
+            value={`PKR ${total.toLocaleString()}`}
             disabled
           />
         </div>
@@ -200,11 +192,91 @@ const LawnPaymentSection = React.memo(
               <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
             </SelectContent>
           </Select>
-          {form.totalPrice > paymentRules.lawnBooking.advancePayment.threshold && (
+          {total > paymentRules.lawnBooking.advancePayment.threshold && (
             <p className="text-[10px] text-blue-600 mt-1 italic font-medium">
               * For bookings over {paymentRules.lawnBooking.advancePayment.threshold.toLocaleString()} PKR, an advance payment of {paymentRules.lawnBooking.advancePayment.defaultPaidAmount.toLocaleString()} PKR is required.
             </p>
           )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <Label>Existing Paid Amount (PKR)</Label>
+            <Input
+              type="text"
+              className="mt-2 font-semibold bg-gray-100"
+              value={existing.toLocaleString()}
+              disabled
+              readOnly
+            />
+          </div>
+          <div>
+            <Label>New Payment Amount (PKR)</Label>
+            <PaidAmountInput
+              value={newPaid}
+              onChange={(val) => onChange("newPaymentAmount", val)}
+              max={total - existing}
+              disabled={form.paymentStatus === "PAID" && existing >= total}
+            />
+          </div>
+          <div>
+            <Label>Pending Amount (PKR)</Label>
+            <Input
+              type="number"
+              value={pending}
+              className="mt-2 font-semibold"
+              readOnly
+              disabled
+              style={{
+                color: pending > 0 ? '#dc2626' : '#16a34a',
+                fontWeight: 'bold'
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <Label className="text-sm font-semibold text-blue-800 mb-2 block">
+            Accounting Summary
+          </Label>
+          <div className="flex flex-wrap gap-4 text-sm mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-700">Total Price:</span>
+              <span className="font-semibold text-blue-700">
+                PKR {total.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">Existing Paid:</span>
+              <span className="font-semibold text-slate-700">
+                PKR {existing.toLocaleString()}
+              </span>
+            </div>
+
+            {newPaid > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-orange-600">New Payment:</span>
+                <span className="font-semibold text-orange-700">
+                  + PKR {newPaid.toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 border-l pl-4 border-blue-200">
+              <span className="text-blue-700">Total Paid (DR):</span>
+              <span className="font-bold text-blue-700">
+                PKR {totalPaid.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-red-700">Pending (CR):</span>
+              <span className="font-bold text-red-700">
+                PKR {pending.toLocaleString()}
+              </span>
+            </div>
+          </div>
         </div>
 
         {form.paymentStatus === "TO_BILL" && (
@@ -217,61 +289,6 @@ const LawnPaymentSection = React.memo(
             </div>
           </div>
         )}
-
-        {(form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <Label>Paid Amount (PKR) *</Label>
-              <Input
-                type="number"
-                value={form.paidAmount || ""}
-                onChange={(e) =>
-                  onChange("paidAmount", parseFloat(e.target.value) || 0)
-                }
-                className="mt-2"
-                placeholder="Enter paid amount"
-                min="0"
-                max={form.totalPrice}
-              />
-            </div>
-            <div>
-              <Label>Pending Amount (PKR)</Label>
-              <Input
-                type="number"
-                value={form.pendingAmount}
-                className="mt-2"
-                readOnly
-                disabled
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <Label className="text-lg font-semibold text-blue-800">
-            Accounting Summary
-          </Label>
-          <div className="grid grid-cols-2 gap-2 text-sm mt-2">
-            <div className="text-blue-700">Total Amount:</div>
-            <div className="font-semibold text-right text-blue-700">
-              PKR {form.totalPrice.toLocaleString()}
-            </div>
-
-            <div className="text-green-700">Paid Amount (DR):</div>
-            <div className="font-semibold text-right text-green-700">
-              PKR {accounting.paid.toLocaleString()}
-            </div>
-
-            <div className="text-red-700">Owed Amount (CR):</div>
-            <div className="font-semibold text-right text-red-700">
-              PKR {accounting.owed.toLocaleString()}
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-blue-600">
-            <strong>DR</strong> = Debit (Amount Received), <strong>CR</strong> =
-            Credit (Amount Owed)
-          </div>
-        </div>
 
         {/* Payment Mode Selection */}
         {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
@@ -291,12 +308,24 @@ const LawnPaymentSection = React.memo(
                 <SelectContent>
                   <SelectItem value="CASH">Cash</SelectItem>
                   <SelectItem value="CARD">Card</SelectItem>
-                  <SelectItem value="CHECK">Check</SelectItem>
+                  <SelectItem value="CHECK">Cheque</SelectItem>
                   <SelectItem value="ONLINE">Online</SelectItem>
                   <SelectItem value="KUICKPAY">KuickPay</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK" || form.paymentMode === "ONLINE") && (
+              <div className="col-span-2">
+                <Label>Bank Name *</Label>
+                <Input
+                  className="mt-2"
+                  placeholder="Enter bank name"
+                  value={form.bank_name || ""}
+                  onChange={(e) => onChange("bank_name", e.target.value)}
+                />
+              </div>
+            )}
 
             {form.paymentMode === "CARD" && (
               <div>
@@ -318,18 +347,6 @@ const LawnPaymentSection = React.memo(
                   placeholder="Enter check number"
                   value={form.check_number || ""}
                   onChange={(e) => onChange("check_number", e.target.value)}
-                />
-              </div>
-            )}
-
-            {(form.paymentMode === "CARD" || form.paymentMode === "CHECK" || form.paymentMode === "ONLINE") && (
-              <div className="col-span-2">
-                <Label>Bank Name *</Label>
-                <Input
-                  className="mt-2"
-                  placeholder="Enter bank name"
-                  value={form.bank_name || ""}
-                  onChange={(e) => onChange("bank_name", e.target.value)}
                 />
               </div>
             )}
@@ -361,10 +378,10 @@ const LawnPaymentSection = React.memo(
 
         {(form.paymentStatus === "PAID" ||
           form.paymentStatus === "HALF_PAID") && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center">
-                <Receipt className="h-4 w-4 text-green-600 mr-2" />
-                <span className="text-sm font-medium text-green-800">
+                <Receipt className="h-4 w-4 text-blue-600 mr-2" />
+                <span className="text-sm font-medium text-blue-800">
                   {form.paymentStatus === "PAID"
                     ? "Full Payment Voucher will be generated automatically"
                     : "Half Payment Voucher will be generated automatically"}
@@ -652,6 +669,8 @@ const initialForm: LawnBookingForm = {
   card_number: "",
   check_number: "",
   bank_name: "",
+  newPaymentAmount: 0,
+  existingPaidAmount: 0,
   transaction_id: "",
   paid_at: "",
 };
@@ -686,6 +705,7 @@ export default function LawnBookings() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editBooking, setEditBooking] = useState<LawnBooking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<LawnBooking | null>(null);
+  const [closeBookingTarget, setCloseBookingTarget] = useState<LawnBooking | null>(null);
   const [activeTab, setActiveTab] = useState("active");
   const [updateReqBooking, setUpdateReqBooking] = useState<LawnBooking | null>(null);
   const [updateStatus, setUpdateStatus] = useState<"APPROVED" | "REJECTED" | null>(null);
@@ -782,6 +802,8 @@ export default function LawnBookings() {
         res = await getBookings({ bookingsFor: "lawns", pageParam });
       } else if (activeTab === "cancelled") {
         res = await getCancelledBookings({ bookingsFor: "lawns", pageParam });
+      } else if (activeTab === "closed") {
+        res = await getBookings({ bookingsFor: "lawns", pageParam, type: "closed" });
       } else {
         res = await getCancellationRequests({ bookingsFor: "lawns", pageParam });
       }
@@ -992,6 +1014,23 @@ export default function LawnBookings() {
     },
   });
 
+  const closeMutation = useMutation({
+    mutationFn: (data: { bookingId: number; refundPayload?: any }) =>
+      closeBooking("lawns", data.bookingId, data.refundPayload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lawn-bookings"] });
+      toast({ title: "Lawn booking closed successfully" });
+      setCloseBookingTarget(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to close booking",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateReqMutation = useMutation({
     mutationFn: ({ bookingFor, bookID, status, remarks }: any) =>
       updateCancellationReq(bookingFor, bookID, status, remarks),
@@ -1127,42 +1166,63 @@ export default function LawnBookings() {
             const oldPaymentStatus = prev.paymentStatus;
             const total = newForm.totalPrice;
 
-            if (total < oldPaid) {
+            if (total <= oldPaid) {
               newForm.paymentStatus = "PAID";
-              newForm.paidAmount = total;
-              newForm.pendingAmount = 0;
+              newForm.paidAmount = oldPaid;
+              newForm.pendingAmount = total - oldPaid;
             } else if (total > oldPaid && oldPaymentStatus === "PAID") {
               newForm.paymentStatus = "HALF_PAID";
               newForm.paidAmount = oldPaid;
               newForm.pendingAmount = total - oldPaid;
+            } else {
+              newForm.pendingAmount = total - newForm.paidAmount;
             }
           }
         }
 
         // Handle payment status changes
         if (field === "paymentStatus") {
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
+
           if (value === "PAID") {
-            newForm.paidAmount = newForm.totalPrice;
+            newForm.newPaymentAmount = Math.max(0, total - existing);
+            newForm.paidAmount = total;
             newForm.pendingAmount = 0;
           } else if (value === "UNPAID") {
-            newForm.paidAmount = 0;
-            newForm.pendingAmount = newForm.totalPrice;
-          } else if (value === "ADVANCE_PAYMENT") {
-            const rules = paymentRules.lawnBooking.advancePayment;
-            if (newForm.totalPrice > rules.threshold) {
-              newForm.paidAmount = rules.defaultPaidAmount;
-            }
-            newForm.pendingAmount = newForm.totalPrice - (newForm.paidAmount || 0);
+            newForm.newPaymentAmount = 0;
+            newForm.paidAmount = existing;
+            newForm.pendingAmount = total - existing;
+          } else {
+            // For HALF_PAID, ADVANCE_PAYMENT etc.
+            newForm.pendingAmount = total - (Number(newForm.paidAmount) || 0);
           }
         }
 
-        // Handle paid amount changes
-        if (field === "paidAmount") {
-          if (value > newForm.totalPrice) {
-            value = newForm.totalPrice;
-            newForm.paidAmount = value;
+        // Handle new payment amount changes
+        if (field === "newPaymentAmount") {
+          const val = parseFloat(value) || 0;
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
+
+          newForm.paidAmount = existing + val;
+          newForm.pendingAmount = total - newForm.paidAmount;
+
+          if (newForm.paidAmount >= total && newForm.paymentStatus !== "PAID") {
+            newForm.paymentStatus = "PAID";
+          } else if (newForm.paidAmount > existing && newForm.paidAmount < total && newForm.paymentStatus !== "HALF_PAID") {
+            newForm.paymentStatus = "HALF_PAID";
           }
-          newForm.pendingAmount = newForm.totalPrice - value;
+        }
+
+        // Handle paid amount changes (backward compatibility/legacy)
+        if (field === "paidAmount") {
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
+          if (value > total) value = total;
+          newForm.paidAmount = value;
+          newForm.pendingAmount = total - value;
+          newForm.newPaymentAmount = Math.max(0, value - existing);
         }
 
         return newForm;
@@ -1243,6 +1303,8 @@ export default function LawnBookings() {
         bank_name: (editBooking as any).bank_name || "",
         transaction_id: (editBooking as any).transaction_id || "",
         paid_at: (editBooking as any).paid_at || "",
+        existingPaidAmount: editBooking.paidAmount || 0,
+        newPaymentAmount: 0,
       });
     }
   }, [editBooking, lawnCategories]);
@@ -1404,7 +1466,11 @@ export default function LawnBookings() {
           pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
         };
 
-        if (newTotal > prev.totalPrice && prev.paymentStatus === "PAID") {
+        if (newTotal <= prev.paidAmount) {
+          updated.paymentStatus = "PAID";
+          updated.paidAmount = prev.paidAmount;
+          updated.pendingAmount = newTotal - prev.paidAmount;
+        } else if (newTotal > prev.paidAmount && prev.paymentStatus === "PAID") {
           updated.paymentStatus = "HALF_PAID";
         }
 
@@ -1439,12 +1505,24 @@ export default function LawnBookings() {
         const { updatedHeads, totalExtra } = recalculateHeads(basePrice, newHeads);
         const newTotal = basePrice + totalExtra;
 
-        return {
+        const updated = {
           ...prev,
           heads: updatedHeads,
           totalPrice: newTotal,
           pendingAmount: (prev.paymentStatus === "TO_BILL" ? 0 : newTotal - prev.paidAmount)
         };
+
+        if (newTotal <= prev.paidAmount) {
+          updated.paymentStatus = "PAID";
+          updated.paidAmount = prev.paidAmount;
+          updated.pendingAmount = newTotal - prev.paidAmount;
+        } else if (newTotal > prev.paidAmount && prev.paymentStatus === "PAID") {
+          updated.paymentStatus = "HALF_PAID";
+          updated.paidAmount = prev.paidAmount;
+          updated.pendingAmount = newTotal - prev.paidAmount;
+        }
+
+        return updated;
       });
     } else {
       setForm(prev => {
@@ -1763,10 +1841,10 @@ export default function LawnBookings() {
                   <div className="space-y-4 col-span-2">
                     <div className="flex items-center justify-between border-b pb-2">
                       <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <Plus className="h-4 w-4 text-emerald-500" />
+                        <Plus className="h-4 w-4 text-blue-500" />
                         Extra Charges (Heads)
                       </h3>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-50">
+                      <Badge variant="outline" className="text-[10px] bg-blue-50">
                         Optional
                       </Badge>
                     </div>
@@ -1816,7 +1894,7 @@ export default function LawnBookings() {
                         <Button
                           type="button"
                           size="sm"
-                          className="h-8 w-full bg-emerald-600 hover:bg-emerald-700"
+                          className="h-8 w-full bg-blue-600 hover:bg-blue-700"
                           onClick={() => addHead(false)}
                         >
                           <Plus className="h-3 w-3" />
@@ -1829,11 +1907,11 @@ export default function LawnBookings() {
                         {form.heads.map((h, index) => (
                           <div key={index} className="flex items-center justify-between p-2 bg-white border rounded-md text-xs shadow-sm group">
                             <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                               <span className="font-medium text-gray-700">{h.head}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="font-bold text-emerald-700">PKR {h.amount.toLocaleString()}</span>
+                              <span className="font-bold text-blue-700">PKR {h.amount.toLocaleString()}</span>
                               <button
                                 onClick={() => removeHead(index, false)}
                                 className="text-gray-400 hover:text-red-500 transition-colors"
@@ -1893,10 +1971,11 @@ export default function LawnBookings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-4 mb-4">
           <TabsTrigger value="active">Active Bookings</TabsTrigger>
           <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
           <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
+          <TabsTrigger value="closed">Closed Bookings</TabsTrigger>
         </TabsList>
 
         <Card>
@@ -1909,7 +1988,8 @@ export default function LawnBookings() {
               <div className="text-center py-32 text-muted-foreground text-lg">
                 {activeTab === "active" ? "No lawn bookings found" :
                   activeTab === "cancelled" ? "No cancelled bookings found" :
-                    "No cancellation requests found"}
+                    activeTab === "closed" ? "No closed bookings found" :
+                      "No cancellation requests found"}
               </div>
             ) : (
               <>
@@ -1996,6 +2076,15 @@ export default function LawnBookings() {
                                 <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setCancelBooking(booking)} title="Cancel Booking">
                                   <XCircle className="h-4 w-4" />
                                 </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-amber-600"
+                                  onClick={() => setCloseBookingTarget(booking)}
+                                  title="Close Booking"
+                                >
+                                  <Lock className="h-4 w-4" />
+                                </Button>
                               </>
                             )}
 
@@ -2004,7 +2093,7 @@ export default function LawnBookings() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-green-600"
+                                  className="text-blue-600"
                                   onClick={() => handleApproveReq(booking)}
                                   title="Approve Cancellation"
                                 >
@@ -2302,10 +2391,10 @@ export default function LawnBookings() {
               <div className="space-y-4 col-span-2">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <Plus className="h-4 w-4 text-emerald-500" />
+                    <Plus className="h-4 w-4 text-blue-500" />
                     Extra Charges (Heads)
                   </h3>
-                  <Badge variant="outline" className="text-[10px] bg-emerald-50">
+                  <Badge variant="outline" className="text-[10px] bg-blue-50">
                     Optional
                   </Badge>
                 </div>
@@ -2354,7 +2443,7 @@ export default function LawnBookings() {
                   <div className="col-span-1">
                     <button
                       type="button"
-                      className="h-8 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center justify-center transition-colors shadow-sm"
+                      className="h-8 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center justify-center transition-colors shadow-sm"
                       onClick={() => addHead(true)}
                     >
                       <Plus className="h-4 w-4" />
@@ -2367,11 +2456,11 @@ export default function LawnBookings() {
                     {editForm.heads.map((h, index) => (
                       <div key={index} className="flex items-center justify-between p-2 bg-white border rounded-md text-xs shadow-sm group">
                         <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                           <span className="font-medium text-gray-700">{h.head}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="font-bold text-emerald-700">PKR {h.amount.toLocaleString()}</span>
+                          <span className="font-bold text-blue-700">PKR {h.amount.toLocaleString()}</span>
                           <button
                             onClick={() => removeHead(index, true)}
                             className="text-gray-400 hover:text-red-500 transition-colors"
@@ -2506,7 +2595,7 @@ export default function LawnBookings() {
 
       {/* booking details */}
       <Dialog open={openDetails} onOpenChange={setOpenDetails}>
-        <DialogContent className="p-0 max-w-5xl min-w-4xl overflow-hidden">
+        <DialogContent className="p-0 max-w-5xl min-w-4xl max-h-[90vh] overflow-y-auto">
           {detailBooking && (
             <LawnBookingDetailsCard
               booking={detailBooking}
@@ -2554,10 +2643,32 @@ export default function LawnBookings() {
             <DialogTitle>{updateStatus === "APPROVED" ? "Approve" : "Reject"} Cancellation Request</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <p>
-              Are you sure you want to <strong>{updateStatus?.toLowerCase()}</strong> the cancellation request for{" "}
-              <strong>{updateReqBooking?.memberName}</strong>?
-            </p>
+            <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
+              <p className="text-sm">
+                Are you sure you want to <strong>{updateStatus?.toLowerCase()}</strong> the cancellation request for{" "}
+                <strong className="text-primary">{updateReqBooking?.memberName}</strong>?
+              </p>
+              <div className="pt-2 border-t space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Total Price:</span>
+                  <span className="font-semibold">PKR {Number(updateReqBooking?.totalPrice || 0).toLocaleString()}</span>
+                </div>
+                {(updateReqBooking as any)?.extraCharges && (updateReqBooking as any).extraCharges.length > 0 && (
+                  <div className="pl-2 border-l-2 border-primary/20 space-y-1 mt-1">
+                    <div className="flex justify-between text-[11px] text-muted-foreground italic">
+                      <span>Base Lawn Rent:</span>
+                      <span>PKR {(Number(updateReqBooking.totalPrice || 0) - ((updateReqBooking as any).extraCharges.reduce((sum: number, h: any) => sum + (Number(h.amount) || 0), 0))).toLocaleString()}</span>
+                    </div>
+                    {(updateReqBooking as any).extraCharges.map((h: any, i: number) => (
+                      <div key={i} className="flex justify-between text-[11px] text-muted-foreground italic">
+                        <span>{h.head}:</span>
+                        <span>+ PKR {Number(h.amount).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Admin Remarks (Optional)</Label>
               <Textarea
@@ -2570,7 +2681,7 @@ export default function LawnBookings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setUpdateReqBooking(null)}>Cancel</Button>
             <Button
-              className={updateStatus === "APPROVED" ? "bg-green-600 hover:bg-green-700 font-medium" : "bg-destructive hover:bg-destructive/90 font-medium"}
+              className={updateStatus === "APPROVED" ? "bg-blue-600 hover:bg-blue-700 font-medium" : "bg-destructive hover:bg-destructive/90 font-medium"}
               onClick={() => {
                 updateReqMutation.mutate({
                   bookingFor: "lawns",
@@ -2588,7 +2699,7 @@ export default function LawnBookings() {
       </Dialog>
 
       <CancelBookingDialog
-        cancelBooking={cancelBooking}
+        cancelBooking={cancelBooking as any}
         onClose={() => setCancelBooking(null)}
         onConfirm={(reason) => {
           deleteMutation.mutate({
@@ -2598,6 +2709,15 @@ export default function LawnBookings() {
           });
         }}
         isDeleting={deleteMutation.isPending}
+      />
+
+      <CloseBookingDialog
+        booking={closeBookingTarget as any}
+        onClose={() => setCloseBookingTarget(null)}
+        onConfirm={(id, refundPayload) => {
+          closeMutation.mutate({ bookingId: id, refundPayload });
+        }}
+        isClosing={closeMutation.isPending}
       />
 
       {/* Conflict Confirmation Dialog */}

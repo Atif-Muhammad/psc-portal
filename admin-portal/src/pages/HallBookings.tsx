@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, XCircle, Loader2, Receipt, User, NotepadText, CheckCircle, Ban, Eye, AlertTriangle } from "lucide-react";
+import { Plus, Edit, XCircle, Loader2, Receipt, User, NotepadText, CheckCircle, Ban, Eye, AlertTriangle, Lock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -49,8 +49,8 @@ import {
   getHalls,
   searchMembers,
   getVouchers,
-  getRoomDateStatuses, // Just in case, but we need getHallDateStatuses
   getHallDateStatuses,
+  closeBooking,
 } from "../../config/apis";
 import { Member, Voucher, DateStatus } from "@/types/room-booking.type";
 import {
@@ -71,13 +71,14 @@ import {
 } from "@/utils/hallBookingUtils";
 import { formatDateForDisplay, parsePakistanDate } from "@/utils/pakDate";
 import { MemberSearchComponent } from "@/components/MemberSearch";
-import { FormInput } from "@/components/FormInputs";
+import { FormInput, PaidAmountInput } from "@/components/FormInputs";
 import { UnifiedDatePicker } from "@/components/UnifiedDatePicker";
 import { format, differenceInCalendarDays, addDays, addYears, startOfDay } from "date-fns";
 import { HallBookingDetailsCard } from "@/components/details/HallBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
-import { Channel, PaymentMode } from "@/types/hall-booking.type";
+import { CloseBookingDialog } from "@/components/CloseBookingDialog";
+import { PaymentMode } from "@/types/hall-booking.type";
 import paymentRules from "../config/paymentRules.json";
 
 
@@ -90,11 +91,11 @@ const HallPaymentSection = React.memo(
     form: HallBookingForm;
     onChange: (field: keyof HallBookingForm, value: any) => void;
   }) => {
-    const accounting = calculateHallAccountingValues(
-      form.paymentStatus as PaymentStatus,
-      form.totalPrice,
-      form.paidAmount
-    );
+    const total = Number(form.totalPrice) || 0;
+    const existing = Number(form.existingPaidAmount) || 0;
+    const newPaid = Number(form.newPaymentAmount) || 0;
+    const totalPaid = existing + newPaid;
+    const pending = total - totalPaid;
 
     return (
       <div className="md:col-span-2 border-t pt-4">
@@ -105,7 +106,7 @@ const HallPaymentSection = React.memo(
           <Input
             type="text"
             className="mt-2 font-bold text-lg"
-            value={`PKR ${form.totalPrice.toLocaleString()}`}
+            value={`PKR ${total.toLocaleString()}`}
             disabled
           />
         </div>
@@ -127,11 +128,91 @@ const HallPaymentSection = React.memo(
               <SelectItem value="ADVANCE_PAYMENT">Advance Payment</SelectItem>
             </SelectContent>
           </Select>
-          {form.totalPrice > paymentRules.hallBooking.advancePayment.threshold && (
+          {total > paymentRules.hallBooking.advancePayment.threshold && (
             <p className="text-[10px] text-blue-600 mt-1 italic font-medium">
               * For bookings over {paymentRules.hallBooking.advancePayment.threshold.toLocaleString()} PKR, an advance payment of {paymentRules.hallBooking.advancePayment.defaultPaidAmount.toLocaleString()} PKR is required.
             </p>
           )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <Label>Existing Paid Amount (PKR)</Label>
+            <Input
+              type="text"
+              className="mt-2 font-semibold bg-gray-100"
+              value={existing.toLocaleString()}
+              disabled
+              readOnly
+            />
+          </div>
+          <div>
+            <Label>New Payment Amount (PKR)</Label>
+            <PaidAmountInput
+              value={newPaid}
+              onChange={(val) => onChange("newPaymentAmount", val)}
+              max={total - existing}
+              disabled={form.paymentStatus === "PAID" && existing >= total}
+            />
+          </div>
+          <div>
+            <Label>Pending Amount (PKR)</Label>
+            <Input
+              type="number"
+              value={pending}
+              className="mt-2 font-semibold"
+              readOnly
+              disabled
+              style={{
+                color: pending > 0 ? '#dc2626' : '#16a34a',
+                fontWeight: 'bold'
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <Label className="text-sm font-semibold text-blue-800 mb-2 block">
+            Accounting Summary
+          </Label>
+          <div className="flex flex-wrap gap-4 text-sm mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-700">Total Price:</span>
+              <span className="font-semibold text-blue-700">
+                PKR {total.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">Existing Paid:</span>
+              <span className="font-semibold text-slate-700">
+                PKR {existing.toLocaleString()}
+              </span>
+            </div>
+
+            {newPaid > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-orange-600">New Payment:</span>
+                <span className="font-semibold text-orange-700">
+                  + PKR {newPaid.toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 border-l pl-4 border-blue-200">
+              <span className="text-green-700">Total Paid (DR):</span>
+              <span className="font-bold text-green-700">
+                PKR {totalPaid.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-red-700">Pending (CR):</span>
+              <span className="font-bold text-red-700">
+                PKR {pending.toLocaleString()}
+              </span>
+            </div>
+          </div>
         </div>
 
         {form.paymentStatus === "TO_BILL" && (
@@ -144,61 +225,6 @@ const HallPaymentSection = React.memo(
             </div>
           </div>
         )}
-
-        {(form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <Label>Paid Amount (PKR) *</Label>
-              <Input
-                type="number"
-                value={form.paidAmount || ""}
-                onChange={(e) =>
-                  onChange("paidAmount", parseFloat(e.target.value) || 0)
-                }
-                className="mt-2"
-                placeholder="Enter paid amount"
-                min="0"
-                max={form.totalPrice}
-              />
-            </div>
-            <div>
-              <Label>Pending Amount (PKR)</Label>
-              <Input
-                type="number"
-                value={form.pendingAmount}
-                className="mt-2"
-                readOnly
-                disabled
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <Label className="text-lg font-semibold text-blue-800">
-            Accounting Summary
-          </Label>
-          <div className="grid grid-cols-2 gap-2 text-sm mt-2">
-            <div className="text-blue-700">Total Amount:</div>
-            <div className="font-semibold text-right text-blue-700">
-              PKR {form.totalPrice.toLocaleString()}
-            </div>
-
-            <div className="text-green-700">Paid Amount (DR):</div>
-            <div className="font-semibold text-right text-green-700">
-              PKR {accounting.paid.toLocaleString()}
-            </div>
-
-            <div className="text-red-700">Owed Amount (CR):</div>
-            <div className="font-semibold text-right text-red-700">
-              PKR {accounting.owed.toLocaleString()}
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-blue-600">
-            <strong>DR</strong> = Debit (Amount Received), <strong>CR</strong> =
-            Credit (Amount Owed)
-          </div>
-        </div>
 
         {/* Payment Mode Selection */}
         {(form.paymentStatus === "PAID" || form.paymentStatus === "HALF_PAID" || form.paymentStatus === "ADVANCE_PAYMENT") && (
@@ -218,7 +244,7 @@ const HallPaymentSection = React.memo(
                 <SelectContent>
                   <SelectItem value="CASH">Cash</SelectItem>
                   <SelectItem value="CARD">Card</SelectItem>
-                  <SelectItem value="CHECK">Check</SelectItem>
+                  <SelectItem value="CHECK">Cheque</SelectItem>
                   <SelectItem value="ONLINE">Online</SelectItem>
                   <SelectItem value="KUICKPAY">KuickPay</SelectItem>
                 </SelectContent>
@@ -239,10 +265,10 @@ const HallPaymentSection = React.memo(
 
             {form.paymentMode === "CHECK" && (
               <div>
-                <Label>Check Number *</Label>
+                <Label>Cheque Number *</Label>
                 <Input
                   className="mt-2"
-                  placeholder="Enter check number"
+                  placeholder="Enter cheque number"
                   value={form.check_number || ""}
                   onChange={(e) => onChange("check_number", e.target.value)}
                 />
@@ -497,6 +523,7 @@ export default function HallBookings() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editBooking, setEditBooking] = useState<HallBooking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<HallBooking | null>(null);
+  const [closeBookingTarget, setCloseBookingTarget] = useState<HallBooking | null>(null);
   const [viewVouchers, setViewVouchers] = useState<HallBooking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [activeTab, setActiveTab] = useState("active");
@@ -601,17 +628,37 @@ export default function HallBookings() {
     enabled: activeTab === "requests",
   });
 
+  const {
+    data: closedData,
+    fetchNextPage: fetchNextClosed,
+    hasNextPage: hasNextClosed,
+    isFetchingNextPage: isFetchingNextClosed,
+    isLoading: isLoadingClosed,
+  } = useInfiniteQuery({
+    queryKey: ["bookings", "halls", "closed"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getBookings({ bookingsFor: "halls", pageParam, type: "closed" });
+      return res as HallBooking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+    enabled: activeTab === "closed",
+  });
+
   const bookings = useMemo(() => {
     if (activeTab === "active") return data?.pages.flat() || [];
     if (activeTab === "cancelled") return cancelledData?.pages.flat() || [];
     if (activeTab === "requests") return requestData?.pages.flat() || [];
+    if (activeTab === "closed") return closedData?.pages.flat() || [];
     return [];
-  }, [data, cancelledData, requestData, activeTab]);
+  }, [data, cancelledData, requestData, closedData, activeTab]);
 
-  const isLoading = isLoadingBookings || isLoadingCancelled || isLoadingRequests;
-  const isFetchingNext = isFetchingNextPage || isFetchingNextCancelled || isFetchingNextRequests;
-  const hasNext = activeTab === "active" ? hasNextPage : activeTab === "cancelled" ? hasNextCancelled : hasNextRequests;
-  const fetchNext = activeTab === "active" ? fetchNextPage : activeTab === "cancelled" ? fetchNextCancelled : fetchNextRequests;
+  const isLoading = isLoadingBookings || isLoadingCancelled || isLoadingRequests || isLoadingClosed;
+  const isFetchingNext = isFetchingNextPage || isFetchingNextCancelled || isFetchingNextRequests || isFetchingNextClosed;
+  const hasNext = activeTab === "active" ? hasNextPage : activeTab === "cancelled" ? hasNextCancelled : activeTab === "requests" ? hasNextRequests : hasNextClosed;
+  const fetchNext = activeTab === "active" ? fetchNextPage : activeTab === "cancelled" ? fetchNextCancelled : activeTab === "requests" ? fetchNextRequests : fetchNextClosed;
 
   const observer = useRef<IntersectionObserver>();
   const lastElementRef = useCallback(
@@ -908,6 +955,23 @@ export default function HallBookings() {
     },
   });
 
+  const closeMutation = useMutation({
+    mutationFn: (data: { bookingId: number; refundPayload?: any }) =>
+      closeBooking("halls", data.bookingId, data.refundPayload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      toast({ title: "Booking closed successfully" });
+      setCloseBookingTarget(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to close booking",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateCancellationReqMutation = useMutation<
     any,
     Error,
@@ -986,10 +1050,10 @@ export default function HallBookings() {
             const oldPaymentStatus = prev.paymentStatus;
             const total = newForm.totalPrice;
 
-            if (total < oldPaid) {
+            if (total <= oldPaid) {
               newForm.paymentStatus = "PAID";
-              newForm.paidAmount = total;
-              newForm.pendingAmount = 0;
+              newForm.paidAmount = oldPaid;
+              newForm.pendingAmount = total - oldPaid;
             } else if (total > oldPaid && oldPaymentStatus === "PAID") {
               newForm.paymentStatus = "HALF_PAID";
               newForm.paidAmount = oldPaid;
@@ -1014,31 +1078,47 @@ export default function HallBookings() {
 
         // Handle payment status changes
         if (field === "paymentStatus") {
-          const accounting = calculateHallAccountingValues(
-            value as PaymentStatus,
-            newForm.totalPrice,
-            newForm.paidAmount
-          );
-          newForm.paidAmount = accounting.paid;
-          newForm.pendingAmount = accounting.pendingAmount;
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
 
-          // Auto-fill advance payment if logic matches
-          if (value === "ADVANCE_PAYMENT") {
-            const rules = paymentRules.hallBooking.advancePayment;
-            if (newForm.totalPrice > rules.threshold) {
-              newForm.paidAmount = rules.defaultPaidAmount;
-              newForm.pendingAmount = newForm.totalPrice - rules.defaultPaidAmount;
-            }
+          if (value === "PAID") {
+            newForm.newPaymentAmount = Math.max(0, total - existing);
+            newForm.paidAmount = total;
+            newForm.pendingAmount = 0;
+          } else if (value === "UNPAID") {
+            newForm.newPaymentAmount = 0;
+            newForm.paidAmount = existing;
+            newForm.pendingAmount = total - existing;
+          } else {
+            // For HALF_PAID, ADVANCE_PAYMENT etc.
+            newForm.pendingAmount = total - (Number(newForm.paidAmount) || 0);
           }
         }
 
-        // Handle paid amount changes
-        if (field === "paidAmount") {
-          if (value > newForm.totalPrice) {
-            value = newForm.totalPrice;
-            newForm.paidAmount = value;
+        // Handle new payment amount changes
+        if (field === "newPaymentAmount") {
+          const val = parseFloat(value) || 0;
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
+
+          newForm.paidAmount = existing + val;
+          newForm.pendingAmount = total - newForm.paidAmount;
+
+          if (newForm.paidAmount >= total && newForm.paymentStatus !== "PAID") {
+            newForm.paymentStatus = "PAID";
+          } else if (newForm.paidAmount > existing && newForm.paidAmount < total && newForm.paymentStatus !== "HALF_PAID") {
+            newForm.paymentStatus = "HALF_PAID";
           }
-          newForm.pendingAmount = newForm.totalPrice - value;
+        }
+
+        // Handle paid amount changes (backward compatibility/legacy)
+        if (field === "paidAmount") {
+          const total = Number(newForm.totalPrice) || 0;
+          const existing = Number(newForm.existingPaidAmount) || 0;
+          if (value > total) value = total;
+          newForm.paidAmount = value;
+          newForm.pendingAmount = total - value;
+          newForm.newPaymentAmount = Math.max(0, value - existing);
         }
 
         // Update bookingDetails when dates or primary event type change
@@ -1439,13 +1519,15 @@ export default function HallBookings() {
         guestCNIC: editBooking.guestCNIC,
         remarks: editBooking.remarks || "",
         endDate: editBooking.endDate ? format(parseLocalDate(editBooking.endDate), "yyyy-MM-dd") : "",
+        existingPaidAmount: Number(editBooking.paidAmount) || 0,
+        newPaymentAmount: 0,
         heads: editBooking.extraCharges || [],
         bookingDetails: (() => {
-          const details = (editBooking.bookingDetails as any[]) || [];
+          const details = editBooking.bookingDetails || [];
           if (details.length > 0) {
             // Ensure dates are yyyy-MM-dd strings in LOCAL time for consistency
             return details.map(d => {
-              let dateStr = d.date;
+              const dateStr = d.date;
               // If date comes as ISO string from backend (e.g., 2025-12-27T19:00:00.000Z),
               // we need to parse it as a Date and format it in local time
               // because 7PM UTC = midnight next day in Pakistan (UTC+5)
@@ -1843,13 +1925,13 @@ export default function HallBookings() {
 
                               if (isEdit) {
                                 if (totalPrice > oldPaid && oldPaymentStatus === "PAID") {
-                                  newForm.paymentStatus = "HALF_PAID" as any;
+                                  newForm.paymentStatus = "HALF_PAID" as PaymentStatus;
                                   newForm.paidAmount = oldPaid;
                                   newForm.pendingAmount = totalPrice - oldPaid;
                                 } else if (totalPrice < oldPaid) {
-                                  newForm.paymentStatus = "PAID" as any;
-                                  newForm.paidAmount = totalPrice;
-                                  newForm.pendingAmount = 0;
+                                  newForm.paymentStatus = "PAID" as PaymentStatus;
+                                  newForm.paidAmount = oldPaid;
+                                  newForm.pendingAmount = totalPrice - oldPaid;
                                 } else {
                                   newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                                 }
@@ -1897,18 +1979,18 @@ export default function HallBookings() {
 
                                   if (isEdit) {
                                     if (totalPrice > oldPaid && oldPaymentStatus === "PAID") {
-                                      newForm.paymentStatus = "HALF_PAID" as any;
+                                      newForm.paymentStatus = "HALF_PAID" as PaymentStatus;
                                       newForm.paidAmount = oldPaid;
                                       newForm.pendingAmount = totalPrice - oldPaid;
                                     } else if (totalPrice < oldPaid) {
-                                      newForm.paymentStatus = "PAID" as any;
-                                      newForm.paidAmount = totalPrice;
-                                      newForm.pendingAmount = 0;
+                                      newForm.paymentStatus = "PAID" as PaymentStatus;
+                                      newForm.paidAmount = oldPaid;
+                                      newForm.pendingAmount = totalPrice - oldPaid;
                                     } else {
-                                      newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : Math.max(0, totalPrice - prev.paidAmount);
+                                      newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                                     }
                                   } else {
-                                    newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : Math.max(0, totalPrice - prev.paidAmount);
+                                    newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                                   }
                                   return newForm;
                                 });
@@ -1950,13 +2032,13 @@ export default function HallBookings() {
 
                             if (isEdit) {
                               if (totalPrice > oldPaid && oldPaymentStatus === "PAID") {
-                                newForm.paymentStatus = "HALF_PAID" as any;
+                                newForm.paymentStatus = "HALF_PAID" as PaymentStatus;
                                 newForm.paidAmount = oldPaid;
                                 newForm.pendingAmount = totalPrice - oldPaid;
                               } else if (totalPrice < oldPaid) {
-                                newForm.paymentStatus = "PAID" as any;
-                                newForm.paidAmount = totalPrice;
-                                newForm.pendingAmount = 0;
+                                newForm.paymentStatus = "PAID" as PaymentStatus;
+                                newForm.paidAmount = oldPaid;
+                                newForm.pendingAmount = totalPrice - oldPaid;
                               } else {
                                 newForm.pendingAmount = totalPrice - prev.paidAmount;
                               }
@@ -2010,10 +2092,11 @@ export default function HallBookings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-4 mb-4">
           <TabsTrigger value="active">Active Bookings</TabsTrigger>
           <TabsTrigger value="cancelled">Cancelled Bookings</TabsTrigger>
           <TabsTrigger value="requests">Cancellation Requests</TabsTrigger>
+          <TabsTrigger value="closed">Closed Bookings</TabsTrigger>
         </TabsList>
 
         <Card>
@@ -2026,7 +2109,8 @@ export default function HallBookings() {
               <div className="text-center py-32 text-muted-foreground text-lg">
                 {activeTab === "active" ? "No hall bookings found" :
                   activeTab === "cancelled" ? "No cancelled bookings" :
-                    "No cancellation requests"}
+                    activeTab === "closed" ? "No closed bookings" :
+                      "No cancellation requests"}
               </div>
             ) : (
               <>
@@ -2114,6 +2198,7 @@ export default function HallBookings() {
                                   <Receipt className="h-4 w-4" />
                                 </Button>
 
+
                                 {activeTab === "active" && (
                                   <Button
                                     variant="ghost"
@@ -2126,6 +2211,17 @@ export default function HallBookings() {
                                   </Button>
                                 )}
                               </>
+                            )}
+                            {activeTab === "active" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-amber-600"
+                                onClick={() => setCloseBookingTarget(booking)}
+                                title="Close Booking"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </Button>
                             )}
                             {activeTab === "requests" && (
                               <>
@@ -2606,10 +2702,10 @@ export default function HallBookings() {
                               newForm.paymentStatus = "HALF_PAID" as any;
                               newForm.paidAmount = oldPaid;
                               newForm.pendingAmount = totalPrice - oldPaid;
-                            } else if (totalPrice < oldPaid) {
+                            } else if (totalPrice <= oldPaid) {
                               newForm.paymentStatus = "PAID" as any;
-                              newForm.paidAmount = totalPrice;
-                              newForm.pendingAmount = 0;
+                              newForm.paidAmount = oldPaid;
+                              newForm.pendingAmount = totalPrice - oldPaid;
                             } else {
                               newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                             }
@@ -2657,18 +2753,18 @@ export default function HallBookings() {
 
                               if (isEdit) {
                                 if (totalPrice > oldPaid && oldPaymentStatus === "PAID") {
-                                  newForm.paymentStatus = "HALF_PAID" as any;
+                                  newForm.paymentStatus = "HALF_PAID" as PaymentStatus;
                                   newForm.paidAmount = oldPaid;
                                   newForm.pendingAmount = totalPrice - oldPaid;
-                                } else if (totalPrice < oldPaid) {
-                                  newForm.paymentStatus = "PAID" as any;
-                                  newForm.paidAmount = totalPrice;
-                                  newForm.pendingAmount = 0;
+                                } else if (totalPrice <= oldPaid) {
+                                  newForm.paymentStatus = "PAID" as PaymentStatus;
+                                  newForm.paidAmount = oldPaid;
+                                  newForm.pendingAmount = totalPrice - oldPaid;
                                 } else {
-                                  newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : Math.max(0, totalPrice - prev.paidAmount);
+                                  newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                                 }
                               } else {
-                                newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : Math.max(0, totalPrice - prev.paidAmount);
+                                newForm.pendingAmount = prev.paymentStatus === "TO_BILL" ? 0 : totalPrice - prev.paidAmount;
                               }
                               return newForm;
                             });
@@ -2711,13 +2807,13 @@ export default function HallBookings() {
 
                         if (isEdit) {
                           if (totalPrice > oldPaid && oldPaymentStatus === "PAID") {
-                            newForm.paymentStatus = "HALF_PAID" as any;
+                            newForm.paymentStatus = "HALF_PAID" as PaymentStatus;
                             newForm.paidAmount = oldPaid;
                             newForm.pendingAmount = totalPrice - oldPaid;
-                          } else if (totalPrice < oldPaid) {
-                            newForm.paymentStatus = "PAID" as any;
-                            newForm.paidAmount = totalPrice;
-                            newForm.pendingAmount = 0;
+                          } else if (totalPrice <= oldPaid) {
+                            newForm.paymentStatus = "PAID" as PaymentStatus;
+                            newForm.paidAmount = oldPaid; // Don't cap paidAmount
+                            newForm.pendingAmount = totalPrice - oldPaid; // Allow negative
                           } else {
                             newForm.pendingAmount = totalPrice - prev.paidAmount;
                           }
@@ -2790,6 +2886,15 @@ export default function HallBookings() {
         isDeleting={deleteMutation.isPending}
       />
 
+      <CloseBookingDialog
+        booking={closeBookingTarget as any}
+        onClose={() => setCloseBookingTarget(null)}
+        onConfirm={(id, refundPayload) => {
+          closeMutation.mutate({ bookingId: id, refundPayload });
+        }}
+        isClosing={closeMutation.isPending}
+      />
+
       {/* Approve/Reject Dialog */}
       <Dialog
         open={!!updateReqBooking}
@@ -2807,11 +2912,33 @@ export default function HallBookings() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <p>
-              {updateStatus === "APPROVED" ? "Approve" : "Reject"} cancellation
-              for booking of{" "}
-              <strong>{updateReqBooking?.memberName || updateReqBooking?.member?.Name}</strong>?
-            </p>
+            <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
+              <p className="text-sm">
+                {updateStatus === "APPROVED" ? "Approve" : "Reject"} cancellation
+                for booking of{" "}
+                <strong className="text-primary">{updateReqBooking?.memberName || updateReqBooking?.member?.Name}</strong>?
+              </p>
+              <div className="pt-2 border-t space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Total Price:</span>
+                  <span className="font-semibold">PKR {Number(updateReqBooking?.totalPrice || 0).toLocaleString()}</span>
+                </div>
+                {updateReqBooking?.extraCharges && updateReqBooking.extraCharges.length > 0 && (
+                  <div className="pl-2 border-l-2 border-primary/20 space-y-1 mt-1">
+                    <div className="flex justify-between text-[11px] text-muted-foreground italic">
+                      <span>Base Hall Rent:</span>
+                      <span>PKR {(Number(updateReqBooking.totalPrice || 0) - (updateReqBooking.extraCharges.reduce((sum, h) => sum + (Number(h.amount) || 0), 0))).toLocaleString()}</span>
+                    </div>
+                    {updateReqBooking.extraCharges.map((h, i) => (
+                      <div key={i} className="flex justify-between text-[11px] text-muted-foreground italic">
+                        <span>{h.head}:</span>
+                        <span>+ PKR {Number(h.amount).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="admin-remarks">Admin Remarks (Optional)</Label>
               <Textarea

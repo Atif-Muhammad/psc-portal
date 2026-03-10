@@ -8,10 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 interface CancelBookingDialogProps {
-  cancelBooking: {
-    id: number | string;
-    memberName: string;
-  } | null;
+  cancelBooking: Booking | null;
   onClose: () => void;
   onConfirm: (reason: string) => void;
   isDeleting: boolean;
@@ -36,10 +33,32 @@ export const CancelBookingDialog = React.memo(({
           <DialogTitle>Request Booking Cancellation</DialogTitle>
         </DialogHeader>
         <div className="py-4 space-y-4">
-          <p>
-            Are you sure you want to request cancellation for this booking for{" "}
-            <strong>{cancelBooking?.memberName}</strong>?
-          </p>
+          <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
+            <p className="text-sm">
+              Are you sure you want to request cancellation for this booking for{" "}
+              <strong className="text-primary">{cancelBooking?.memberName}</strong>?
+            </p>
+            <div className="pt-2 border-t space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Total Price:</span>
+                <span className="font-semibold">PKR {Number(cancelBooking?.totalPrice || 0).toLocaleString()}</span>
+              </div>
+              {cancelBooking?.extraCharges && cancelBooking.extraCharges.length > 0 && (
+                <div className="pl-2 border-l-2 border-primary/20 space-y-1 mt-1">
+                  <div className="flex justify-between text-[11px] text-muted-foreground italic">
+                    <span>Base Rent:</span>
+                    <span>PKR {(Number(cancelBooking.totalPrice || 0) - (cancelBooking.extraCharges.reduce((sum, h) => sum + (Number(h.amount) || 0), 0))).toLocaleString()}</span>
+                  </div>
+                  {cancelBooking.extraCharges.map((h, i) => (
+                    <div key={i} className="flex justify-between text-[11px] text-muted-foreground italic">
+                      <span>{h.head}:</span>
+                      <span>+ PKR {Number(h.amount).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="cancellation-reason">Reason for Cancellation</Label>
             <Textarea

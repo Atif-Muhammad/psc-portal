@@ -291,18 +291,28 @@ export const searchMembers = async (searchString: any): Promise<any> => {
 export const getBookings = async ({
   bookingsFor,
   pageParam = 1,
+  type = "all",
 }: {
-  bookingsFor: any;
+  bookingsFor: string;
   pageParam?: number;
+  type?: string;
 }): Promise<any> => {
   try {
     const response = await axios.get(
-      `${base_url}/booking/get/bookings/all?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      `${base_url}/booking/get/bookings/${type}?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
       { withCredentials: true }
     );
     return response.data;
   } catch (error: any) {
-    throw { ...(error.response?.data || {}), message: error.response?.data?.message || error.response?.data?.error || error.message || "Something went wrong", status: error.response?.status || 500 };
+    throw {
+      ...(error.response?.data || {}),
+      message:
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Something went wrong",
+      status: error.response?.status || 500,
+    };
   }
 };
 export const createBooking = async (data: any): Promise<any> => {

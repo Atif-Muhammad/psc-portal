@@ -22,7 +22,7 @@ import { JwtAccGuard } from 'src/common/guards/jwt-access.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesEnum } from 'src/common/constants/roles.enum';
-import { OTP_MSG } from '../common/utils/messages';
+import { OTP_MSG } from 'src/utils/messages';
 import { generateRandomNumber } from './utils/genOTP';
 
 @Controller('auth')
@@ -250,26 +250,16 @@ export class AuthController {
     const otp = generateRandomNumber(4) || 1234;
     // store in member table
     await this.authService.storeOTP(member?.Membership_No, otp);
+
+    const emailBody = OTP_MSG
+      .replace('{{memberName}}', member.Name || 'Member')
+      .replace('{{pinCode}}', otp.toString())
+      .replace('{{timestamp}}', new Date().toISOString());
+
     return await this.authService.sendOTP(
       member?.Email!,
-      'Login Request',
-      `${OTP_MSG} <br/>
-                <p style="
-                background-color:#FE9A00;
-                color:#ffffff;
-                font-size:24px;
-                font-weight:bold;
-                border-radius:8px;
-                padding:12px 24px;
-                text-align:center;
-                position:absolute;
-                top:50%;
-                left:50%;
-                transform:translate(-50%, -50%);
-                margin:0;
-                ">
-                ${otp}
-                </p>`,
+      `PIN CODE OF PSC MOBILE APP | (${member?.Membership_No})`,
+      emailBody,
     );
   }
 
