@@ -149,6 +149,12 @@ model RoomBooking {
   extraCharges   Json?   @default("[]") // Stores { head: string, amount: number }
   cancellationRequests RoomCancellationRequest[]
 
+  local_sync         Int       @default(0)
+  local_sync_id       String?
+  local_sync_status   Int?
+  sync_datetime      DateTime?
+  local_sync_message String?   @db.Text
+
   member Member @relation(fields: [Membership_No], references: [Membership_No])
   // room   Room   @relation(fields: [roomId], references: [id]) // Removed direct single relation mapping validation, logic handled in service
 

@@ -343,4 +343,28 @@ export class BookingController {
   ) {
     return await this.bookingService.cancelUnpaidBooking(consumer_number);
   }
+
+  // @UseGuards(JwtAccGuard)
+  @Get('sync/guest-rooms')
+  async getGuestRoomData() {
+    return await this.bookingService.sync();
+  }
+
+  // @UseGuards(JwtAccGuard)
+  @Post('sync/response')
+  async syncResponse(
+    @Body()
+    payload: {
+      results: {
+        booking_id: number;
+        local_sync_id: string;
+        local_sync_status: number;
+        local_sync_message: string;
+      }[];
+    },
+  ) {
+    return await this.bookingService.syncResponse(payload);
+  }
+
+
 }

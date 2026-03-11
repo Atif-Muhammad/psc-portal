@@ -499,6 +499,7 @@ export class BookingService {
         numberOfAdults,
         numberOfChildren,
         specialRequests,
+        isConfirmed: true,
         paidBy,
         guestName,
         guestContact: guestContact?.toString(),
@@ -3375,6 +3376,7 @@ export class BookingService {
           pendingAmount: bookingPendingAmount,
           eventType,
           bookingTime: normalizedEventTime,
+          isConfirmed: true,
           paidBy,
           guestName,
           guestContact: guestContact?.toString(),
@@ -4300,6 +4302,7 @@ export class BookingService {
           bookingTime: eventTime.toUpperCase() as any,
           paidBy,
           guestName,
+          isConfirmed: true,
           guestContact: guestContact?.toString(),
           guestCNIC: guestCNIC?.toString(),
           eventType,
@@ -5641,6 +5644,7 @@ export class BookingService {
           guestContact,
           createdBy,
           updatedBy: '-',
+          isConfirmed: true,
         },
         include: {
           photoshoot: {
@@ -7183,6 +7187,97 @@ export class BookingService {
           data: { remarks: `${v.remarks} | UPDATE: ${remark}` },
         });
       }
+    }
+  }
+
+
+  async sync() {
+    try {
+      const bookings = await this.prismaService.roomBooking.findMany({
+        where: {
+          local_sync: 0,
+          isCancelled: false, 
+          isConfirmed: true
+        },
+        include: {
+          rooms: {
+            select: {id: true}
+          },
+        },
+      });
+
+      const bookingIds = bookings.map((b) => b.id);
+      const vouchers = await this.prismaService.paymentVoucher.findMany({
+        where: {
+          booking_id: { in: bookingIds },
+          booking_type: 'ROOM',
+        },
+        select: {
+          booking_id: true, id: true, consumer_number: true, booking_type: true, amount: true, payment_mode: true, invoice_no: true, transaction_id: true, card_number: true, check_number: true, bank_name: true, voucher_type: true, status: true, remarks: true, issued_by: true, issued_at: true, expiresAt: true, paid_at: true
+        }
+      });
+
+      const data = bookings.map((booking) => {
+        const bookingVouchers = vouchers.filter((v) => v.booking_id === booking.id);
+        return {
+          ...booking,
+          vouchers: bookingVouchers,
+        };
+      });
+
+      return {
+        status: true,
+        data,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async syncResponse(payload: {
+    results: {
+      booking_id: number;
+      local_sync_id: string;
+      local_sync_status: number;
+      local_sync_message: string;
+    }[];
+  }) {
+    try {
+      const results = payload.results;
+      const updatedBookings: any[] = [];
+
+      for (const result of results) {
+        const updateData: any = {
+          local_sync_id: result.local_sync_id,
+          local_sync_status: result.local_sync_status,
+          local_sync_message: result.local_sync_message,
+          sync_datetime: new Date(),
+        };
+
+        if (result.local_sync_status === 1) {
+          updateData.local_sync = 1;
+        }
+
+        const updated = await this.prismaService.roomBooking.update({
+          where: { id: result.booking_id },
+          data: updateData,
+        });
+
+        updatedBookings.push({
+          booking_id: updated.id,
+          local_sync_id: updated.local_sync_id,
+          local_sync_status: updated.local_sync_status,
+          sync_datetime: updated.sync_datetime,
+          local_sync_message: updated.local_sync_message,
+        });
+      }
+
+      return {
+        status: true,
+        data: updatedBookings,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
     }
   }
 }
