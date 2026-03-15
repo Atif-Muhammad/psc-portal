@@ -75,55 +75,66 @@ export const createRequestEmailContent = (
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="UTF-8" />
+      <title>Introductory Letter</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; }
-        .content { padding: 20px 0; }
-        .details { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
-        .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+        body {
+          font-family: "Georgia", serif;
+          background: #f2f2f2;
+          margin: 0;
+          padding: 40px;
+        }
+        .letter-container {
+          background: #ffffff;
+          max-width: 800px;
+          margin: auto;
+          padding: 60px 50px;
+          text-align: center;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .logo { width: 180px; margin-bottom: 20px; }
+        h1 { font-style: italic; text-decoration: underline; font-size: 22px; margin-bottom: 30px; }
+        .meta { text-align: left; font-size: 14px; margin-bottom: 30px; }
+        .meta strong { font-weight: bold; }
+        .content { font-size: 20px; line-height: 1.6; margin: 30px 0; }
+        .content strong { font-weight: bold; }
+        .footer { margin-top: 40px; font-size: 20px; }
+        .signature { margin-top: 30px; font-weight: bold; font-size: 22px; }
+        .club-name { font-size: 20px; margin-top: 5px; }
+        .phone { margin-top: 5px; font-size: 18px; }
       </style>
     </head>
     <body>
-      <div class="container">
-        <div class="header">
-          <h2>New Visit Request</h2>
-          <p><strong>Club:</strong> ${club.name}</p>
+      <div class="letter-container">
+        <img src="https://res.cloudinary.com/dtqdpntlc/image/upload/v1772616023/logo_rghsf6.png" class="logo" alt="Club Logo" />
+
+        <h1>INTRODUCTORY LETTER</h1>
+
+        <div class="meta">
+          <div><strong>Serial No:</strong> ${request.id}</div>
+          <div><strong>Date:</strong> ${new Date(request.createdAt ?? Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
         </div>
-        
+
         <div class="content">
-          <p>Dear ${club.name} Team,</p>
-          
-          <p>A new visit request has been submitted. Please find the details below:</p>
-          
-          <div class="details">
-            <h3>Request Details:</h3>
-            <p><strong>Request ID:</strong> ${request.id}</p>
-            <p><strong>Request Date:</strong> ${new Date(request.requestedDate).toLocaleDateString()}</p>
-            
-            <h3>Member Details:</h3>
-            <p><strong>Name:</strong> ${member.Name}</p>
-            <p><strong>Membership No:</strong> ${member.Membership_No}</p>
-            <p><strong>Email:</strong> ${member.Email}</p>
-            <p><strong>Contact No:</strong> ${member.Contact_No}</p>
-          </div>
-          
-          <p>This email has been CC'd to the member and PSC Club for reference.</p>
-          
-          <p>Please review this request and take appropriate action.</p>
+          I have the honor to introduce
+          <strong>Mr. ${member.Name}</strong> with family,
+          Membership No. <strong>${member.Membership_No}</strong>,
+          a bonafide Member of Peshawar Services Club,
+          who will be visiting <strong>${club.name}</strong>
+          on <strong>${new Date(request.requestedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</strong>
+          <br /><br />
+          Thank you for your kind cooperation!
         </div>
-        
-        <div class="footer">
-          <p>This is an automated message. Please do not reply directly to this email.</p>
-          <p>© ${new Date().getFullYear()} Club Management System</p>
-        </div>
+
+        <div class="footer">Best Regards,</div>
+        <div class="signature">Secretary</div>
+        <div class="club-name">Peshawar Services Club</div>
+        <div class="phone">091-9212753-5</div>
       </div>
     </body>
     </html>
   `;
 }
-
-
 
 export const sendMailMemberAff = (
   status: 'APPROVED' | 'REJECTED',

@@ -1,0 +1,215 @@
+
+
+
+sync call api -- to fetch the active bookings with local_sync_status = 0
+
+==== https://admin.peshawarservicesclub.com/api/booking/sync/guest-rooms ====
+
+response:
+{
+    "status": true,
+    "data": [
+        {
+            "id": 3,
+            "Membership_No": "001",
+            "roomId": null,
+            "checkIn": "2026-02-09T00:00:00.000Z",
+            "checkOut": "2026-02-10T00:00:00.000Z",
+            "totalPrice": "6500",
+            "paymentStatus": "UNPAID",
+            "pricingType": "member",
+            "paidAmount": "1625",
+            "pendingAmount": "4875",
+            "numberOfAdults": 1,
+            "numberOfChildren": 0,
+            "guestName": "",
+            "guestContact": "",
+            "guestCNIC": null,
+            "paidBy": "MEMBER",
+            "specialRequests": "",
+            "remarks": null,
+            "refundAmount": "0",
+            "refundReturned": false,
+            "isConfirmed": true,
+            "isCancelled": false,
+            "isClosed": false,
+            "extraCharges": [],
+            "local_sync": 0,
+            "local_sync_id": null,
+            "local_sync_status": null,
+            "sync_datetime": null,
+            "local_sync_message": null,
+            "createdBy": null,
+            "updatedBy": null,
+            "createdAt": "2026-02-09T14:23:18.169Z",
+            "updatedAt": "2026-02-09T14:29:16.332Z",
+            "rooms": [
+                {
+                    "id": 3
+                }
+            ],
+            "vouchers": [
+                {
+                    "booking_id": 3,
+                    "id": 4,
+                    "consumer_number": "254300064699817871",
+                    "booking_type": "ROOM",
+                    "amount": "1625",
+                    "payment_mode": "ONLINE",
+                    "invoice_no": null,
+                    "transaction_id": "787965",
+                    "card_number": null,
+                    "check_number": null,
+                    "bank_name": null,
+                    "voucher_type": "ADVANCE_PAYMENT",
+                    "status": "CONFIRMED",
+                    "remarks": "Advance payment (25%) for room booking: 201 from 2026-02-09 to 2026-02-10. Total: Rs. 6500",
+                    "issued_by": "system",
+                    "issued_at": "2026-02-09T14:23:18.180Z",
+                    "expiresAt": "2026-02-09T15:23:18.159Z",
+                    "paid_at": "2026-02-09T14:29:16.323Z"
+                },
+                {
+                    "booking_id": 3,
+                    "id": 264,
+                    "consumer_number": "254300263363734077",
+                    "booking_type": "ROOM",
+                    "amount": "20",
+                    "payment_mode": "CASH",
+                    "invoice_no": null,
+                    "transaction_id": null,
+                    "card_number": "",
+                    "check_number": "",
+                    "bank_name": null,
+                    "voucher_type": "FULL_PAYMENT",
+                    "status": "CONFIRMED",
+                    "remarks": "AFFILIATED BOOKING - Rooms: 990 | 3 Apr 2026 → 4 Apr 2026 | Club ID: 2",
+                    "issued_by": "super abd",
+                    "issued_at": "2026-03-04T14:13:57.342Z",
+                    "expiresAt": null,
+                    "paid_at": "2026-03-04T14:13:57.340Z"
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "Membership_No": "001",
+            "roomId": null,
+            "checkIn": "2026-02-10T00:00:00.000Z",
+            "checkOut": "2026-02-11T00:00:00.000Z",
+            "totalPrice": "6500",
+            "paymentStatus": "ADVANCE_PAYMENT",
+            "pricingType": "member",
+            "paidAmount": "1625",
+            "pendingAmount": "4875",
+            "numberOfAdults": 1,
+            "numberOfChildren": 0,
+            "guestName": "",
+            "guestContact": "",
+            "guestCNIC": "",
+            "paidBy": "MEMBER",
+            "specialRequests": "",
+            "remarks": "",
+            "refundAmount": "0",
+            "refundReturned": false,
+            "isConfirmed": true,
+            "isCancelled": false,
+            "isClosed": false,
+            "extraCharges": [],
+            "local_sync": 0,
+            "local_sync_id": null,
+            "local_sync_status": null,
+            "sync_datetime": null,
+            "local_sync_message": null,
+            "createdBy": null,
+            "updatedBy": "super_admin",
+            "createdAt": "2026-02-09T14:40:34.127Z",
+            "updatedAt": "2026-02-09T15:16:35.416Z",
+            "rooms": [
+                {
+                    "id": 5
+                }
+            ],
+            "vouchers": [
+                {
+                    "booking_id": 4,
+                    "id": 5,
+                    "consumer_number": "254300064803413242",
+                    "booking_type": "ROOM",
+                    "amount": "1625",
+                    "payment_mode": "ONLINE",
+                    "invoice_no": null,
+                    "transaction_id": "787965",
+                    "card_number": null,
+                    "check_number": null,
+                    "bank_name": null,
+                    "voucher_type": "ADVANCE_PAYMENT",
+                    "status": "CONFIRMED",
+                    "remarks": "Advance payment (25%) for room booking: 201 from 2026-02-10 to 2026-02-11. Total: Rs. 6500",
+                    "issued_by": "system",
+                    "issued_at": "2026-02-09T14:40:34.133Z",
+                    "expiresAt": "2026-02-09T15:40:34.120Z",
+                    "paid_at": "2026-02-09T14:53:40.052Z"
+                },
+                {
+                    "booking_id": 4,
+                    "id": 265,
+                    "consumer_number": "254300264092319018",
+                    "booking_type": "ROOM",
+                    "amount": "5",
+                    "payment_mode": "CASH",
+                    "invoice_no": null,
+                    "transaction_id": null,
+                    "card_number": "",
+                    "check_number": "",
+                    "bank_name": null,
+                    "voucher_type": "ADVANCE_PAYMENT",
+                    "status": "CONFIRMED",
+                    "remarks": "AFFILIATED BOOKING - Rooms: 995 | 19 Mar 2026 → 20 Mar 2026 | Club ID: 2",
+                    "issued_by": "super abd",
+                    "issued_at": "2026-03-04T16:15:23.199Z",
+                    "expiresAt": null,
+                    "paid_at": "2026-03-04T16:15:23.191Z"
+                }
+            ]
+        },
+    ]
+}
+
+
+
+
+
+
+sync confirmation api -- ack to cofirm the sync for local
+
+==== https://admin.peshawarservicesclub.com/api/booking/sync/response ====
+payload:
+{
+    "results": [
+        {
+            "booking_id": 4,
+            "local_sync_id": "2", // incase of failure send empty string
+            "local_sync_status": 1,   // 0 for failed, 1 for success sync
+            "local_sync_message": "success"
+        }
+    ]
+}
+
+
+response:
+{
+    "status": true,
+    "data": [
+        {
+            "booking_id": 4,
+            "local_sync_id": 2",
+            "local_sync_status": 1,
+            "sync_datetime": "2026-03-11T10:44:27.754Z",
+            "local_sync_message": success
+        }
+    ]
+}
+
+
+

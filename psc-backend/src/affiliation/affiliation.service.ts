@@ -228,18 +228,18 @@ export class AffiliationService {
     });
 
     // Send email after request is created so we have the ID
-    this.sendRequestEmail(member.Email!, club, request).catch(err => {
+    this.sendRequestEmail(member, club, request).catch(err => {
       console.error('Failed to send affiliation request email:', err);
     });
 
     return request;
   }
 
-  private async sendRequestEmail(member: string, club: any, request: any) {
+  private async sendRequestEmail(member: any, club: any, request: any) {
     const message = createRequestEmailContent(member, club, request);
     await this.mailerService.sendMail(
       club.email,
-      [member, process.env.NODEMAILER_USER],
+      [member.Email, process.env.NODEMAILER_USER],
       `New Visit Request - ${club.name}`,
       message,
     );

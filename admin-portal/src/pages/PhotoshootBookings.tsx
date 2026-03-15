@@ -688,7 +688,9 @@ export default function PhotoshootBookings() {
     if (!timeString) return "";
     // If it's a full date string
     if (timeString.includes('T')) {
-      return format(new Date(timeString), "hh:mm a");
+      // Strip 'Z' to treat as local time and avoid 5h offset
+      const normalizedString = timeString.endsWith('Z') ? timeString.slice(0, -1) : timeString;
+      return format(new Date(normalizedString), "hh:mm a");
     }
     // If it's HH:mm:ss
     const [hours, minutes] = timeString.split(':');
