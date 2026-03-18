@@ -19,6 +19,7 @@ import {
   BillInquiryRequestDto,
   BillPaymentRequestDto,
 } from './dtos/kuickpay.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('payment')
 export class PaymentController {
@@ -30,6 +31,7 @@ export class PaymentController {
   // generate invoice:
 
   @UseGuards(JwtAccGuard, StatusGuard)
+  @Throttle({default: {limit: 3, ttl: 60}})
   @Post('generate/invoice/room')
   async generateInvoiceRoom(
     @Query('roomType') roomType: string,
@@ -45,6 +47,7 @@ export class PaymentController {
   }
 
   @UseGuards(JwtAccGuard, StatusGuard)
+  @Throttle({default: {limit: 3, ttl: 60}})
   @Post('generate/invoice/hall')
   async generateInvoiceHall(
     @Query('hallId') hallId: string,
@@ -60,6 +63,7 @@ export class PaymentController {
   }
 
   @UseGuards(JwtAccGuard, StatusGuard)
+  @Throttle({default: {limit: 3, ttl: 60}})
   @Post('generate/invoice/lawn')
   async generateInvoiceLawn(
     @Query('lawnId') lawnId: string,
@@ -74,6 +78,7 @@ export class PaymentController {
     });
   }
   @UseGuards(JwtAccGuard, StatusGuard)
+  @Throttle({default: {limit: 3, ttl: 60}})
   @Post('generate/invoice/photoshoot')
   async generateInvoicePhotoshoot(
     @Query('photoshootId') photoshootId: string,
@@ -88,9 +93,9 @@ export class PaymentController {
     });
   }
 
-  // generate invoice balance
-
+  // generate invoice balanc
   @UseGuards(JwtAccGuard)
+  @Throttle({default: {limit: 5, ttl: 60}})
   @Post('generate/invoice/balance')
   async generateInvoiceBalance(
     @Body() bookingData: any,

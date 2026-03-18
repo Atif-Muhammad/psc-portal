@@ -31,6 +31,8 @@ import {
   FileFieldsInterceptor,
   FilesInterceptor,
 } from '@nestjs/platform-express';
+import { ThrottleGuard } from 'src/common/guards/throttler.guard';
+import { ThrottleEmail } from 'src/common/decorators/throttle-email.decorator';
 
 @Controller('admin')
 export class AdminController {
@@ -38,6 +40,7 @@ export class AdminController {
 
   @UseGuards(JwtAccGuard, RolesGuard)
   @Roles(RolesEnum.SUPER_ADMIN)
+  // @ThrottleEmail({ limit: 3, ttl: 60 })
   @Get('get/admins')
   async getAdmins() {
     return this.adminService.getAdmins();

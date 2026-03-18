@@ -24,6 +24,10 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesEnum } from 'src/common/constants/roles.enum';
 import { OTP_MSG } from 'src/utils/messages';
 import { generateRandomNumber } from './utils/genOTP';
+import { Throttle } from '@nestjs/throttler';
+
+import { ThrottleGuard } from 'src/common/guards/throttler.guard';
+import { ThrottleEmail } from 'src/common/decorators/throttle-email.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -84,7 +88,7 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
       res.cookie('refresh_token', refresh_token, {
         httpOnly: true,
@@ -142,7 +146,7 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       res.cookie('refresh_token', refresh_token, {
         httpOnly: true,
@@ -239,6 +243,8 @@ export class AuthController {
 
   // members
 
+  @UseGuards(ThrottleGuard)
+  @ThrottleEmail({ limit: 3, ttl: 60 })
   @Post('sendOTP/member')
   async sendOTP(@Body() payload: { memberID: string }) {
     const member = await this.authService.getMember(payload?.memberID);

@@ -1335,3 +1335,24 @@ model BillPaymentHistory {
 
   @@map("billpaymenthistory")
 }
+
+enum attemptStatus {
+  SUCCESS
+  FAILURE
+}
+
+
+model ThrottleLog {
+  id Int @id @default(autoincrement())
+  email String
+  attempts Int
+  failed Int
+  success Int
+
+  recentAttempt Json @default("[]") //attemptAt, status, path
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("throttlelog")
+}

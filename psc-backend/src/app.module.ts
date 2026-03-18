@@ -24,6 +24,7 @@ import { MessingModule } from './messing/messing.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -53,8 +54,18 @@ import { AccountsModule } from './accounts/accounts.module';
     RealtimeModule,
     FeedbackModule,
     AccountsModule,
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60,
+        limit: 1000,
+      }
+    ])
   ],
+  
   controllers: [],
-  providers: [MailerService],
+  providers: [MailerService, {
+    provide: 'APP_GUARD',
+    useClass: ThrottlerModule,
+  }],
 })
 export class AppModule { }
