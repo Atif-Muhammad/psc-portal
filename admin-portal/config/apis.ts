@@ -2538,3 +2538,187 @@ export const getUnifiedBooking = async (type: string, id: string): Promise<any> 
     throw { message, status: error.response?.status || 500 };
   }
 };
+
+// ===================== Reports =====================
+
+// Room Reports
+export const getRoomBookingsReport = async (params: Record<string, string | undefined>): Promise<any> => {
+  try {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== undefined)
+    ) as Record<string, string>;
+    const response = await axios.get(`${base_url}/reports/rooms/bookings`, {
+      params: filteredParams,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomMonthlyCheckout = async (params: { fromDate: string; toDate: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/rooms/monthly-checkout`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomDailyCheckout = async (params: { date: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/rooms/daily-checkout`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomSalesReport = async (params: { fromDate: string; toDate: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/rooms/sales`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomCancellationsReport = async (params: { fromDate: string; toDate: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/rooms/cancellations`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getRoomMonthlyBillsReport = async (params: { fromDate: string; toDate: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/rooms/monthly-bills`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+// Hall Reports
+export const getHallBookingsReport = async (params: Record<string, string | undefined>): Promise<any> => {
+  try {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== undefined)
+    ) as Record<string, string>;
+    const response = await axios.get(`${base_url}/reports/halls/bookings`, {
+      params: filteredParams,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getHallDailyCheckout = async (params: { date: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/halls/daily-checkout`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+export const getHallMonthlyReport = async (params: { fromDate: string; toDate: string }): Promise<any> => {
+  try {
+    const response = await axios.get(`${base_url}/reports/halls/monthly`, {
+      params,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};
+
+// Photoshoot Reports
+export const getPhotoshootBookingsReport = async (params: Record<string, string | undefined>): Promise<any> => {
+  try {
+    const filteredParams = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== undefined)
+    ) as Record<string, string>;
+    const response = await axios.get(`${base_url}/reports/photoshoot/bookings`, {
+      params: filteredParams,
+      withCredentials: true,
+    });
+    return response.data;
+  } catch (error: any) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Something went wrong";
+    throw { message, status: error.response?.status || 500 };
+  }
+};

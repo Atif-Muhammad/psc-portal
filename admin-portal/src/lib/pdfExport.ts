@@ -432,3 +432,613 @@ export const exportPhotoshootReport = (photoshoot: any[]) => {
 
   doc.save("photoshoot-report.pdf");
 };
+
+// ============================================================
+// PSC Report Export Helpers
+// ============================================================
+
+const DARK_HEADER: [number, number, number] = [31, 41, 55]; // gray-800
+const PSC_CLUB_NAME = "Peshawar Services Club";
+const PSC_ADDRESS = "40-The Mall, Peshawar Cantt. Tell: 091-9212753-55";
+
+/**
+ * Adds the standard PSC report header to a jsPDF document.
+ * Returns the Y position after the header.
+ */
+function addPSCHeader(
+  doc: jsPDF,
+  title: string,
+  periodOrDate?: string
+): number {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 14;
+
+  // Club name
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text(PSC_CLUB_NAME, pageWidth / 2, y, { align: "center" });
+  y += 7;
+
+  // Address
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 80);
+  doc.text(PSC_ADDRESS, pageWidth / 2, y, { align: "center" });
+  y += 6;
+
+  // Report title
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text(title, pageWidth / 2, y, { align: "center" });
+  y += 5;
+
+  // Period / date
+  if (periodOrDate) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(periodOrDate, pageWidth / 2, y, { align: "center" });
+    y += 5;
+  }
+
+  // Divider
+  doc.setDrawColor(31, 41, 55);
+  doc.setLineWidth(0.4);
+  doc.line(10, y, pageWidth - 10, y);
+  y += 4;
+
+  return y;
+}
+
+// ============================================================
+// Room Report Exports
+// ============================================================
+
+/**
+ * Exports a filtered room bookings list as PDF.
+ * Requirements: 2.4
+ */
+export const exportRoomBookingsReportPDF = (
+  data: any[],
+  filters?: Record<string, string>
+): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const periodStr = filters?.fromDate && filters?.toDate
+    ? `${filters.fromDate} – ${filters.toDate}`
+    : undefined;
+  const startY = addPSCHeader(doc, "Room Bookings Report", periodStr);
+
+  const columns = [
+    "S#", "Booking ID", "Member Name", "Member #", "Room #",
+    "Room Type", "Check-In", "Check-Out", "Days", "Rent",
+    "GST", "Food", "S.C", "Mattress", "Laundry", "Total",
+    "Payment Status", "Booking Status", "Booked By",
+  ];
+
+  const rows = data.map((row, i) => [
+    i + 1,
+    row.id ?? "",
+    row.memberName ?? "",
+    row.memberNumber ?? "",
+    row.roomNumber ?? "",
+    row.roomType ?? "",
+    row.checkIn ?? "",
+    row.checkOut ?? "",
+    row.days ?? "",
+    row.rent ?? 0,
+    row.gst ?? 0,
+    row.food ?? 0,
+    row.serviceCharge ?? 0,
+    row.mattress ?? 0,
+    row.laundry ?? 0,
+    row.total ?? 0,
+    row.paymentStatus ?? "",
+    row.bookingStatus ?? "",
+    row.bookedBy ?? "",
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+  });
+
+  doc.save(`room-bookings-report-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the room monthly checkout grid (rooms × days) as landscape PDF.
+ * Requirements: 3.4
+ */
+export const exportRoomMonthlyCheckoutPDF = (data: any, period: string): void => {
+  const doc = new jsPDF({ orientation: "landscape" });
+  const startY = addPSCHeader(doc, "Room Monthly Checkout", period);
+
+  const rooms: any[] = data?.rooms ?? [];
+  const dailyTotals: Record<number, number> = data?.dailyTotals ?? {};
+
+  // Determine day columns from data
+  const allDays = Object.keys(dailyTotals).map(Number).sort((a, b) => a - b);
+
+  const head = [["Room #", ...allDays.map(String), "Total"]];
+
+  const body = rooms.map((room: any) => [
+    room.roomNumber,
+    ...allDays.map((d) => room.days?.[d] ?? ""),
+    room.total ?? "",
+  ]);
+
+  // Totals row
+  body.push([
+    "Total",
+    ...allDays.map((d) => dailyTotals[d] ?? 0),
+    allDays.reduce((sum, d) => sum + (dailyTotals[d] ?? 0), 0),
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head,
+    body,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+    didParseCell: (hookData) => {
+      // Highlight totals row
+      if (hookData.row.index === body.length - 1) {
+        hookData.cell.styles.fontStyle = "bold";
+        hookData.cell.styles.fillColor = [243, 244, 246];
+      }
+    },
+  });
+
+  doc.save(`room-monthly-checkout-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the room daily checkout report as portrait PDF.
+ * Requirements: 4.5
+ */
+export const exportRoomDailyCheckoutPDF = (data: any, date: string): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const startY = addPSCHeader(doc, "Room Daily Checkout", date);
+
+  const entries: any[] = data?.entries ?? [];
+  const openingBalance: number = data?.openingBalance ?? 0;
+  const accumulativeTotal: number = data?.accumulativeTotal ?? 0;
+
+  const columns = [
+    "Room #", "Guest Name", "From", "To", "Days",
+    "Rent", "Mattress", "GST", "Food", "S.C", "Laundry", "Total", "Voucher #",
+  ];
+
+  const openingRow = [
+    { content: "Opening Balance", colSpan: 11, styles: { fontStyle: "bold" as const } },
+    { content: openingBalance.toLocaleString(), styles: { fontStyle: "bold" as const } },
+    "",
+  ];
+
+  const dataRows = entries.map((e: any) => [
+    e.roomNumber ?? "",
+    e.guestName ?? "",
+    e.from ?? "",
+    e.to ?? "",
+    e.days ?? "",
+    e.rent ?? 0,
+    e.mattress ?? 0,
+    e.gst ?? 0,
+    e.food ?? 0,
+    e.serviceCharge ?? 0,
+    e.laundry ?? 0,
+    e.total ?? 0,
+    e.voucherNumber ?? "",
+  ]);
+
+  const accRow = [
+    { content: "Accumulative Total", colSpan: 11, styles: { fontStyle: "bold" as const } },
+    { content: accumulativeTotal.toLocaleString(), styles: { fontStyle: "bold" as const } },
+    "",
+  ];
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: [openingRow as any, ...dataRows, accRow as any],
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+  });
+
+  doc.save(`room-daily-checkout-${date}-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the room sales report (daily breakdown + totals) as portrait PDF.
+ * Requirements: 5.4
+ */
+export const exportRoomSalesReportPDF = (data: any, period: string): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const startY = addPSCHeader(doc, "Guest Room Sales Report", period);
+
+  const entries: any[] = data?.entries ?? [];
+  const totals: any = data?.totals ?? {};
+
+  const columns = ["Date", "Food", "GST", "S.C", "No. of Bills", "Total"];
+
+  const rows = entries.map((e: any) => [
+    e.date ?? "",
+    e.food ?? 0,
+    e.gst ?? 0,
+    e.serviceCharge ?? 0,
+    e.numberOfBills ?? 0,
+    e.total ?? 0,
+  ]);
+
+  rows.push([
+    "Total",
+    totals.food ?? 0,
+    totals.gst ?? 0,
+    totals.serviceCharge ?? 0,
+    totals.numberOfBills ?? 0,
+    totals.total ?? 0,
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
+    styles: { cellPadding: 2 },
+    margin: { left: 10, right: 10 },
+    didParseCell: (hookData) => {
+      if (hookData.row.index === rows.length - 1) {
+        hookData.cell.styles.fontStyle = "bold";
+        hookData.cell.styles.fillColor = [243, 244, 246];
+      }
+    },
+  });
+
+  doc.save(`room-sales-report-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the room cancellations report (room type × cancellation %) as portrait PDF.
+ * Requirements: 6.4
+ */
+export const exportRoomCancellationsReportPDF = (data: any, period: string): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const startY = addPSCHeader(doc, "Room Cancellations Report", period);
+
+  const entries: any[] = data?.entries ?? [];
+
+  const columns = ["Room Type", "Room #", "Days in Month", "Days Cancelled", "Cancellation %"];
+
+  const rows = entries.map((e: any) => [
+    e.roomType ?? "",
+    e.roomNumber ?? "",
+    e.daysInMonth ?? 0,
+    e.daysCanceled ?? 0,
+    e.cancellationPercentage != null
+      ? `${Number(e.cancellationPercentage).toFixed(2)}%`
+      : "0.00%",
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
+    styles: { cellPadding: 2 },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`room-cancellations-report-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the room monthly bills report (summary + detailed table) as portrait PDF.
+ * Requirements: 7.4
+ */
+export const exportRoomMonthlyBillsPDF = (data: any, period: string): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  let y = addPSCHeader(doc, "Room Monthly Bills", period);
+
+  const summary: any = data?.summary ?? {};
+  const entries: any[] = data?.entries ?? [];
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Summary section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Summary", 10, y);
+  y += 5;
+
+  const summaryData = [
+    ["Member", summary.member ?? 0],
+    ["Guest", summary.guest ?? 0],
+    ["Forces", summary.forces ?? 0],
+    ["Aff. Club", summary.affClub ?? 0],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Category", "Count"]],
+    body: summaryData,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
+    styles: { cellPadding: 2 },
+    tableWidth: 80,
+    margin: { left: 10 },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // Detailed table
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("Detailed Bills", 10, y);
+  y += 4;
+
+  const columns = [
+    "S#", "Member #", "Guest Name", "Room #", "From", "To",
+    "Rent", "GST", "Food", "Food GST", "S.C", "Mattress", "Matt. GST",
+    "Laundry", "Total", "Advance", "Net Total",
+  ];
+
+  const rows = entries.map((e: any) => [
+    e.sNo ?? "",
+    e.memberNumber ?? "",
+    e.guestName ?? "",
+    e.roomNumber ?? "",
+    e.from ?? "",
+    e.to ?? "",
+    e.rent ?? 0,
+    e.gst ?? 0,
+    e.food ?? 0,
+    e.foodGst ?? 0,
+    e.serviceCharge ?? 0,
+    e.mattress ?? 0,
+    e.mattressGst ?? 0,
+    e.laundry ?? 0,
+    e.total ?? 0,
+    e.advance ?? 0,
+    e.netTotal ?? 0,
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+  });
+
+  // Footer note
+  const finalY = (doc as any).lastAutoTable.finalY + 6;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Generated: ${new Date().toLocaleString("en-US")}`, pageWidth - 10, finalY, { align: "right" });
+
+  doc.save(`room-monthly-bills-${Date.now()}.pdf`);
+};
+
+// ============================================================
+// Hall / Lawn Report Exports
+// ============================================================
+
+/**
+ * Exports a filtered hall/lawn bookings list as portrait PDF.
+ * Requirements: 8.4
+ */
+export const exportHallBookingsReportPDF = (
+  data: any[],
+  filters?: Record<string, string>
+): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const periodStr = filters?.fromDate && filters?.toDate
+    ? `${filters.fromDate} – ${filters.toDate}`
+    : undefined;
+  const startY = addPSCHeader(doc, "Hall / Lawn Bookings Report", periodStr);
+
+  const columns = [
+    "S#", "Booking ID", "Venue Name", "Venue Type", "Member Name", "Member #",
+    "Event Date", "Event Type", "Time Slot", "Rent", "SC", "GST", "Food",
+    "Total", "Payment Status", "Booking Status", "Booked By",
+  ];
+
+  const rows = data.map((row, i) => [
+    i + 1,
+    row.id ?? "",
+    row.venueName ?? "",
+    row.venueType ?? "",
+    row.memberName ?? "",
+    row.memberNumber ?? "",
+    row.eventDate ?? "",
+    row.eventType ?? "",
+    row.timeSlot ?? "",
+    row.rent ?? 0,
+    row.serviceCharge ?? 0,
+    row.gst ?? 0,
+    row.food ?? 0,
+    row.total ?? 0,
+    row.paymentStatus ?? "",
+    row.bookingStatus ?? "",
+    row.bookedBy ?? "",
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+  });
+
+  doc.save(`hall-bookings-report-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the hall daily checkout report as portrait PDF.
+ * Requirements: 9.5
+ */
+export const exportHallDailyCheckoutPDF = (data: any, date: string): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const startY = addPSCHeader(doc, "Hall / Lawn Daily Checkout", date);
+
+  const entries: any[] = data?.entries ?? [];
+  const openingBalance: number = data?.openingBalance ?? 0;
+  const accumulativeTotal: number = data?.accumulativeTotal ?? 0;
+
+  const columns = [
+    "Hall Name", "Contact Person", "From", "To", "Days",
+    "Rent", "S.C", "GST", "Food", "Total",
+  ];
+
+  const openingRow = [
+    { content: "Opening Balance", colSpan: 9, styles: { fontStyle: "bold" as const } },
+    { content: openingBalance.toLocaleString(), styles: { fontStyle: "bold" as const } },
+  ];
+
+  const dataRows = entries.map((e: any) => [
+    e.hallName ?? "",
+    e.contactPersonName ?? "",
+    e.from ?? "",
+    e.to ?? "",
+    e.days ?? "",
+    e.rent ?? 0,
+    e.serviceCharge ?? 0,
+    e.gst ?? 0,
+    e.food ?? 0,
+    e.total ?? 0,
+  ]);
+
+  const accRow = [
+    { content: "Accumulative Total", colSpan: 9, styles: { fontStyle: "bold" as const } },
+    { content: accumulativeTotal.toLocaleString(), styles: { fontStyle: "bold" as const } },
+  ];
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: [openingRow as any, ...dataRows, accRow as any],
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    styles: { cellPadding: 2 },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`hall-daily-checkout-${date}-${Date.now()}.pdf`);
+};
+
+/**
+ * Exports the hall/lawn monthly grid (venues × days) as landscape PDF.
+ * Requirements: 10.4
+ */
+export const exportHallMonthlyGridPDF = (data: any, period: string): void => {
+  const doc = new jsPDF({ orientation: "landscape" });
+  const startY = addPSCHeader(doc, "Hall / Lawn Monthly Grid", period);
+
+  const venues: any[] = data?.venues ?? [];
+  const dailyTotals: Record<number, number> = data?.dailyTotals ?? {};
+
+  const allDays = Object.keys(dailyTotals).map(Number).sort((a, b) => a - b);
+
+  const head = [["Venue", "Type", ...allDays.map(String), "Total"]];
+
+  const body = venues.map((v: any) => [
+    v.name ?? "",
+    v.type ?? "",
+    ...allDays.map((d) => v.days?.[d] ?? ""),
+    v.total ?? "",
+  ]);
+
+  body.push([
+    "Total",
+    "",
+    ...allDays.map((d) => dailyTotals[d] ?? 0),
+    allDays.reduce((sum, d) => sum + (dailyTotals[d] ?? 0), 0),
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head,
+    body,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7 },
+    bodyStyles: { fontSize: 7 },
+    styles: { cellPadding: 1.5 },
+    margin: { left: 7, right: 7 },
+    didParseCell: (hookData) => {
+      if (hookData.row.index === body.length - 1) {
+        hookData.cell.styles.fontStyle = "bold";
+        hookData.cell.styles.fillColor = [243, 244, 246];
+      }
+    },
+  });
+
+  doc.save(`hall-monthly-grid-${Date.now()}.pdf`);
+};
+
+// ============================================================
+// Photoshoot Report Exports
+// ============================================================
+
+/**
+ * Exports a filtered photoshoot bookings list as portrait PDF.
+ * Requirements: 11.4
+ */
+export const exportPhotoshootBookingsReportPDF = (
+  data: any[],
+  filters?: Record<string, string>
+): void => {
+  const doc = new jsPDF({ orientation: "portrait" });
+  const periodStr = filters?.fromDate && filters?.toDate
+    ? `${filters.fromDate} – ${filters.toDate}`
+    : undefined;
+  const startY = addPSCHeader(doc, "Photoshoot Bookings Report", periodStr);
+
+  const columns = [
+    "S#", "Booking ID", "Member Name", "Member #", "Package Description",
+    "Date", "Time Slot", "Charges", "Payment Status", "Booking Status", "Booked By",
+  ];
+
+  const rows = data.map((row, i) => [
+    i + 1,
+    row.id ?? "",
+    row.memberName ?? "",
+    row.memberNumber ?? "",
+    row.packageDescription ?? "",
+    row.date ?? "",
+    row.timeSlot ?? "",
+    row.charges ?? 0,
+    row.paymentStatus ?? "",
+    row.bookingStatus ?? "",
+    row.bookedBy ?? "",
+  ]);
+
+  autoTable(doc, {
+    startY,
+    head: [columns],
+    body: rows,
+    headStyles: { fillColor: DARK_HEADER, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
+    bodyStyles: { fontSize: 8 },
+    styles: { cellPadding: 2 },
+    margin: { left: 10, right: 10 },
+  });
+
+  doc.save(`photoshoot-bookings-report-${Date.now()}.pdf`);
+};

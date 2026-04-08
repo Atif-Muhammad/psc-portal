@@ -24,6 +24,7 @@ import { MessingModule } from './messing/messing.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { ReportsModule } from './reports/reports.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
@@ -54,6 +55,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     RealtimeModule,
     FeedbackModule,
     AccountsModule,
+    ReportsModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60,

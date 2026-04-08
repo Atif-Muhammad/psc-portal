@@ -34,6 +34,9 @@ import Content from "./pages/Content";
 import Messing from "./pages/Messing";
 import Feedback from "./pages/Feedback";
 import Search from "./pages/Search";
+import RoomReports from "./pages/reports/RoomReports";
+import HallReports from "./pages/reports/HallReports";
+import PhotoshootReports from "./pages/reports/PhotoshootReports";
 
 
 const queryClient = new QueryClient();
@@ -64,7 +67,10 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/bookings": "Bookings",
   "/messing": "Messing",
   "/feedback": "Feedback",
-  "/search": "Search"
+  "/search": "Search",
+  "/reports/rooms": "Room Reports",
+  "/reports/halls": "Hall Reports",
+  "/reports/photoshoot": "Photoshoot Reports"
 };
 
 
@@ -323,6 +329,9 @@ const ProtectedContents = withPermissions(Content);
 const ProtectedMessing = withPermissions(Messing);
 const ProtectedFeedback = withPermissions(Feedback);
 const ProtectedSearch = withPermissions(Search);
+const ProtectedRoomReports = withPermissions(RoomReports);
+const ProtectedHallReports = withPermissions(HallReports);
+const ProtectedPhotoshootReports = withPermissions(PhotoshootReports);
 
 
 // Permission Denied page doesn't need permissions check
@@ -375,6 +384,10 @@ function App() {
               <Route path="/messing" element={<ProtectedMessing />} />
               <Route path="/feedback" element={<ProtectedFeedback />} />
               <Route path="/search" element={<ProtectedSearch />} />
+              <Route path="/reports" element={<Navigate to="/reports/rooms" replace />} />
+              <Route path="/reports/rooms" element={<ProtectedRoomReports />} />
+              <Route path="/reports/halls" element={<ProtectedHallReports />} />
+              <Route path="/reports/photoshoot" element={<ProtectedPhotoshootReports />} />
 
             </Route>
 

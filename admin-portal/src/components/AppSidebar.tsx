@@ -20,7 +20,8 @@ import {
   Text,
   Utensils,
   MessageSquare,
-  Search as SearchIcon
+  Search as SearchIcon,
+  BarChart2
 } from "lucide-react";
 
 
@@ -68,7 +69,11 @@ const ROUTE_TO_PERMISSION_MAP: Record<string, string> = {
   "/bookings": "Bookings",
   "/messing": "Messing",
   "/feedback": "Feedback",
-  "/search": "Search"
+  "/search": "Search",
+  "/reports/rooms": "Room Reports",
+  "/reports/halls": "Hall Reports",
+  "/reports/photoshoot": "Photoshoot Reports",
+  // "/reports": "Reports"
 };
 
 const menuItems = [
@@ -86,6 +91,7 @@ const menuItems = [
       { title: "Room Types", url: "/rooms/types" },
       { title: "Rooms", url: "/rooms" },
       { title: "Room Bookings", url: "/bookings/rooms" },
+      { title: "Room Reports", url: "/reports/rooms" },
     ],
   },
   {
@@ -94,6 +100,7 @@ const menuItems = [
     items: [
       { title: "Manage Halls", url: "/halls" },
       { title: "Hall Bookings", url: "/bookings/halls" },
+      { title: "Hall Reports", url: "/reports/halls" },
     ],
   },
   {
@@ -111,6 +118,7 @@ const menuItems = [
     items: [
       { title: "Manage Photoshoot", url: "/photoshoot" },
       { title: "Photoshoot Bookings", url: "/bookings/photoshoot" },
+      { title: "Photoshoot Reports", url: "/reports/photoshoot" },
     ],
   },
   { title: "Messing", url: "/messing", icon: Utensils },
@@ -121,6 +129,7 @@ const menuItems = [
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Contents", url: "/contents", icon: Text },
   { title: "Feedback", url: "/feedback", icon: MessageSquare },
+  // { title: "Reports", url: "/reports", icon: BarChart2 },
 ];
 
 export function AppSidebar() {
