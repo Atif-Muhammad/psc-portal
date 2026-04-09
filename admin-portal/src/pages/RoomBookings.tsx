@@ -53,15 +53,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Import reusable components
-import { BookingsTable } from "@/components/BookingsTable";
+import {
+  BookingSearchFilter,
+  type BookingSearchFilters,
+} from "@/components/BookingSearchFilter";
 import { EditBookingDialog } from "@/components/EditBookingDialog";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import { CloseBookingDialog } from "@/components/CloseBookingDialog";
 import { BookingFormComponent } from "@/components/BookingForm";
 
-// Import types and utilities
+// Import reusable components
+import { BookingsTable } from "@/components/BookingsTable";
 import {
   Booking,
   BookingForm,
@@ -95,6 +98,9 @@ export default function RoomBookings() {
   const [viewVouchers, setViewVouchers] = useState<Booking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [activeTab, setActiveTab] = useState("active");
+  const [searchFilters, setSearchFilters] = useState<BookingSearchFilters>({
+    membershipNo: "", bookingId: "", checkIn: "", checkOut: "",
+  });
   const [form, setForm] = useState<BookingForm>(initialFormState);
   const [editForm, setEditForm] = useState<BookingForm>(initialFormState);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
@@ -161,9 +167,9 @@ export default function RoomBookings() {
     isFetchingNextPage,
     isLoading: isLoadingBookings,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "rooms", "active"],
+    queryKey: ["bookings", "rooms", "active", { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter }],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getBookings({ bookingsFor: "rooms", pageParam });
+      const res = await getBookings({ bookingsFor: "rooms", pageParam, filters: { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter } });
       return res as Booking[];
     },
     initialPageParam: 1,
@@ -180,9 +186,9 @@ export default function RoomBookings() {
     isFetchingNextPage: isFetchingNextCancelled,
     isLoading: isLoadingCancelled,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "rooms", "cancelled"],
+    queryKey: ["bookings", "rooms", "cancelled", { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter }],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getCancelledBookings({ bookingsFor: "rooms", pageParam });
+      const res = await getCancelledBookings({ bookingsFor: "rooms", pageParam, filters: { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter } });
       return res as Booking[];
     },
     initialPageParam: 1,
@@ -199,9 +205,9 @@ export default function RoomBookings() {
     isFetchingNextPage: isFetchingNextRequests,
     isLoading: isLoadingRequests,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "rooms", "requests"],
+    queryKey: ["bookings", "rooms", "requests", { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter }],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getCancellationRequests({ bookingsFor: "rooms", pageParam });
+      const res = await getCancellationRequests({ bookingsFor: "rooms", pageParam, filters: { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter } });
       return res as Booking[];
     },
     initialPageParam: 1,
@@ -218,9 +224,9 @@ export default function RoomBookings() {
     isFetchingNextPage: isFetchingNextClosed,
     isLoading: isLoadingClosed,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "rooms", "closed"],
+    queryKey: ["bookings", "rooms", "closed", { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter }],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await getClosedBookings({ bookingsFor: "rooms", pageParam });
+      const res = await getClosedBookings({ bookingsFor: "rooms", pageParam, filters: { membershipNo: searchFilters.membershipNo, bookingId: searchFilters.bookingId, checkIn: searchFilters.checkIn, checkOut: searchFilters.checkOut, paymentStatus: paymentFilter } });
       return res as Booking[];
     },
     initialPageParam: 1,
@@ -1128,10 +1134,7 @@ export default function RoomBookings() {
     setViewVouchers(booking);
   };
 
-  const filteredBookings =
-    paymentFilter === "ALL"
-      ? bookings
-      : bookings?.filter((b: any) => b.paymentStatus === paymentFilter);
+  const filteredBookings = bookings;
 
   const getPaymentBadge = (status: string) => {
     switch (status) {
@@ -1263,8 +1266,15 @@ export default function RoomBookings() {
           <TabsTrigger value="closed">Closed Bookings</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="active" className="m-0">
-          <BookingsTable
+        <BookingSearchFilter
+          filters={searchFilters}
+          onChange={setSearchFilters}
+          checkInLabel="Check-In Date"
+          checkOutLabel="Check-Out Date"
+        />
+
+          <TabsContent value="active" className="m-0">
+            <BookingsTable
             bookings={filteredBookings}
             isLoading={isLoading}
             onEdit={setEditBooking}
@@ -1277,7 +1287,7 @@ export default function RoomBookings() {
             onClose={setCloseBookingTarget}
             getPaymentBadge={getPaymentBadge}
           />
-        </TabsContent>
+          </TabsContent>
 
         <TabsContent value="cancelled" className="m-0">
           <BookingsTable

@@ -58,7 +58,7 @@ export class RoomReportsService {
     if (bookingStatus) {
       if (bookingStatus === 'CANCELED') {
         where.isCancelled = true;
-      } else if (bookingStatus === 'OCCUPIED') {
+      } else if (bookingStatus === 'OCCUPIED' || bookingStatus === 'CLOSED') {
         where.isClosed = true;
         where.isCancelled = false;
       } else if (bookingStatus === 'BOOKED') {
@@ -491,22 +491,34 @@ export class RoomReportsService {
       },
     });
 
-    const entries = bookings.map((b) => {
+    // Group by roomNumber — sum daysCanceled across all cancellations for that room
+    const roomMap = new Map<string, { roomType: string; daysCanceled: number }>();
+
+    for (const b of bookings) {
       const firstRoom = b.rooms?.[0];
       const roomNumber = firstRoom?.room?.roomNumber ?? '';
       const roomType = firstRoom?.room?.roomType?.type ?? '';
 
       const checkIn = new Date(b.checkIn);
       const checkOut = new Date(b.checkOut);
-      const daysCanceled = Math.round(
+      const days = Math.round(
         (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      const cancellationPercentage =
-        Math.round((daysCanceled / daysInMonth) * 100 * 100) / 100;
+      if (roomMap.has(roomNumber)) {
+        roomMap.get(roomNumber)!.daysCanceled += days;
+      } else {
+        roomMap.set(roomNumber, { roomType, daysCanceled: days });
+      }
+    }
 
-      return { roomType, roomNumber, daysInMonth, daysCanceled, cancellationPercentage };
-    });
+    const entries = Array.from(roomMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(([roomNumber, { roomType, daysCanceled }]) => {
+        const cancellationPercentage =
+          Math.round((daysCanceled / daysInMonth) * 100 * 100) / 100;
+        return { roomType, roomNumber, daysInMonth, daysCanceled, cancellationPercentage };
+      });
 
     return { entries };
   }
@@ -710,7 +722,7 @@ export class RoomReportsService {
     // Determine booking status string
     let bookingStatus = 'BOOKED';
     if (booking.isCancelled) bookingStatus = 'CANCELED';
-    else if (booking.isClosed) bookingStatus = 'OCCUPIED';
+    else if (booking.isClosed) bookingStatus = 'CLOSED';
 
     const dto = new RoomBookingReportDto();
     dto.id = booking.id;

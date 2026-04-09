@@ -95,7 +95,9 @@ export function ReportTable({
               <TableRow className="bg-gray-100 font-semibold border-t-2 border-gray-400">
                 {columns.map((col, idx) => (
                   <TableCell key={col.key} className={alignClass(col.align)}>
-                    {idx === 0 ? "Totals" : (totalsRow[col.key] ?? "")}
+                    {idx === 0
+                      ? (totalsRow[col.key] != null ? totalsRow[col.key] : "Totals")
+                      : (totalsRow[col.key] ?? "")}
                   </TableCell>
                 ))}
               </TableRow>

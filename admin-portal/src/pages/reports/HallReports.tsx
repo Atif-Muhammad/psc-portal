@@ -198,6 +198,7 @@ function BookingListTab() {
               <SelectContent>
                 <SelectItem value="ALL">All</SelectItem>
                 <SelectItem value="BOOKED">Booked</SelectItem>
+                <SelectItem value="CLOSED">Closed</SelectItem>
                 <SelectItem value="CANCELED">Canceled</SelectItem>
               </SelectContent>
             </Select>
@@ -310,6 +311,14 @@ function DailyCheckoutTab() {
   const openingBalance: number = data?.openingBalance ?? 0;
   const accumulativeTotal: number = data?.accumulativeTotal ?? 0;
 
+  const numericHallKeys = ["rent", "serviceCharge", "gst", "food", "total"];
+  const dailyTotalsRow = DAILY_CHECKOUT_COLUMNS.reduce((acc, col) => {
+    acc[col.key] = numericHallKeys.includes(col.key)
+      ? entries.reduce((sum, e) => sum + (Number(e[col.key]) || 0), 0)
+      : "";
+    return acc;
+  }, {} as Record<string, any>);
+
   const openingBalanceRow = DAILY_CHECKOUT_COLUMNS.reduce((acc, col) => {
     acc[col.key] = col.key === "total" ? openingBalance : "";
     return acc;
@@ -348,9 +357,10 @@ function DailyCheckoutTab() {
     const bodyRows = entries
       .map((r) => `<tr>${DAILY_CHECKOUT_COLUMNS.map((c) => `<td>${r[c.key] ?? ""}</td>`).join("")}</tr>`)
       .join("");
+    const totalRow = `<tr><td>Total</td>${DAILY_CHECKOUT_COLUMNS.slice(1).map((c) => `<td>${numericHallKeys.includes(c.key) ? (dailyTotalsRow[c.key] ?? "") : ""}</td>`).join("")}</tr>`;
     const accRow = `<tr><td>Accumulative Total</td>${DAILY_CHECKOUT_COLUMNS.slice(1).map((c) => `<td>${c.key === "total" ? accumulativeTotal : ""}</td>`).join("")}</tr>`;
     print(
-      `${pscHeader("Hall / Lawn Daily Checkout", date)}<table><thead><tr>${headerCells}</tr></thead><tbody>${obRow}${bodyRows}${accRow}</tbody></table>`,
+      `${pscHeader("Hall / Lawn Daily Checkout", date)}<table><thead><tr>${headerCells}</tr></thead><tbody>${obRow}${bodyRows}${totalRow}${accRow}</tbody></table>`,
       "Hall / Lawn Daily Checkout"
     );
   }
@@ -391,6 +401,7 @@ function DailyCheckoutTab() {
               data={entries}
               loading={isLoading}
               openingBalanceRow={openingBalanceRow}
+              totalsRow={dailyTotalsRow}
               accumulativeRow={accumulativeRow}
               emptyMessage="No checkouts found for this date"
             />
@@ -406,25 +417,30 @@ function DailyCheckoutTab() {
 function MonthlyGridTab() {
   const { print } = usePrintTemplate();
   const { toast } = useToast();
-  const [filters, setFilters] = useState({ fromDate: "", toDate: "" });
+  const [month, setMonth] = useState(""); // "YYYY-MM"
   const [submitted, setSubmitted] = useState(false);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["hallMonthlyReport", filters],
-    queryFn: () => getHallMonthlyReport({ fromDate: filters.fromDate, toDate: filters.toDate }),
-    enabled: submitted,
-  });
+  const fromDate = month ? `${month}-01` : "";
+  const toDate = month
+    ? new Date(Number(month.split("-")[0]), Number(month.split("-")[1]), 0)
+        .toISOString().split("T")[0]
+    : "";
+  const period = month
+    ? new Date(fromDate).toLocaleString("en-US", { month: "long", year: "numeric" })
+    : "";
 
-  const period =
-    filters.fromDate && filters.toDate
-      ? `${filters.fromDate} – ${filters.toDate}`
-      : "";
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["hallMonthlyReport", month],
+    queryFn: () => getHallMonthlyReport({ fromDate, toDate }),
+    enabled: submitted && !!month,
+  });
 
   const venues: any[] = data?.venues ?? [];
   const dailyTotals: Record<number, number> = data?.dailyTotals ?? {};
   const days = Object.keys(dailyTotals).map(Number).sort((a, b) => a - b);
 
   function handleSubmit() {
+    if (!month) return;
     setSubmitted(true);
     refetch();
   }
@@ -463,28 +479,20 @@ function MonthlyGridTab() {
 
   return (
     <div>
-      <ReportFilterPanel
-        fromDate={filters.fromDate}
-        toDate={filters.toDate}
-        onSubmit={handleSubmit}
-        isLoading={isLoading}
-      >
+      <ReportFilterPanel onSubmit={handleSubmit} isLoading={isLoading}>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label>From Date</Label>
+            <Label>Month</Label>
             <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
+              type="month"
+              value={month}
+              onChange={(e) => { setMonth(e.target.value); setSubmitted(false); }}
             />
           </div>
           <div className="space-y-1">
             <Label>To Date</Label>
             <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
-            />
+              type="date"/>
           </div>
         </div>
       </ReportFilterPanel>

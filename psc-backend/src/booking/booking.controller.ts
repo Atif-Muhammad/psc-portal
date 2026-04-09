@@ -154,15 +154,21 @@ export class BookingController {
     @Query('bookingsFor') bookingFor: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('membershipNo') membershipNo?: string,
+    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('checkIn') checkIn?: string,
+    @Query('checkOut') checkOut?: string,
+    @Query('paymentStatus') paymentStatus?: string,
   ) {
+    const search = { membershipNo, bookingId, checkIn, checkOut, paymentStatus };
     if (bookingFor === 'rooms')
-      return this.bookingService.gBookingsRoom(page, limit);
+      return this.bookingService.gBookingsRoom(page, limit, search);
     if (bookingFor === 'halls')
-      return this.bookingService.gBookingsHall(page, limit);
+      return this.bookingService.gBookingsHall(page, limit, search);
     if (bookingFor === 'lawns')
-      return this.bookingService.gBookingsLawn(page, limit);
+      return this.bookingService.gBookingsLawn(page, limit, search);
     if (bookingFor === 'photoshoots')
-      return this.bookingService.gBookingPhotoshoot(page, limit);
+      return this.bookingService.gBookingPhotoshoot(page, limit, search);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -172,15 +178,21 @@ export class BookingController {
     @Query('bookingsFor') bookingFor: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('membershipNo') membershipNo?: string,
+    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('checkIn') checkIn?: string,
+    @Query('checkOut') checkOut?: string,
+    @Query('paymentStatus') paymentStatus?: string,
   ) {
+    const search = { membershipNo, bookingId, checkIn, checkOut, paymentStatus };
     if (bookingFor === 'rooms')
-      return this.bookingService.gCancelledBookingsRoom(page, limit);
+      return this.bookingService.gCancelledBookingsRoom(page, limit, search);
     if (bookingFor === 'halls')
-      return this.bookingService.gCancelledBookingsHall(page, limit);
+      return this.bookingService.gCancelledBookingsHall(page, limit, search);
     if (bookingFor === 'lawns')
-      return this.bookingService.gCancelledBookingsLawn(page, limit);
+      return this.bookingService.gCancelledBookingsLawn(page, limit, search);
     if (bookingFor === 'photoshoots')
-      return this.bookingService.gCancelledBookingsPhotoshoot(page, limit);
+      return this.bookingService.gCancelledBookingsPhotoshoot(page, limit, search);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -190,13 +202,19 @@ export class BookingController {
     @Query('bookingsFor') bookingFor: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('membershipNo') membershipNo?: string,
+    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('checkIn') checkIn?: string,
+    @Query('checkOut') checkOut?: string,
+    @Query('paymentStatus') paymentStatus?: string,
   ) {
+    const search = { membershipNo, bookingId, checkIn, checkOut, paymentStatus };
     if (bookingFor === 'rooms')
-      return this.bookingService.gCancellationRequestsRoom(page, limit);
+      return this.bookingService.gCancellationRequestsRoom(page, limit, search);
     if (bookingFor === 'halls')
-      return this.bookingService.gCancellationRequestsHall(page, limit);
+      return this.bookingService.gCancellationRequestsHall(page, limit, search);
     if (bookingFor === 'lawns')
-      return this.bookingService.gCancellationRequestsLawn(page, limit);
+      return this.bookingService.gCancellationRequestsLawn(page, limit, search);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)
@@ -206,13 +224,19 @@ export class BookingController {
     @Query('bookingsFor') bookingFor: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('membershipNo') membershipNo?: string,
+    @Query('bookingId', new ParseIntPipe({ optional: true })) bookingId?: number,
+    @Query('checkIn') checkIn?: string,
+    @Query('checkOut') checkOut?: string,
+    @Query('paymentStatus') paymentStatus?: string,
   ) {
+    const search = { membershipNo, bookingId, checkIn, checkOut, paymentStatus };
     if (bookingFor === 'rooms')
-      return this.bookingService.gClosedBookingsRoom(page, limit);
+      return this.bookingService.gClosedBookingsRoom(page, limit, search);
     if (bookingFor === 'halls')
-      return this.bookingService.gClosedBookingsHall(page, limit);
+      return this.bookingService.gClosedBookingsHall(page, limit, search);
     if (bookingFor === 'lawns')
-      return this.bookingService.gClosedBookingsLawn(page, limit);
+      return this.bookingService.gClosedBookingsLawn(page, limit, search);
   }
 
   @UseGuards(JwtAccGuard, RolesGuard)

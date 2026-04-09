@@ -288,18 +288,38 @@ export const searchMembers = async (searchString: any): Promise<any> => {
 
 // Bookings
 // Bookings
+interface BookingFilterParams {
+  membershipNo?: string;
+  bookingId?: string;
+  checkIn?: string;
+  checkOut?: string;
+  paymentStatus?: string;
+}
+
 export const getBookings = async ({
   bookingsFor,
   pageParam = 1,
   type = "all",
+  filters,
 }: {
   bookingsFor: string;
   pageParam?: number;
   type?: string;
+  filters?: BookingFilterParams;
 }): Promise<any> => {
   try {
+    const params = new URLSearchParams({
+      bookingsFor,
+      page: pageParam.toString(),
+      limit: "20",
+    });
+    if (filters?.membershipNo) params.append("membershipNo", filters.membershipNo);
+    if (filters?.bookingId) params.append("bookingId", filters.bookingId);
+    if (filters?.checkIn) params.append("checkIn", filters.checkIn);
+    if (filters?.checkOut) params.append("checkOut", filters.checkOut);
+    if (filters?.paymentStatus && filters.paymentStatus !== "ALL") params.append("paymentStatus", filters.paymentStatus);
     const response = await axios.get(
-      `${base_url}/booking/get/bookings/${type}?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      `${base_url}/booking/get/bookings/${type}?${params.toString()}`,
       { withCredentials: true }
     );
     return response.data;
@@ -389,13 +409,25 @@ export const updateCancellationReq = async (
 export const getCancelledBookings = async ({
   bookingsFor,
   pageParam = 1,
+  filters,
 }: {
   bookingsFor: string;
   pageParam?: number;
+  filters?: BookingFilterParams;
 }): Promise<any> => {
   try {
+    const params = new URLSearchParams({
+      bookingsFor,
+      page: pageParam.toString(),
+      limit: "20",
+    });
+    if (filters?.membershipNo) params.append("membershipNo", filters.membershipNo);
+    if (filters?.bookingId) params.append("bookingId", filters.bookingId);
+    if (filters?.checkIn) params.append("checkIn", filters.checkIn);
+    if (filters?.checkOut) params.append("checkOut", filters.checkOut);
+    if (filters?.paymentStatus && filters.paymentStatus !== "ALL") params.append("paymentStatus", filters.paymentStatus);
     const response = await axios.get(
-      `${base_url}/booking/get/bookings/cancelled?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      `${base_url}/booking/get/bookings/cancelled?${params.toString()}`,
       { withCredentials: true }
     );
     return response.data;
@@ -413,13 +445,25 @@ export const getCancelledBookings = async ({
 export const getCancellationRequests = async ({
   bookingsFor,
   pageParam = 1,
+  filters,
 }: {
   bookingsFor: string;
   pageParam?: number;
+  filters?: BookingFilterParams;
 }): Promise<any> => {
   try {
+    const params = new URLSearchParams({
+      bookingsFor,
+      page: pageParam.toString(),
+      limit: "20",
+    });
+    if (filters?.membershipNo) params.append("membershipNo", filters.membershipNo);
+    if (filters?.bookingId) params.append("bookingId", filters.bookingId);
+    if (filters?.checkIn) params.append("checkIn", filters.checkIn);
+    if (filters?.checkOut) params.append("checkOut", filters.checkOut);
+    if (filters?.paymentStatus && filters.paymentStatus !== "ALL") params.append("paymentStatus", filters.paymentStatus);
     const response = await axios.get(
-      `${base_url}/booking/get/bookings/cancellation-requests?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      `${base_url}/booking/get/bookings/cancellation-requests?${params.toString()}`,
       { withCredentials: true }
     );
     return response.data;
@@ -437,13 +481,25 @@ export const getCancellationRequests = async ({
 export const getClosedBookings = async ({
   bookingsFor,
   pageParam = 1,
+  filters,
 }: {
   bookingsFor: string;
   pageParam?: number;
+  filters?: BookingFilterParams;
 }): Promise<any> => {
   try {
+    const params = new URLSearchParams({
+      bookingsFor,
+      page: pageParam.toString(),
+      limit: "20",
+    });
+    if (filters?.membershipNo) params.append("membershipNo", filters.membershipNo);
+    if (filters?.bookingId) params.append("bookingId", filters.bookingId);
+    if (filters?.checkIn) params.append("checkIn", filters.checkIn);
+    if (filters?.checkOut) params.append("checkOut", filters.checkOut);
+    if (filters?.paymentStatus && filters.paymentStatus !== "ALL") params.append("paymentStatus", filters.paymentStatus);
     const response = await axios.get(
-      `${base_url}/booking/get/bookings/closed?bookingsFor=${bookingsFor}&page=${pageParam}&limit=20`,
+      `${base_url}/booking/get/bookings/closed?${params.toString()}`,
       { withCredentials: true }
     );
     return response.data;

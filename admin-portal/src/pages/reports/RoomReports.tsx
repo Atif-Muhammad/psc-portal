@@ -177,7 +177,7 @@ function BookingListTab() {
               <SelectContent>
                 <SelectItem value="ALL">All</SelectItem>
                 <SelectItem value="BOOKED">Booked</SelectItem>
-                <SelectItem value="OCCUPIED">Occupied</SelectItem>
+                <SelectItem value="CLOSED">Closed</SelectItem>
                 <SelectItem value="CANCELED">Canceled</SelectItem>
               </SelectContent>
             </Select>
@@ -447,6 +447,15 @@ function DailyCheckoutTab() {
   const openingBalance: number = data?.openingBalance ?? 0;
   const accumulativeTotal: number = data?.accumulativeTotal ?? 0;
 
+  // Sum of today's entries per numeric column
+  const numericKeys = ["rent", "mattress", "gst", "food", "serviceCharge", "laundry", "total"];
+  const dailyTotalsRow = DAILY_CHECKOUT_COLUMNS.reduce((acc, col) => {
+    acc[col.key] = numericKeys.includes(col.key)
+      ? entries.reduce((sum, e) => sum + (Number(e[col.key]) || 0), 0)
+      : "";
+    return acc;
+  }, {} as Record<string, any>);
+
   const openingBalanceRow = DAILY_CHECKOUT_COLUMNS.reduce((acc, col) => {
     acc[col.key] = col.key === "total" ? openingBalance : "";
     return acc;
@@ -485,9 +494,10 @@ function DailyCheckoutTab() {
     const bodyRows = entries
       .map((r) => `<tr>${DAILY_CHECKOUT_COLUMNS.map((c) => `<td>${r[c.key] ?? ""}</td>`).join("")}</tr>`)
       .join("");
+    const totalRow = `<tr><td>Total</td>${DAILY_CHECKOUT_COLUMNS.slice(1).map((c) => `<td>${numericKeys.includes(c.key) ? (dailyTotalsRow[c.key] ?? "") : ""}</td>`).join("")}</tr>`;
     const accRow = `<tr><td>Accumulative Total</td>${DAILY_CHECKOUT_COLUMNS.slice(1).map((c) => `<td>${c.key === "total" ? accumulativeTotal : ""}</td>`).join("")}</tr>`;
     print(
-      `${pscHeader("Room Daily Checkout", date)}<table><thead><tr>${headerCells}</tr></thead><tbody>${obRow}${bodyRows}${accRow}</tbody></table>`,
+      `${pscHeader("Room Daily Checkout", date)}<table><thead><tr>${headerCells}</tr></thead><tbody>${obRow}${bodyRows}${totalRow}${accRow}</tbody></table>`,
       "Room Daily Checkout"
     );
   }
@@ -528,6 +538,7 @@ function DailyCheckoutTab() {
               data={entries}
               loading={isLoading}
               openingBalanceRow={openingBalanceRow}
+              totalsRow={dailyTotalsRow}
               accumulativeRow={accumulativeRow}
               emptyMessage="No checkouts found for this date"
             />
@@ -673,22 +684,30 @@ const CANCELLATIONS_COLUMNS = [
 function CancellationsTab() {
   const { print } = usePrintTemplate();
   const { toast } = useToast();
-  const [filters, setFilters] = useState({ fromDate: "", toDate: "" });
+  const [month, setMonth] = useState(""); // "YYYY-MM"
   const [submitted, setSubmitted] = useState(false);
 
+  // Derive first/last day of the selected month for the API
+  const fromDate = month ? `${month}-01` : "";
+  const toDate = month
+    ? new Date(Number(month.split("-")[0]), Number(month.split("-")[1]), 0)
+        .toISOString()
+        .split("T")[0]
+    : "";
+  const period = month
+    ? new Date(fromDate).toLocaleString("en-US", { month: "long", year: "numeric" })
+    : "";
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["roomCancellationsReport", filters],
-    queryFn: () => getRoomCancellationsReport({ fromDate: filters.fromDate, toDate: filters.toDate }),
-    enabled: submitted,
+    queryKey: ["roomCancellationsReport", month],
+    queryFn: () => getRoomCancellationsReport({ fromDate, toDate }),
+    enabled: submitted && !!month,
   });
 
   const entries: any[] = data?.entries ?? [];
-  const period =
-    filters.fromDate && filters.toDate
-      ? `${filters.fromDate} – ${filters.toDate}`
-      : "";
 
   function handleSubmit() {
+    if (!month) return;
     setSubmitted(true);
     refetch();
   }
@@ -722,27 +741,14 @@ function CancellationsTab() {
 
   return (
     <div>
-      <ReportFilterPanel
-        fromDate={filters.fromDate}
-        toDate={filters.toDate}
-        onSubmit={handleSubmit}
-        isLoading={isLoading}
-      >
+      <ReportFilterPanel onSubmit={handleSubmit} isLoading={isLoading}>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label>From Date</Label>
+            <Label>Month</Label>
             <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>To Date</Label>
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))}
+              type="month"
+              value={month}
+              onChange={(e) => { setMonth(e.target.value); setSubmitted(false); }}
             />
           </div>
         </div>
@@ -768,7 +774,7 @@ function CancellationsTab() {
               columns={CANCELLATIONS_COLUMNS}
               data={entries}
               loading={isLoading}
-              emptyMessage="No cancellation data found for the selected period"
+              emptyMessage="No cancellation data found for the selected month"
             />
           )}
         </div>
@@ -796,7 +802,7 @@ const MONTHLY_BILLS_COLUMNS = [
   { key: "laundry", label: "Laundry", align: "right" as const },
   { key: "total", label: "Total", align: "right" as const },
   { key: "advance", label: "Advance", align: "right" as const },
-  { key: "netTotal", label: "Net Total", align: "right" as const },
+  { key: "netTotal", label: "Total", align: "right" as const },
 ];
 
 function MonthlyBillsTab() {
@@ -817,6 +823,13 @@ function MonthlyBillsTab() {
     filters.fromDate && filters.toDate
       ? `${filters.fromDate} – ${filters.toDate}`
       : "";
+
+  // Grand total row — sum all numeric columns
+  const numericBillKeys = ["rent", "gst", "food", "foodGst", "serviceCharge", "mattress", "mattressGst", "laundry", "total", "advance", "netTotal"];
+  const grandTotal = numericBillKeys.reduce((acc, key) => {
+    acc[key] = entries.reduce((sum, e) => sum + (Number(e[key]) || 0), 0);
+    return acc;
+  }, {} as Record<string, number>);
 
   function handleSubmit() {
     setSubmitted(true);
@@ -851,8 +864,12 @@ function MonthlyBillsTab() {
     const bodyRows = entries
       .map((r) => `<tr>${MONTHLY_BILLS_COLUMNS.map((c) => `<td>${r[c.key] ?? ""}</td>`).join("")}</tr>`)
       .join("");
+    const grandTotalRow = `<tr style="font-weight:bold; background:#1f2937; color:white;">
+      <td colspan="6" style="text-align:center;">Grand Total</td>
+      ${numericBillKeys.map((k) => `<td style="text-align:right;">${grandTotal[k] ?? 0}</td>`).join("")}
+    </tr>`;
     print(
-      `${pscHeader("Room Monthly Bills", period)}${summaryHtml}<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`,
+      `${pscHeader("Room Monthly Bills", period)}${summaryHtml}<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}${grandTotalRow}</tbody></table>`,
       "Room Monthly Bills"
     );
   }
@@ -914,6 +931,7 @@ function MonthlyBillsTab() {
                 columns={MONTHLY_BILLS_COLUMNS}
                 data={entries}
                 loading={isLoading}
+                totalsRow={{ ...grandTotal, sNo: "Grand Total" }}
                 emptyMessage="No monthly bills found for the selected period"
               />
             </>

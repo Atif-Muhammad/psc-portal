@@ -24,6 +24,10 @@ import { LawnBookingDetailsCard } from "@/components/details/LawnBookingDets";
 import { VouchersDialog } from "@/components/VouchersDialog";
 import { Voucher } from "@/types/room-booking.type";
 import { MemberSearchComponent } from "@/components/MemberSearch";
+import {
+  BookingSearchFilter,
+  type BookingSearchFilters,
+} from "@/components/BookingSearchFilter";
 import paymentRules from "../config/paymentRules.json";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import { CloseBookingDialog } from "@/components/CloseBookingDialog";
@@ -713,6 +717,9 @@ export default function LawnBookings() {
   const [reasonToView, setReasonToView] = useState<{ reason: string; requestedBy: string } | null>(null);
   const [viewVouchers, setViewVouchers] = useState<LawnBooking | null>(null);
   const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [searchFilters, setSearchFilters] = useState<BookingSearchFilters>({
+    membershipNo: "", bookingId: "", checkIn: "", checkOut: "",
+  });
 
   const [form, setForm] = useState<LawnBookingForm>(initialForm);
   const [editForm, setEditForm] = useState<LawnBookingForm>(initialForm);
@@ -787,37 +794,117 @@ export default function LawnBookings() {
   });
 
   // Fetch lawn bookings
-  // Infinite Query for Lawn Bookings
+  const filters = {
+    membershipNo: searchFilters.membershipNo,
+    bookingId: searchFilters.bookingId,
+    checkIn: searchFilters.checkIn,
+    checkOut: searchFilters.checkOut,
+    paymentStatus: paymentFilter,
+  };
+
+  // Infinite Query for active Lawn Bookings
   const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading: isLoadingBookings,
+    data: activeData,
+    fetchNextPage: fetchNextActive,
+    hasNextPage: hasNextActive,
+    isFetchingNextPage: isFetchingNextActive,
+    isLoading: isLoadingActive,
   } = useInfiniteQuery({
-    queryKey: ["lawn-bookings", activeTab],
+    queryKey: ["lawn-bookings", "active", searchFilters, paymentFilter],
     queryFn: async ({ pageParam = 1 }) => {
-      let res;
-      if (activeTab === "active") {
-        res = await getBookings({ bookingsFor: "lawns", pageParam });
-      } else if (activeTab === "cancelled") {
-        res = await getCancelledBookings({ bookingsFor: "lawns", pageParam });
-      } else if (activeTab === "closed") {
-        res = await getBookings({ bookingsFor: "lawns", pageParam, type: "closed" });
-      } else {
-        res = await getCancellationRequests({ bookingsFor: "lawns", pageParam });
-      }
+      const res = await getBookings({ bookingsFor: "lawns", pageParam, filters });
       return res as LawnBooking[];
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
-      return lastPage && lastPage.length === 20
-        ? allPages.length + 1
-        : undefined;
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
     },
   });
 
-  const lawnBookings = useMemo(() => data?.pages.flat() || [], [data]);
+  // Infinite Query for cancelled Lawn Bookings
+  const {
+    data: cancelledData,
+    fetchNextPage: fetchNextCancelled,
+    hasNextPage: hasNextCancelled,
+    isFetchingNextPage: isFetchingNextCancelled,
+    isLoading: isLoadingCancelled,
+  } = useInfiniteQuery({
+    queryKey: ["lawn-bookings", "cancelled", searchFilters, paymentFilter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getCancelledBookings({ bookingsFor: "lawns", pageParam, filters });
+      return res as LawnBooking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+  });
+
+  // Infinite Query for closed Lawn Bookings
+  const {
+    data: closedData,
+    fetchNextPage: fetchNextClosed,
+    hasNextPage: hasNextClosed,
+    isFetchingNextPage: isFetchingNextClosed,
+    isLoading: isLoadingClosed,
+  } = useInfiniteQuery({
+    queryKey: ["lawn-bookings", "closed", searchFilters, paymentFilter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getBookings({ bookingsFor: "lawns", pageParam, type: "closed", filters });
+      return res as LawnBooking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+  });
+
+  // Infinite Query for cancellation requests Lawn Bookings
+  const {
+    data: requestsData,
+    fetchNextPage: fetchNextRequests,
+    hasNextPage: hasNextRequests,
+    isFetchingNextPage: isFetchingNextRequests,
+    isLoading: isLoadingRequests,
+  } = useInfiniteQuery({
+    queryKey: ["lawn-bookings", "requests", searchFilters, paymentFilter],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await getCancellationRequests({ bookingsFor: "lawns", pageParam, filters });
+      return res as LawnBooking[];
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage && lastPage.length === 20 ? allPages.length + 1 : undefined;
+    },
+  });
+
+  const lawnBookings = useMemo(() => {
+    if (activeTab === "active") return activeData?.pages.flat() || [];
+    if (activeTab === "cancelled") return cancelledData?.pages.flat() || [];
+    if (activeTab === "closed") return closedData?.pages.flat() || [];
+    if (activeTab === "requests") return requestsData?.pages.flat() || [];
+    return [];
+  }, [activeTab, activeData, cancelledData, closedData, requestsData]);
+
+  const isLoadingBookings = activeTab === "active" ? isLoadingActive
+    : activeTab === "cancelled" ? isLoadingCancelled
+    : activeTab === "closed" ? isLoadingClosed
+    : isLoadingRequests;
+
+  const isFetchingNextPage = activeTab === "active" ? isFetchingNextActive
+    : activeTab === "cancelled" ? isFetchingNextCancelled
+    : activeTab === "closed" ? isFetchingNextClosed
+    : isFetchingNextRequests;
+
+  const hasNextPage = activeTab === "active" ? hasNextActive
+    : activeTab === "cancelled" ? hasNextCancelled
+    : activeTab === "closed" ? hasNextClosed
+    : hasNextRequests;
+
+  const fetchNextPage = activeTab === "active" ? fetchNextActive
+    : activeTab === "cancelled" ? fetchNextCancelled
+    : activeTab === "closed" ? fetchNextClosed
+    : fetchNextRequests;
 
   const observer = useRef<IntersectionObserver>();
   const lastElementRef = useCallback(
@@ -1314,9 +1401,7 @@ export default function LawnBookings() {
     return (availableLawnsData as Lawn[]).filter((lawn: Lawn) => lawn.isActive && !lawn.isOutOfService);
   }, [availableLawnsData]);
 
-  const filteredBookings = paymentFilter === "ALL"
-    ? lawnBookings
-    : lawnBookings.filter(b => b.paymentStatus === paymentFilter);
+
 
   const getPaymentBadge = (status: string) => {
     switch (status) {
@@ -1978,13 +2063,20 @@ export default function LawnBookings() {
           <TabsTrigger value="closed">Closed Bookings</TabsTrigger>
         </TabsList>
 
+        <BookingSearchFilter
+          filters={searchFilters}
+          onChange={setSearchFilters}
+          checkInLabel="Booking Date"
+          checkOutLabel="End Date"
+        />
+
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             {isLoadingBookings ? (
               <div className="flex justify-center items-center py-32">
                 <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredBookings.length === 0 ? (
+            ) : lawnBookings.length === 0 ? (
               <div className="text-center py-32 text-muted-foreground text-lg">
                 {activeTab === "active" ? "No lawn bookings found" :
                   activeTab === "cancelled" ? "No cancelled bookings found" :
@@ -2008,7 +2100,7 @@ export default function LawnBookings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredBookings.map((booking) => (
+                    {lawnBookings.map((booking) => (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">
                           {booking.member?.Name || booking.memberName}

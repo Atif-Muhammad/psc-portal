@@ -17,6 +17,10 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { getBookings, createBooking, updateBooking, cancelReqBooking as delBooking, getPhotoshoots, searchMembers, getVouchers, getCancelledBookings } from "../../config/apis";
 import { MemberSearchComponent } from "@/components/MemberSearch";
+import {
+  BookingSearchFilter,
+  type BookingSearchFilters,
+} from "@/components/BookingSearchFilter";
 import { Member, Voucher } from "@/types/room-booking.type";
 import { cn } from "@/lib/utils";
 import { FormInput } from "@/components/FormInputs";
@@ -304,6 +308,9 @@ export default function PhotoshootBookings() {
   const [viewVouchers, setViewVouchers] = useState<PhotoshootBooking | null>(null);
   const [activeTab, setActiveTab] = useState("active");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchFilters, setSearchFilters] = useState<BookingSearchFilters>({
+    membershipNo: "", bookingId: "", checkIn: "", checkOut: "",
+  });
 
   // Form States
   const [memberSearch, setMemberSearch] = useState("");
@@ -361,6 +368,13 @@ export default function PhotoshootBookings() {
 
   // Queries
   // Infinite Query for Bookings
+  const filters = {
+    membershipNo: searchFilters.membershipNo,
+    bookingId: searchFilters.bookingId,
+    checkIn: searchFilters.checkIn,
+    paymentStatus: statusFilter,
+  };
+
   const {
     data,
     fetchNextPage,
@@ -368,13 +382,13 @@ export default function PhotoshootBookings() {
     isFetchingNextPage,
     isLoading: isLoadingBookings,
   } = useInfiniteQuery({
-    queryKey: ["bookings", "photoshoots", activeTab],
+    queryKey: ["bookings", "photoshoots", activeTab, searchFilters, statusFilter],
     queryFn: async ({ pageParam = 1 }) => {
       if (activeTab === "active") {
-        const res = await getBookings({ bookingsFor: "photoshoots", pageParam });
+        const res = await getBookings({ bookingsFor: "photoshoots", pageParam, filters });
         return res as PhotoshootBooking[];
       } else {
-        const res = await getCancelledBookings({ bookingsFor: "photoshoots", pageParam });
+        const res = await getCancelledBookings({ bookingsFor: "photoshoots", pageParam, filters });
         return res as PhotoshootBooking[];
       }
     },
@@ -667,9 +681,7 @@ export default function PhotoshootBookings() {
     }
   }, [editBooking]);
 
-  const filteredBookings = statusFilter === "ALL"
-    ? bookings
-    : bookings.filter(b => b.paymentStatus === statusFilter);
+  const filteredBookings = bookings;
 
   const getPaymentBadge = (status: string) => {
     switch (status) {
@@ -1018,6 +1030,14 @@ export default function PhotoshootBookings() {
             Cancelled Bookings
           </TabsTrigger>
         </TabsList>
+
+        <BookingSearchFilter
+          filters={searchFilters}
+          onChange={setSearchFilters}
+          checkInLabel="Booking Date"
+          checkOutLabel="End Date"
+        />
+
         <TabsContent value="active" className="mt-0">
           <Card>
             <CardContent className="p-0">

@@ -1213,7 +1213,7 @@ export class BookingService {
     return { ...updated, prevRoomId: booking.roomId };
   }
 
-  async gBookingsRoom(page?: number, limit?: number) {
+  async gBookingsRoom(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -1252,6 +1252,30 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -1261,7 +1285,7 @@ export class BookingService {
     return bookings.map(b => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancelledBookingsRoom(page?: number, limit?: number) {
+  async gCancelledBookingsRoom(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isCancelled: true },
       orderBy: { createdAt: 'desc' },
@@ -1294,6 +1318,30 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -1303,7 +1351,7 @@ export class BookingService {
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancellationRequestsRoom(page?: number, limit?: number) {
+  async gCancellationRequestsRoom(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -1343,6 +1391,30 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -1352,7 +1424,7 @@ export class BookingService {
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
-  async gClosedBookingsRoom(page?: number, limit?: number) {
+  async gClosedBookingsRoom(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isClosed: true, isCancelled: false },
       orderBy: { updatedAt: 'desc' },
@@ -1384,6 +1456,30 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -1479,7 +1575,7 @@ export class BookingService {
     return { message: 'Booking closed successfully' };
   }
 
-  async gClosedBookingsHall(page?: number, limit?: number) {
+  async gClosedBookingsHall(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isClosed: true, isCancelled: false },
       orderBy: { updatedAt: 'desc' },
@@ -1499,6 +1595,30 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -1587,7 +1707,7 @@ export class BookingService {
     return { message: 'Booking closed successfully' };
   }
 
-  async gClosedBookingsLawn(page?: number, limit?: number) {
+  async gClosedBookingsLawn(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isClosed: true, isCancelled: false },
       orderBy: { updatedAt: 'desc' },
@@ -1607,6 +1727,30 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.endDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -1779,7 +1923,7 @@ export class BookingService {
     return { message: 'Affiliated booking closed successfully' };
   }
 
-  async gCancelledBookingsHall(page?: number, limit?: number) {
+  async gCancelledBookingsHall(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isCancelled: true },
       orderBy: { createdAt: 'desc' },
@@ -1800,6 +1944,30 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -1809,7 +1977,7 @@ export class BookingService {
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancellationRequestsHall(page?: number, limit?: number) {
+  async gCancellationRequestsHall(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -1837,6 +2005,30 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -1846,7 +2038,7 @@ export class BookingService {
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancelledBookingsLawn(page?: number, limit?: number) {
+  async gCancelledBookingsLawn(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: { isCancelled: true },
       orderBy: { createdAt: 'desc' },
@@ -1868,6 +2060,30 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.endDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -1878,7 +2094,7 @@ export class BookingService {
     return bookings.map((b) => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancellationRequestsLawn(page?: number, limit?: number) {
+  async gCancellationRequestsLawn(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -1907,6 +2123,30 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.endDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -2990,7 +3230,7 @@ export class BookingService {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////
   // hall bookings
-  async gBookingsHall(page?: number, limit?: number) {
+  async gBookingsHall(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -3024,6 +3264,30 @@ export class BookingService {
         },
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.Membership_No = { contains: search.membershipNo };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkIn = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.checkOut = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -4019,7 +4283,7 @@ export class BookingService {
   }
 
   // lawn booking
-  async gBookingsLawn(page?: number, limit?: number) {
+  async gBookingsLawn(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; checkOut?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -4037,6 +4301,30 @@ export class BookingService {
         },
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.checkOut) {
+      const d = new Date(search.checkOut);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkOut);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.endDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -5447,7 +5735,7 @@ export class BookingService {
 
     return updated;
   }
-  async gBookingPhotoshoot(page?: number, limit?: number) {
+  async gBookingPhotoshoot(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: false,
@@ -5469,6 +5757,23 @@ export class BookingService {
       },
     };
 
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
+
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
       args.take = Number(limit);
@@ -5478,7 +5783,7 @@ export class BookingService {
     return bookings.map(b => this.attachActiveCancellationRequest(b));
   }
 
-  async gCancelledBookingsPhotoshoot(page?: number, limit?: number) {
+  async gCancelledBookingsPhotoshoot(page?: number, limit?: number, search?: { membershipNo?: string; bookingId?: number; checkIn?: string; paymentStatus?: string }) {
     const args: any = {
       where: {
         isCancelled: true,
@@ -5496,6 +5801,23 @@ export class BookingService {
         cancellationRequests: true,
       },
     };
+
+    if (search?.bookingId) {
+      args.where.id = search.bookingId;
+    }
+    if (search?.membershipNo) {
+      args.where.member = { Membership_No: { contains: search.membershipNo } };
+    }
+    if (search?.checkIn) {
+      const d = new Date(search.checkIn);
+      d.setHours(0, 0, 0, 0);
+      const dEnd = new Date(search.checkIn);
+      dEnd.setHours(23, 59, 59, 999);
+      args.where.bookingDate = { gte: d, lte: dEnd };
+    }
+    if (search?.paymentStatus && search.paymentStatus !== 'ALL') {
+      args.where.paymentStatus = search.paymentStatus;
+    }
 
     if (page && limit) {
       args.skip = (Number(page) - 1) * Number(limit);
@@ -7281,3 +7603,4 @@ export class BookingService {
     }
   }
 }
+
