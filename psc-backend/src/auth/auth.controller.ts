@@ -169,6 +169,7 @@ export class AuthController {
         id: string | undefined;
         name: string | undefined;
         FCMToken: string | null;
+        sessionToken: string | null;
         role: string | undefined;
         permissions: any[];
       };
@@ -190,9 +191,8 @@ export class AuthController {
         permissions: req.user?.permissions,
       };
     }
-    const activeUser = await this.authService.checkActive(
-      String(req.user?.id!),
-    );
+
+    const activeUser = await this.authService.checkActive(String(req.user?.id!));
     if (!activeUser) {
       throw new HttpException(
         'User is not active. Please contact support.',
@@ -200,8 +200,13 @@ export class AuthController {
       );
     }
 
-    // check for fcm token match and logout if not match
-    if (activeUser?.FCMToken !== fcmToken) {
+    // Single-device session enforcement via sessionToken.
+    // sessionToken is generated at login and stored in both the JWT and the DB.
+    // When a new device logs in, a new sessionToken overwrites the DB value,
+    // so the old device's JWT will fail this check on its next userWho call.
+    // FCM token rotation (same device, Firebase refresh) does NOT affect this.
+    const jwtSessionToken = req.user?.sessionToken;
+    if (jwtSessionToken && activeUser.sessionToken && jwtSessionToken !== activeUser.sessionToken) {
       throw new HttpException(
         {
           error: 'SESSION_EXPIRED',
@@ -210,10 +215,16 @@ export class AuthController {
         HttpStatus.FORBIDDEN,
       );
     }
+
+    // Silently update FCM token if Firebase rotated it on the same device
+    if (fcmToken && activeUser.FCMToken !== fcmToken) {
+      await this.authService.updateFCMToken(String(req.user?.id!), fcmToken);
+    }
+
     return {
       id: req.user?.id,
       name: req.user?.name,
-      FCMToken: activeUser?.FCMToken,
+      FCMToken: fcmToken || activeUser?.FCMToken,
       role: req.user?.role,
       permissions: req.user?.permissions,
     };
@@ -285,9 +296,8 @@ export class AuthController {
       return res.status(500).json({ message: 'Login un-successful' });
     }
 
-    const { Name, Email, Status, Membership_No, FCMToken } = authenticated;
+    const { Name, Email, Status, Membership_No, FCMToken, sessionToken } = authenticated;
 
-    // return jwt cookie if clientType == web || return jwt/json object if clientType == native/mobile
     const { access_token, refresh_token } =
       await this.authService.generateTokens({
         name: Name,
@@ -295,6 +305,7 @@ export class AuthController {
         status: Status,
         id: Membership_No,
         FCMToken: FCMToken ?? undefined,
+        sessionToken,
       });
     if (clientType === 'web') {
       res.cookie('access_token', access_token, {

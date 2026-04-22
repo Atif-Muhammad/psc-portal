@@ -5,6 +5,7 @@ import { CreateAdminDto } from './dtos/create-admin.dto';
 import { LoginAdminDto } from './dtos/login-admin.dto';
 import { JwtService } from '@nestjs/jwt';
 import { MailerService } from 'src/mailer/mailer.service';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,7 @@ export class AuthService {
     status?: string;
     permissions?: any[];
     FCMToken?: string;
+    sessionToken?: string;
   }) {
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: process.env.JWT_ACCESS_SECRET!,
@@ -42,6 +44,7 @@ export class AuthService {
     status?: string;
     permissions?: any[];
     FCMToken?: string;
+    sessionToken?: string;
   }) {
     return this.generateTokens(payload);
   }
@@ -190,7 +193,14 @@ export class AuthService {
         Membership_No,
         OR: [{ Status: 'active' }, { Status: 'deactivated' }],
       },
-      select: {FCMToken: true}
+      select: { FCMToken: true, sessionToken: true }
+    });
+  }
+
+  async updateFCMToken(memberID: string, fcmToken: string) {
+    return await this.prisma.member.update({
+      where: { Membership_No: String(memberID) },
+      data: { FCMToken: fcmToken },
     });
   }
 
@@ -215,28 +225,25 @@ export class AuthService {
   }
 
   async loginMember(memberID: string, otp: number, FCMToken: string) {
-    // check otp against the memberID
     const member = await this.prisma.member.findFirst({
       where: { Membership_No: String(memberID), otp },
-      select: {Membership_No: true, Name: true, Status: true, Email: true, otp: true, otpExpiry: true, FCMToken: true}
+      select: { Membership_No: true, Name: true, Status: true, Email: true, otp: true, otpExpiry: true, FCMToken: true }
     });
     if (!member) {
       throw new HttpException("OTP Didn't match", HttpStatus.NOT_ACCEPTABLE);
     }
-
-    // check expiry
     if (member.otpExpiry && new Date() > member.otpExpiry) {
       throw new HttpException('OTP Expired', HttpStatus.NOT_ACCEPTABLE);
     }
 
-    console.log("Requested FCM:", FCMToken)
-    console.log("Member FCM:", member?.FCMToken)
+    // Generate a new sessionToken on every login — this invalidates any existing session on another device
+    const sessionToken = randomUUID();
 
     await this.prisma.member.update({
       where: { Membership_No: String(memberID) },
-      data: { otp: null, otpExpiry: null, FCMToken },
+      data: { otp: null, otpExpiry: null, FCMToken, sessionToken },
     });
-    return member;
+    return { ...member, sessionToken };
   }
 
   async getAdmins() {

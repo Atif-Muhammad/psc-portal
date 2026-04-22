@@ -62,6 +62,7 @@ model Member {
   memberType String @default("CIVILIAN")
 
   FCMToken String?
+  sessionToken String? // UUID generated at login, used for single-device session enforcement
 
   roomBookings        RoomBooking[]
   hallBookings        HallBooking[]
